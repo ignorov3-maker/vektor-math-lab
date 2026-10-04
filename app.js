@@ -365,7 +365,13 @@ function bind(page, idx) {
 }
 
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => location.hash = b.dataset.page);
-document.querySelector('#reset').onclick = () => { if (confirm('Сбросить весь прогресс и настройки в этом браузере?')) { state = fresh(); save(); location.hash = 'home'; render(); } };
+// Сброс в два нажатия — без системного confirm()
+const resetBtn = document.querySelector('#reset'); let resetArmed;
+resetBtn.onclick = () => {
+  if (!resetArmed) { resetArmed = setTimeout(() => { resetArmed = null; resetBtn.textContent = 'Начать заново'; }, 4000); resetBtn.textContent = 'Нажми ещё раз, чтобы стереть прогресс'; return; }
+  clearTimeout(resetArmed); resetArmed = null; resetBtn.textContent = 'Начать заново';
+  state = fresh(); save(); location.hash = 'home'; render();
+};
 addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); app.querySelector('h1')?.focus?.(); });
 let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(drawRoute, 100); });
 render();
