@@ -256,3 +256,44 @@ th{font-size:14px;color:var(--ink-2);font-weight:600}
   .answer label{flex:1 1 100%}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ---------- Методичка и этапы занятия ---------- */
+.stages{display:flex;gap:6px;margin:-12px 0 20px;flex-wrap:wrap}
+.stage{display:flex;align-items:center;gap:10px;border:1.5px solid var(--line);background:var(--sheet);border-radius:999px;padding:7px 16px 7px 7px;font-size:15px;font-weight:600;color:var(--ink-2)}
+.stage b{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--tint);color:var(--ink-2);font-size:13px}
+.stage.on{border-color:var(--green);color:var(--ink)}
+.stage.on b{background:var(--green);color:var(--on-accent)}
+.requires{margin:-8px 0 20px;color:var(--ink-2)}
+.method h2{margin:28px 0 10px}
+.method h2:first-child{margin-top:0}
+.method>p{font-size:17px}
+.rule{margin:20px 0 4px;padding:16px 18px;border-radius:var(--radius);background:var(--green-soft);border-left:4px solid var(--green)}
+.rule h3{margin-bottom:6px}
+.rule p{margin:0;font-size:17px}
+.worked{border:var(--border-w) solid var(--line);border-radius:var(--radius);padding:14px 18px;margin:12px 0;background:var(--sheet)}
+.worked-q{font-weight:700;margin:0 0 6px;font-size:17px}
+.worked ol{margin:0;padding-left:22px}
+.worked li{margin:4px 0}
+.mistakes{padding-left:20px;margin:8px 0}
+.mistakes li{margin:8px 0}
+.choices{display:flex;gap:10px}
+.choice{min-width:64px;justify-content:center;font-size:24px;padding:10px 18px}
+.btn-sm{padding:7px 14px;font-size:14px;margin-left:8px}
+.row-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:16px}
+.result.pass{border-left:6px solid var(--green)}
+.result.fail{border-left:6px solid var(--warn-line)}
+.review-due{border-left:6px solid var(--marker)}
+.review-list{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.streak{margin-top:24px;padding-top:18px;border-top:1px solid var(--line)}
+.streak .btn{margin-top:4px}
+.story .frac,.question .frac{font-size:.95em}
+.figure svg{max-width:100%;height:auto}
+.fig-on{fill:var(--pie)}
+.fig-on2{fill:var(--green);opacity:.75}
+.fig-off{fill:var(--sheet);stroke:var(--dash);stroke-width:1.5}
+.fig-half{fill:var(--tint);stroke:var(--dash);stroke-width:1}
+.fig-x{fill:var(--tint);stroke:var(--dash);stroke-width:1.5;stroke-dasharray:4 4}
+.fig-cross{stroke:var(--ink-2);stroke-width:2;stroke-linecap:round}
+.fig-label{fill:var(--ink-2);font:600 14px var(--font-body)}
+.figure-caption{margin-top:6px}
+.requires .link{text-align:left}
