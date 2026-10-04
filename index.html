@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Вектор — интерактивный прототип персональной траектории по математике">
+  <title>Вектор — твой путь к пониманию</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<aside>
+  <a class="brand" href="#home"><span>↗</span> вектор<span class="dot">.</span></a>
+  <div class="workspace">ЛИЧНОЕ ПРОСТРАНСТВО</div>
+  <nav>
+    <button data-page="home">◫ <span>Мой маршрут</span></button>
+    <button data-page="map">⌘ <span>Карта знаний</span></button>
+    <button data-page="diagnostic">◎ <span>Диагностика</span></button>
+    <button data-page="teacher">▥ <span>Преподавателю</span></button>
+    <button data-page="library">▤ <span>Учебные материалы</span></button>
+    <button data-page="settings">⚙ <span>Подключение AI</span></button>
+  </nav>
+  <div class="sidecard"><span>✧</span><b>Понимать — интереснее</b><p>Маленькие шаги.<br>Большие открытия.</p><div class="orbit">✳</div></div>
+  <div class="profile"><div class="avatar">А</div><div>Александр<small>Математика · 6 класс</small></div></div>
+</aside>
+<main>
+  <header><div>Моё обучение <span>/</span> <b id="crumb">Мой маршрут</b></div><div class="header-right"><span class="demo">ПРОТОТИП</span><span class="avatar small">А</span></div></header>
+  <div id="app"></div>
+  <footer>Вектор · У каждого свой путь к пониманию <span id="sync-status">✓ Прогресс хранится в браузере</span></footer>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
