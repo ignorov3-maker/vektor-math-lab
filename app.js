@@ -192,10 +192,11 @@ function drawRoute() {
   const last = pts[n - 1], prev = pts[n - 2], ang = Math.atan2(last[1] - prev[1], last[0] - prev[0]);
   const tip = [last[0] + 34 * Math.cos(ang), last[1] + 34 * Math.sin(ang)];
   const hw = (a, d) => [tip[0] - 16 * Math.cos(ang) + d * 9 * Math.cos(ang + a), tip[1] - 16 * Math.sin(ang) + d * 9 * Math.sin(ang + a)];
-  svg.innerHTML = `<line class="axis" x1="0" y1="${H - 1}" x2="${W}" y2="${H - 1}"/>
+  svg.innerHTML = `<defs><linearGradient id="holo-grad" x1="0" x2="1"><stop offset="0" stop-color="#7EE0C3"/><stop offset=".45" stop-color="#8F7CFF"/><stop offset="1" stop-color="#FF7EB8"/></linearGradient></defs><line class="axis" x1="0" y1="${H - 1}" x2="${W}" y2="${H - 1}"/>
     <polyline class="todo" points="${P(pts.slice(Math.max(cur, 0)).concat([tip]))}"/>
     <polyline class="done" points="${P(pts.slice(0, cur + 1))}"/>
     <polygon class="head" points="${P([tip, hw(Math.PI / 2, 1), hw(Math.PI / 2, -1)])}"/>`;
+  const done = svg.querySelector('.done'); if (done) done.style.setProperty('--len', Math.ceil(done.getTotalLength()) + 1);
 }
 
 function mapPage(filter = 'Все') {
@@ -373,5 +374,26 @@ resetBtn.onclick = () => {
   state = fresh(); save(); location.hash = 'home'; render();
 };
 addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); app.querySelector('h1')?.focus?.(); });
+// ---------- Скины ----------
+const SKIN_FONTS = {
+  orbit: 'family=Unbounded:wght@500;700',
+  pop: 'family=Dela+Gothic+One&family=Rubik:wght@400;500;600;700',
+  holo: 'family=Comfortaa:wght@500;700&family=Nunito:wght@400;600;700;800',
+};
+function setSkin(name) {
+  if (!['notebook', 'orbit', 'pop', 'holo'].includes(name)) name = 'notebook';
+  document.documentElement.dataset.skin = name;
+  if (SKIN_FONTS[name] && !document.getElementById('font-' + name)) {
+    const l = document.createElement('link'); l.id = 'font-' + name; l.rel = 'stylesheet';
+    l.href = `https://fonts.googleapis.com/css2?${SKIN_FONTS[name]}&display=swap`; document.head.appendChild(l);
+  }
+  document.querySelectorAll('.skin-switch button').forEach(b => b.setAttribute('aria-pressed', b.dataset.skin === name));
+  try { localStorage.setItem('vektor-skin', name); } catch {}
+  requestAnimationFrame(drawRoute);
+}
+document.querySelectorAll('.skin-switch button').forEach(b => b.onclick = () => setSkin(b.dataset.skin));
+let savedSkin; try { savedSkin = localStorage.getItem('vektor-skin'); } catch {}
+setSkin(savedSkin || 'notebook');
+
 let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(drawRoute, 100); });
 render();

@@ -10,11 +10,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="skins.css">
 </head>
 <body>
 <aside class="sidebar">
   <a class="brand" href="#home" aria-label="Вектор — на главную">
-    <svg width="34" height="34" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#1E7358"/><path d="M9 23 23 9M13 9h10v10" stroke="#fff" stroke-width="3.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <svg class="brand-mark" width="34" height="34" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7"/><path d="M9 23 23 9M13 9h10v10" stroke-width="3.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <span class="brand-text">вектор</span>
   </a>
   <nav aria-label="Разделы">
@@ -38,6 +39,13 @@
     <span>Прогресс хранится только в этом браузере. <button id="reset">Начать заново</button></span>
   </footer>
 </main>
+<div class="skin-switch" role="group" aria-label="Стиль оформления">
+  <span>Стиль</span>
+  <button data-skin="notebook" title="Тетрадь" aria-label="Тетрадь"></button>
+  <button data-skin="orbit" title="Орбита" aria-label="Орбита"></button>
+  <button data-skin="pop" title="Стикеры" aria-label="Стикеры"></button>
+  <button data-skin="holo" title="Голограмма" aria-label="Голограмма"></button>
+</div>
 <script src="app.js"></script>
 </body>
 </html>
