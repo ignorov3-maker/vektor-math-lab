@@ -49,4 +49,18 @@ ok(A.pace(Array(10).fill({ firstTry: false, hints: 1, sec: 90 })) === 'slow', 'p
 ok(A.pace([{ firstTry: true, hints: 0, sec: 20 }]) === 'normal', 'pace default with little data');
 ok(A.need('slow') > A.need('normal') && A.need('normal') > A.need('fast'), 'need by pace');
 
-console.log(fails ? `ошибок: ${fails}` : 'tutor tests: ok'); process.exit(fails ? 1 : 0);
+// обрыв по лимиту длины не оставляет «дроб…»
+globalThis.location = { origin: 'https://example.github.io' };
+const sseBody = parts => parts.map(p => 'data: ' + JSON.stringify(p) + '\n\n').join('') + 'data: [DONE]\n\n';
+(async () => {
+  globalThis.fetch = async () => new Response(sseBody([
+    { choices: [{ delta: { content: 'Сложим дроби. Числители складываем, а знаменатель остаётся. Получится дроб' } }] },
+    { choices: [{ delta: {}, finish_reason: 'length' }] }]), { status: 200 });
+  let fin = null;
+  const txt = await T.stream({ mode: 'key', key: 'sk-or-v1-x', model: 'm' }, [], () => {}, { onFinish: r => fin = r });
+  ok(fin === 'length' && !/дроб$/.test(txt) && txt.endsWith('остаётся.'), 'обрыв по лимиту обрезается до конца предложения: ' + txt);
+  globalThis.fetch = async () => new Response('data: ' + JSON.stringify({ choices: [{ delta: { content: 'При' } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [{ delta: { content: 'вет! 3/5' } }] }) + '\n\ndata: [DONE]\n\n', { status: 200 });
+  ok(await T.stream({ mode: 'key', key: 'sk-or-v1-x', model: 'm' }, [], () => {}) === 'Привет! 3/5', 'склейка кусков потока');
+  ok(V.figureFromTag('дробь 2/7')?.type === 'bar' && V.figureFromTag('торт 3/8')?.type === 'circle', 'синонимы тегов');
+  console.log(fails ? `ошибок: ${fails}` : 'tutor tests: ok'); process.exit(fails ? 1 : 0);
+})();

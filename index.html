@@ -18,13 +18,18 @@
     <svg class="brand-mark" width="34" height="34" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7"/><path d="M9 23 23 9M13 9h10v10" stroke-width="3.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <span class="brand-text">вектор</span>
   </a>
+  <a class="hud" href="#awards" aria-label="Награды">
+    <span class="hud-item hud-stars" title="Звёзды"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg><b id="hud-stars">0</b></span>
+    <span class="hud-item hud-streak" title="Дней подряд"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 21c-4 0-6.5-2.8-6.5-6.3 0-3.6 3-5.6 3.6-9.2 2.3 1.4 3.5 3.7 3.5 5.8 1-1 1.6-2.4 1.7-3.8 2.4 1.9 4.2 4.5 4.2 7.2 0 3.5-2.5 6.3-6.5 6.3z"/></svg><b id="hud-streak">0</b></span>
+  </a>
   <nav aria-label="Разделы">
-    <button data-page="home"><svg viewBox="0 0 24 24"><path d="M4 19 10 13l4 3 6-8"/><path d="M15 8h5v5"/></svg><span>Мой маршрут</span></button>
-    <button data-page="map"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><circle cx="9" cy="18" r="2.5"/><path d="M8.3 7 15.6 7.6M7 8.3l1.4 7.3M16.6 10 10.8 16"/></svg><span>Карта знаний</span></button>
-    <button data-page="diagnostic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg><span>Диагностика</span></button>
-    <button data-page="library"><svg viewBox="0 0 24 24"><path d="M5 4h10l4 4v12H5z"/><path d="M9 12h6M9 16h6"/></svg><span>Материалы</span></button>
-    <button data-page="teacher"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Преподавателю</span></button>
-    <button data-page="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg><span>Настройки</span></button>
+    <button data-page="home" data-short="Маршрут"><svg viewBox="0 0 24 24"><path d="M4 19 10 13l4 3 6-8"/><path d="M15 8h5v5"/></svg><span>Мой маршрут</span></button>
+    <button data-page="map" data-short="Карта"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><circle cx="9" cy="18" r="2.5"/><path d="M8.3 7 15.6 7.6M7 8.3l1.4 7.3M16.6 10 10.8 16"/></svg><span>Карта знаний</span></button>
+    <button data-page="diagnostic" data-short="Тест"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg><span>Диагностика</span></button>
+    <button data-page="library" data-short="Уроки"><svg viewBox="0 0 24 24"><path d="M5 4h10l4 4v12H5z"/><path d="M9 12h6M9 16h6"/></svg><span>Материалы</span></button>
+    <button data-page="awards" data-short="Награды"><svg viewBox="0 0 24 24"><path d="M7 4h10v4a5 5 0 0 1-10 0z"/><path d="M7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/><path d="M12 13v4M8 20h8"/></svg><span>Награды</span></button>
+    <button data-page="teacher" data-short="Учитель"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Преподавателю</span></button>
+    <button data-page="settings" data-short="Профиль"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg><span>Настройки</span></button>
   </nav>
   <div class="profile"><div class="avatar" id="avatar">А</div><div><span id="student-name">Александр</span><small>Математика, 6 класс</small></div></div>
 </aside>
@@ -51,6 +56,8 @@
 <script src="content/fractions.js"></script>
 <script src="content/adaptive.js"></script>
 <script src="content/tutor.js"></script>
+<script src="content/game.js"></script>
+<div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
 <script src="app.js"></script>
 </body>
 </html>

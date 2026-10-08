@@ -83,7 +83,9 @@
   const FR = '(\\d{1,2})\\s*\\/\\s*(\\d{1,2})';
   const ok = (n, d, maxD = 24) => d >= 1 && d <= maxD && n >= 0 && n <= d * 4;
   function figureFromTag(tag) {
-    const t = tag.trim().toLowerCase().replace(/ё/g, 'е');
+    let t = tag.trim().toLowerCase().replace(/ё/g, 'е');
+    // синонимы, которые модель иногда пишет вместо названий из списка
+    t = t.replace(/^(дробь|доля|полоса)\s/, 'полоска ').replace(/^(торт|пирог)\s/, 'круг ').replace(/^(отрезок|луч|числовая прямая)\s/, 'прямая ').replace(/^(сравни|сравнение)\s/, 'сравнить ');
     let m;
     if ((m = t.match(new RegExp(`^(полоска|bar)\\s+${FR}$`))) && ok(+m[2], +m[3]) && +m[2] <= +m[3]) return { type: 'bar', parts: +m[3], shaded: +m[2] };
     if ((m = t.match(new RegExp(`^(круг|пицца|circle)\\s+${FR}$`))) && ok(+m[2], +m[3], 16) && +m[2] <= +m[3]) return { type: 'circle', parts: +m[3], shaded: +m[2] };

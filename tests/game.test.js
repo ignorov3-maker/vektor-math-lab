@@ -1,0 +1,23 @@
+// Запуск: node tests/game.test.js — звёзды, цель дня, серия дней, достижения
+globalThis.window = globalThis;
+require('../content/game.js');
+const G = window.VEKTOR_GAME;
+let fails = 0; const ok = (c, m) => { if (!c) { fails++; console.log('FAIL', m); } };
+const st = {}; const g = G.ensure(st);
+let ev = G.solved(g, '2026-10-06', { firstTry: true, hints: 0, wrongBefore: 0 });
+ok(g.stars === 3 && ev.some(e => e.type === 'badge' && e.badge.id === 'first'), '+3 и «Первый шаг»');
+G.solved(g, '2026-10-06', { firstTry: true, hints: 1, wrongBefore: 0 }); ok(g.stars === 5, '+2 с подсказкой');
+G.solved(g, '2026-10-06', { firstTry: false, hints: 0, wrongBefore: 2 }); ok(g.stars === 6 && g.earned.includes('comeback'), '+1 и «Не сдаюсь»');
+const before = g.stars; G.wrong(g); ok(g.stars === before, 'ошибка не отнимает звёзд');
+G.solved(g, '2026-10-06', { firstTry: true, hints: 0 }); ev = G.solved(g, '2026-10-06', { firstTry: true, hints: 0 });
+ok(ev.some(e => e.type === 'goal') && g.earned.includes('goal'), 'цель дня 5 задач');
+ev = G.solved(g, '2026-10-06', { firstTry: true, hints: 0 }); ok(!ev.some(e => e.type === 'goal'), 'цель дня засчитывается один раз');
+G.solved(g, '2026-10-07', { firstTry: true, hints: 0 }); G.solved(g, '2026-10-08', { firstTry: true, hints: 0 });
+ok(g.streak === 3 && g.earned.includes('streak3'), 'серия 3 дня');
+ok(G.liveStreak(g, '2026-10-09') === 3 && G.liveStreak(g, '2026-10-11') === 0, 'серия жива до конца следующего дня');
+G.solved(g, '2026-10-12', { firstTry: true, hints: 0 }); ok(g.streak === 1 && g.bestStreak === 3, 'пропуск обнуляет серию, лучшая сохраняется');
+ok(g.day === '2026-10-12' && g.dayTasks === 1, 'новый день — новая цель');
+ev = G.mastered(g, 1); ok(ev.some(e => e.type === 'mastered') && g.earned.includes('topic1'), 'тема освоена');
+ok(G.rank(0).name === 'Новичок' && G.rank(130).name === 'Знаток дробей' && G.rank(9999).next === null, 'звания');
+const broken = { game: { stars: 'x', earned: 5 } }; G.ensure(broken); ok(broken.game.stars === 0 && Array.isArray(broken.game.earned), 'испорченные данные чинятся');
+console.log(fails ? `ошибок: ${fails}` : 'game tests: ok'); process.exit(fails ? 1 : 0);

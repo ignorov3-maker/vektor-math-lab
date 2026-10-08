@@ -60,7 +60,7 @@
     const common = `Ты — добрый и терпеливый наставник по математике в учебном приложении «Вектор». Твой ученик — школьник 5–6 класса (10–12 лет)${name ? `, его зовут ${name}` : ''}.
 
 Как ты пишешь:
-- По-русски, просто и дружелюбно, на «ты». 2–4 коротких предложения в одном сообщении, одна мысль за раз.
+- По-русски, просто и дружелюбно, на «ты». 2–4 коротких предложения в одном сообщении (не больше 70 слов), одна мысль за раз. Всегда заканчивай мысль — не обрывай слова и фразы.
 - Опирайся только на методичку ниже. Не придумывай других правил и обозначений.
 - Дроби пиши как 3/5. Никакого LaTeX, формул в долларах и таблиц.
 - Чтобы показать картинку, вставь на отдельной строке один тег: [[полоска 3/5]], [[круг 3/8]], [[прямая 3/4]], [[сравнить 1/3 1/5]], [[прямоугольник 2/3 3/4]] (для умножения 2/3 · 3/4), [[смешанное 2 1/3]]. Знаменатель не больше 12. Не больше одной картинки в сообщении.
@@ -107,7 +107,7 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
     return `Ошибка подключения (${status}). ${body ? String(body).slice(0, 120) : ''}`;
   }
 
-  async function stream(cfg, messages, onText, { maxTokens = 450, signal } = {}) {
+  async function stream(cfg, messages, onText, { maxTokens = 600, signal, onFinish } = {}) {
     const proxy = cfg.mode === 'proxy';
     const url = proxy ? cfg.proxy.trim() : OPENROUTER_URL;
     const headers = { 'Content-Type': 'application/json' };
@@ -133,7 +133,7 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
     if (!res.body) throw new TutorError('Браузер не поддерживает потоковые ответы.');
 
     const reader = res.body.getReader(), dec = new TextDecoder();
-    let buf = '', text = '';
+    let buf = '', text = '', finish = null;
     const handle = line => {
       line = line.trim();
       if (!line.startsWith('data:')) return false; // комментарии вида ": OPENROUTER PROCESSING"
@@ -142,7 +142,8 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
       let obj; try { obj = JSON.parse(data); } catch { return false; }
       // ошибка посреди потока приходит со статусом 200 и полем error
       if (obj.error) throw new TutorError(errorFor(Number(obj.error.code) || 500, obj.error.message));
-      const piece = obj.choices?.[0]?.delta?.content;
+      const ch = obj.choices?.[0], piece = ch?.delta?.content;
+      if (ch?.finish_reason) finish = ch.finish_reason;
       if (piece) { text += piece; onText(text); }
       return false;
     };
@@ -159,6 +160,14 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
     }
     if (finished) { try { reader.cancel(); } catch {} }
     if (!text.trim()) throw new TutorError('Наставник прислал пустой ответ. Попробуй спросить ещё раз или выбери другую модель в настройках.');
+    // ответ упёрся в лимит длины — обрезаем до конца последнего предложения, чтобы не было «дроб…»
+    if (finish === 'length') {
+      const cut = Math.max(text.lastIndexOf('. '), text.lastIndexOf('! '), text.lastIndexOf('? '), text.lastIndexOf('\n'), text.lastIndexOf('.'), text.lastIndexOf('?'), text.lastIndexOf('!'));
+      if (cut > text.length * 0.4) text = text.slice(0, cut + 1).trimEnd();
+      else text = text.replace(/\s+\S*$/, '') + '…';
+      text = text.replace(/\[\[[^\]]*$/, '');
+    }
+    if (onFinish) onFinish(finish);
     return text;
   }
 

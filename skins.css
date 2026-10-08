@@ -198,3 +198,6 @@ main{padding-bottom:64px}
   .vector .done{animation:none;stroke-dashoffset:0}
   [data-skin="holo"] body{animation:none}
 }
+/* на телефоне нижнее меню фиксировано: размытие фона у панели создало бы для него свою систему координат */
+@media (max-width:760px){.sidebar{backdrop-filter:none!important;overflow:visible!important}[data-skin="orbit"] .sidebar{background:#120E30}[data-skin="holo"] .sidebar{background:#F7F2FF}}
+@media (max-width:760px){[data-skin="orbit"] nav{background:#120E30}[data-skin="holo"] nav{background:#F7F2FF}[data-skin="pop"] nav{border-top:2.5px solid var(--ink)}}
