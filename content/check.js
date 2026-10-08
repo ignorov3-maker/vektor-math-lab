@@ -14,7 +14,7 @@
   function check(input, task) {
     if (!String(input).trim()) return { ok: false, empty: true, msg: 'Сначала впиши ответ.' };
     const got = parse(input), want = parse(task.answer);
-    if (!got) return { ok: false, unreadable: true, msg: 'Не получилось прочитать ответ. Запиши число или дробь через косую черту, например 3/4, а смешанное число — через пробел: 2 1/3.' };
+    if (!got) return { ok: false, unreadable: true, msg: 'Не получилось прочитать ответ. Впиши числа в клеточки: сверху числитель, снизу знаменатель.' };
     if (want.kind === 'sign') return got.v === want.v ? { ok: true } : { ok: false, mistake: task.misc && task.misc(got) };
     if (got.kind === 'sign' || Math.abs(got.v - want.v) > 1e-9) return { ok: false, mistake: task.misc && task.misc(got) };
     const reducible = got.kind === 'frac' && gcd(got.n, got.d) > 1;
@@ -26,7 +26,7 @@
         if (got.kind !== 'frac') return { ok: false, almost: true, msg: 'Число верное, но запиши его неправильной дробью, например 7/3.' };
         return reducible ? { ok: true, note: 'Дробь можно было сократить.' } : { ok: true };
       case 'mixed':
-        if (got.kind !== 'mixed' || got.n >= got.d) return { ok: false, almost: true, msg: 'Значение верное, но нужно выделить целую часть: целое, пробел, дробь.' };
+        if (got.kind !== 'mixed' || got.n >= got.d) return { ok: false, almost: true, msg: 'Значение верное, но нужно выделить целую часть: впиши целые в левую клеточку.' };
         return { ok: true };
       case 'equivalent':
         if (reducible) return { ok: true, note: 'Дробь ещё можно сократить — в ответах её обычно сокращают.' };

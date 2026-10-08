@@ -26,7 +26,7 @@ async def handler(route):
     await route.fulfill(status=200, content_type='text/event-stream', body=sse('Хорошо! Посмотри: [[круг 3/8]] Сколько кусков осталось? [[готово]]'), headers=h)
 async def answer(pg, val):
     if await pg.locator('.choices').count(): await pg.click(f'.choice[value="{val}"]')
-    else: await pg.fill('#answer', val); await pg.click('form.answer button[type=submit]')
+    else: await pg.evaluate("v => fillAnswer(v)", val); await pg.click('form.answer button[type=submit]')
 async def overflow(pg): return await pg.evaluate("document.documentElement.scrollWidth > window.innerWidth + 1")
 async def main():
     async with async_playwright() as p:
@@ -92,20 +92,21 @@ async def main():
                 await answer(pg, '=' if await pg.locator('.choices').count() and await pg.evaluate("session.task.answer")!='=' else ('<' if await pg.locator('.choices').count() else '0')); await pg.click('#next-task')
         txt=await pg.inner_text('#app'); rep('после двух провалов — совет повторить базовую тему', 'освежить' in txt, txt[:0])
         await pg.goto(B+'#home'); await pg.wait_for_timeout(200)
-        rep('главная предлагает сначала повторить', 'Сначала повторим' in await pg.inner_text('.next'))
+        rep('главная предлагает сначала повторить', 'Сначала повторим' in await pg.inner_text('.hero-next'))
         # 8. Сдать проверку и повторение
         await pg.goto(B+'#lesson/0/practice'); await pg.goto(B+'#lesson/0/check'); await pg.wait_for_timeout(100)
         for k in range(4): await answer(pg, await pg.evaluate("session.task.answer")); await pg.click('#next-task')
         rep('проверка сдана', 'Тема освоена' in await pg.inner_text('#app'))
         await pg.evaluate("state.meta['concept'].reviewDue = today(); save()"); await pg.goto(B+'#home'); await pg.wait_for_timeout(200)
-        await pg.click('[data-review]'); await pg.wait_for_timeout(200)
+        rep('повторение показано на пути и в «Продолжить»', 'Повторение' in await pg.inner_text('.hero-next') and await pg.locator('.node.is-due').count()==1)
+        await pg.click('.hero-next [data-continue]'); await pg.wait_for_timeout(200)
         for k in range(2): await answer(pg, await pg.evaluate("session.task.answer")); await pg.click('#next-task')
         due=await pg.evaluate("state.meta['concept'].reviewDue"); rep('повторение: следующая дата через 3 дня', due==await pg.evaluate("addDays(state.meta['concept'].masteredAt,3)"), due)
         # 9. Краткие темы (без методички)
         await pg.goto(B+'#lesson/9'); await pg.wait_for_timeout(100); await answer(pg,'3'); rep('краткая тема решается', 'Верно' in await pg.inner_text('#feedback'))
         await pg.goto(B+'#lesson/9/check'); rep('краткая тема не ломается на /check', await pg.locator('#answer-form').count()==1)
         # 10. Материалы → конспект открывает урок, а не тренировку
-        await pg.goto(B+'#library'); await pg.click('[data-lesson="2"]'); await pg.wait_for_timeout(200)
+        await pg.goto(B+'#library'); await pg.click('[data-lesson="2"][data-tab="notes"]'); await pg.wait_for_timeout(200)
         rep('«Открыть конспект» ведёт в конспект', await pg.locator('.method').count()==1, await pg.evaluate("location.hash"))
         # 11. ИИ: подключение, стрим, ошибки, запасной режим
         await pg.goto(B+'#settings'); await pg.check('input[value=key]'); await pg.fill('#ai-key','abc'); await pg.click('#ai-form button[type=submit]')
@@ -117,14 +118,14 @@ async def main():
         await pg.goto(B+'#lesson/6/learn'); await pg.click('[data-learn-tab=tutor]'); await pg.wait_for_timeout(800)
         rep('модель без отключения рассуждений: повтор запроса', len(MOCK['calls'])==2 and MOCK['calls'][1]['reasoning'].get('enabled') is None and '<svg' in await pg.inner_html('.chat-lesson .chat-log'), str([c.get('reasoning') for c in MOCK['calls']]))
         rep('тег [[готово]] даёт кнопку тренировки', await pg.locator('[data-quick="go-practice"]').count()==1)
-        MOCK['mode']='midstream'; await pg.fill('#chat-in-lesson','ещё'); await pg.click('.chat-lesson .chat-form button'); await pg.wait_for_timeout(500)
-        rep('ошибка посреди потока показана', 'не отвечает' in await pg.inner_text('.chat-lesson .msg.error >> nth=-1'))
-        MOCK['mode']='empty'; await pg.fill('#chat-in-lesson','ещё'); await pg.click('.chat-lesson .chat-form button'); await pg.wait_for_timeout(500)
-        rep('пустой ответ показан как ошибка', 'пустой' in await pg.inner_text('.chat-lesson .msg.error >> nth=-1'))
-        MOCK['mode']='402'; await pg.fill('#chat-in-lesson','ещё'); await pg.click('.chat-lesson .chat-form button'); await pg.wait_for_timeout(500)
-        rep('нет денег на счёте — понятное сообщение', 'средства' in await pg.inner_text('.chat-lesson .msg.error >> nth=-1'))
-        await pg.click('.chat-lesson .msg.error >> nth=-1 >> [data-offline]'); await pg.wait_for_timeout(100)
-        rep('запасной офлайн-ответ после ошибки', not (await pg.locator('.chat-lesson .msg >> nth=-1').get_attribute('class')).endswith('error'))
+        MOCK['mode']='midstream'; await pg.fill('#chat-in-lesson','ещё'); await pg.click('.chat-lesson .chat-form button'); await pg.wait_for_timeout(2600)
+        log=await pg.inner_text('.chat-lesson .chat-log')
+        rep('сбой ИИ: короткое пояснение, урок продолжается по конспекту', 'не отвечает' in log and not (await pg.locator('.chat-lesson .msg >> nth=-1').get_attribute('class')).endswith('error'))
+        rep('сбой ИИ: подпись режима и кнопка «Попробовать снова»', 'временно недоступен' in await pg.inner_text('.chat-lesson .chat-mode') and await pg.locator('[data-retry-ai]').count()>=1)
+        MOCK['mode']='empty'; await pg.click('.chat-lesson [data-retry-ai] >> nth=-1'); await pg.fill('#chat-in-lesson','ещё'); await pg.click('.chat-lesson .chat-form button'); await pg.wait_for_timeout(500)
+        rep('пустой ответ показан понятным текстом', 'пустой' in await pg.inner_text('.chat-lesson .chat-log'))
+        MOCK['mode']='402'; await pg.click('.chat-lesson [data-retry-ai] >> nth=-1'); await pg.fill('#chat-in-lesson','ещё'); await pg.click('.chat-lesson .chat-form button'); await pg.wait_for_timeout(500)
+        rep('нет денег на счёте — понятное сообщение', 'средства' in await pg.inner_text('.chat-lesson .chat-log'))
         hist=MOCK['calls'][-1]['messages']; rep('ошибки не уходят в историю для модели', all('средства' not in (m.get('content') or '') for m in hist))
         MOCK['mode']='ok'
         await pg.goto(B+'#settings'); await pg.click('#ai-forget'); rep('ключ удаляется', await pg.evaluate("JSON.parse(localStorage.getItem('vektor-ai')).key")=='')
@@ -134,15 +135,38 @@ async def main():
         # 13. Все страницы во всех стилях на телефоне без горизонтальной прокрутки
         m=await b.new_page(viewport={'width':375,'height':760}); await m.route('https://openrouter.ai/**', handler)
         bad=[]
-        for skin in ['notebook','orbit','pop','holo']:
-            for h in ['home','map','diagnostic','library','teacher','settings','lesson/0/learn','lesson/4/practice','lesson/5/check']:
-                await m.goto(B+'#'+h); await m.evaluate(f"setSkin('{skin}')"); await m.wait_for_timeout(80)
+        for skin in ['notebook','orbit','pop','pixel']:
+            for h in ['home','map','diagnostic','awards','teacher','settings','lesson/0/learn','lesson/4/practice','lesson/5/check','lesson/5/practice']:
+                await m.goto(B+'#'+h); await m.evaluate(f"setSkin('{skin}')"); await m.wait_for_timeout(120)
                 if await overflow(m): bad.append(f'{skin}:{h}')
         rep('нет горизонтальной прокрутки на телефоне', not bad, ','.join(bad[:6]))
         # 14. Клавиатура: ответ по Enter
         await pg.goto(B+'#lesson/1/practice'); await pg.wait_for_timeout(150)
-        await pg.fill('#answer', await pg.evaluate("session.task.answer")); await pg.press('#answer','Enter')
+        await pg.evaluate("v => fillAnswer(v)", await pg.evaluate("session.task.answer")); await pg.press('#ans-num','Enter')
         rep('ответ отправляется клавишей Enter', 'Верно' in await pg.inner_text('#feedback'))
+        # 14b. Удобство: путь, «Продолжить», шаги, клеточки дроби
+        await pg.goto(B); await pg.evaluate("localStorage.removeItem('vektor-progress-v3')"); await pg.reload(); await pg.wait_for_timeout(300)
+        rep('путь из 9 тем + финиш', await pg.locator('#path .node').count()==10)
+        await pg.click('.hero-next [data-continue]'); await pg.wait_for_timeout(200)
+        rep('«Продолжить» ведёт в урок первой темы', (await pg.evaluate("location.hash")).startswith('#lesson/0/learn'))
+        rep('шаги урока и «что делать сейчас»', await pg.locator('.stepper .step').count()==3 and await pg.locator('.do-now').count()==1)
+        await pg.click('.stepper [data-stage=practice]'); await pg.wait_for_timeout(150)
+        await pg.fill('#ans-num','3'); await pg.press('#ans-num','/'); await pg.keyboard.type('5')
+        rep('«/» переносит курсор в знаменатель', await pg.input_value('#ans-den')=='5')
+        await pg.fill('#ans-num',''); await pg.click('form.answer button[type=submit]')
+        rep('пустые клеточки — понятная подсказка', 'клеточки' in await pg.inner_text('#feedback') or 'верхнее' in await pg.inner_text('#feedback'))
+        await pg.click('#hint-btn'); rep('подсказка под задачей со счётчиком', await pg.locator('#hints .bubble').count()==1 and '(' in await pg.inner_text('#hint-btn'))
+        await pg.evaluate("v => fillAnswer(v)", '1/97'); await pg.click('form.answer button[type=submit]')
+        rep('неверный ответ: кнопка «Исправить ответ»', await pg.locator('#try-again').count()==1)
+        await pg.click('#try-again'); rep('«Исправить ответ» ставит курсор в клеточку', await pg.evaluate("document.activeElement.id")=='ans-num')
+        await pg.click('.back'); rep('«← К пути» возвращает на главную', (await pg.evaluate("location.hash"))=='#home')
+        await pg.goto(B+'#map'); rep('«Все темы»: кнопки Урок и Конспект', await pg.locator('.topic-actions .btn').count()>=17)
+        rep('меню из 4 пунктов', await pg.locator('nav [data-page]').count()==4)
+        await pg.goto(B+'#lesson/5/practice'); await pg.wait_for_timeout(150)
+        rep('смешанное число: клеточка «целые» открывается', not await pg.evaluate("getComputedStyle(document.querySelector('.fi-whole')).display==='none'") or await pg.locator('[data-whole]').count()==1)
+        await pg.evaluate("setSkin('pixel')"); await pg.goto(B+'#home'); await pg.wait_for_timeout(300)
+        rep('стиль «Пиксель» включается', await pg.evaluate("document.documentElement.dataset.skin")=='pixel')
+        await pg.evaluate("setSkin('notebook')")
         # 15. Геймификация
         await pg.goto(B); await pg.evaluate("localStorage.removeItem('vektor-progress-v3')"); await pg.reload(); await pg.wait_for_timeout(200)
         await pg.goto(B+'#lesson/1/practice'); await pg.wait_for_timeout(150)

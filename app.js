@@ -32,8 +32,8 @@ const ROUTE = window.VEKTOR_FRACTIONS.topics.map((t, i) => i); // раздел �
 const DIAG = ['concept', 'reduce', 'compare', 'add-same', 'mult', 'part-of'].map(id => byId[id]);
 const DONE = 80;
 
-const pages = { home: 'Мой маршрут', map: 'Карта знаний', diagnostic: 'Диагностика', library: 'Материалы', awards: 'Награды', teacher: 'Преподавателю', settings: 'Настройки', lesson: 'Занятие' };
-const STAGES = [['learn', 'Урок'], ['practice', 'Тренировка'], ['check', 'Проверка']];
+const pages = { home: 'Мой путь', map: 'Все темы', diagnostic: 'Диагностика', library: 'Все темы', awards: 'Награды', teacher: 'Отчёт для учителя', settings: 'Профиль', lesson: 'Занятие' };
+const STAGES = [['learn', 'Узнать'], ['practice', 'Потренироваться'], ['check', 'Проверить себя']];
 
 /* ================= Состояние ================= */
 
@@ -53,6 +53,7 @@ try { state = Object.assign(fresh(), JSON.parse(localStorage.getItem(KEY))); } c
   for (const k of ['answers', 'asked']) if (!Number.isFinite(state[k])) state[k] = 0;
   if (typeof state.settings.name !== 'string' || !state.settings.name.trim()) state.settings.name = d.settings.name;
   if (!['steps', 'visual'].includes(state.settings.style)) state.settings.style = 'steps';
+  if (typeof state.settings.sound !== 'boolean') state.settings.sound = true;
   if (!Array.isArray(state.diag.results) || !Number.isInteger(state.diag.step)) state.diag = d.diag;
   state.attempts = state.attempts.filter(a => a && typeof a === 'object');
 })();
@@ -106,17 +107,61 @@ const app = document.querySelector('#app');
 const head = (title, lead) => `<div class="page-head"><h1>${title}</h1>${lead ? `<p class="lead">${lead}</p>` : ''}</div>`;
 const bar = v => `<div class="bar" role="progressbar" aria-valuenow="${v}" aria-valuemin="0" aria-valuemax="100"><i style="width:${v}%"></i></div>`;
 
-function taskCard(task, { formId = 'answer-form', button = 'Проверить ответ', exam = false } = {}) {
-  const input = task.choices
-    ? `<div class="choices" role="group" aria-label="Выбери знак">${task.choices.map(c => `<button type="submit" class="btn btn-ghost choice" name="choice" value="${esc(c)}">${esc(c)}</button>`).join('')}</div>`
-    : `<label>Твой ответ<input id="answer" inputmode="text" autocomplete="off" placeholder="${esc(task.placeholder || 'число или дробь')}"></label>
-       <div class="keypad" aria-label="Быстрый ввод"><button type="button" data-insert="/" aria-label="Знак дроби">/</button><button type="button" data-insert=" " aria-label="Пробел для смешанного числа">␣</button><button type="button" data-insert="-" aria-label="Минус">−</button></div>
-       <button class="btn btn-primary" type="submit">${button}</button>`;
+// Поле ответа: дробь клеточками (числитель сверху, знаменатель снизу), при желании — целая часть
+function answerInput(task, button) {
+  if (task.choices) return `<div class="choices" role="group" aria-label="Выбери знак">${task.choices.map(c => `<button type="submit" class="btn btn-ghost choice" name="choice" value="${esc(c)}" aria-label="${{ '<': 'меньше', '>': 'больше', '=': 'равно' }[c] || c}">${esc(c)}</button>`).join('')}</div>`;
+  const numberOnly = !String(task.answer).includes('/') && task.accept === 'exact';
+  if (numberOnly) return `<div class="answer-row"><label class="num-input"><span class="visually-hidden">Твой ответ</span><input id="ans-num" inputmode="numeric" autocomplete="off" placeholder="?" aria-label="Твой ответ — число"></label><button class="btn btn-primary btn-big" type="submit">${button}</button></div>`;
+  const mixed = task.accept === 'mixed';
+  return `<div class="answer-row">
+    <div class="frac-input${mixed ? ' with-whole' : ''}" role="group" aria-label="Твой ответ — дробь">
+      <label class="fi-whole"><input id="ans-whole" inputmode="numeric" autocomplete="off" aria-label="Целая часть"><span>целые</span></label>
+      <div class="fi-frac">
+        <input id="ans-num" inputmode="numeric" autocomplete="off" aria-label="Числитель — верхнее число" placeholder="?">
+        <i aria-hidden="true"></i>
+        <input id="ans-den" inputmode="numeric" autocomplete="off" aria-label="Знаменатель — нижнее число" placeholder="?">
+      </div>
+    </div>
+    <button class="btn btn-primary btn-big" type="submit">${button}</button>
+  </div>
+  <p class="fi-help small muted">Сверху — сколько частей взяли, снизу — на сколько частей делили. Ответ целый? Впиши его сверху, низ оставь пустым.${mixed ? '' : ' <button type="button" class="link small" data-whole>Добавить целую часть</button>'}</p>`;
+}
+
+function taskCard(task, { formId = 'answer-form', button = 'Проверить', exam = false, hints = false } = {}) {
   return `<p class="story">${task.story}</p>${exam && task.figureIsHint ? '' : figure(task.figure)}<p class="question" id="q">${task.question}</p>
-    <form class="answer" id="${formId}" autocomplete="off">${input}</form>
+    <form class="answer" id="${formId}" autocomplete="off">${answerInput(task, button)}</form>
+    ${hints ? `<div class="hint-zone"><div id="hints"></div><button type="button" class="btn btn-ghost" id="hint-btn">Подсказка</button></div>` : ''}
     <div class="feedback" id="feedback" role="status" aria-live="polite"></div>`;
 }
-const readAnswer = (form, e) => e.submitter && e.submitter.name === 'choice' ? e.submitter.value : (form.querySelector('#answer')?.value || '');
+
+// Собрать ответ из клеточек → строка для проверки
+function readAnswer(form, e) {
+  if (e && e.submitter && e.submitter.name === 'choice') return { value: e.submitter.value };
+  const v = id => (form.querySelector('#' + id)?.value || '').trim();
+  const whole = v('ans-whole'), num = v('ans-num'), den = v('ans-den');
+  if (num.includes('/') || num.includes(' ')) return { value: (whole ? whole + ' ' : '') + num };
+  if (den && !num) return { error: 'Впиши верхнее число — числитель.' };
+  if (num && den) return { value: whole ? `${whole} ${num}/${den}` : `${num}/${den}` };
+  if (whole && !num && !den) return { value: whole };
+  return { value: num };
+}
+// Для тестов и наставника: разложить строку ответа по клеточкам
+function fillAnswer(val) {
+  const s = String(val).trim(), set = (id, x) => { const el = app.querySelector('#' + id); if (el) el.value = x; };
+  let m;
+  if ((m = s.match(/^(-?\d+) (\d+)\/(\d+)$/))) { app.querySelector('.frac-input')?.classList.add('with-whole'); set('ans-whole', m[1]); set('ans-num', m[2]); set('ans-den', m[3]); }
+  else if ((m = s.match(/^(-?\d+)\/(-?\d+)$/))) { set('ans-whole', ''); set('ans-num', m[1]); set('ans-den', m[2]); }
+  else { set('ans-whole', ''); set('ans-num', s); set('ans-den', ''); }
+}
+function bindAnswerKeys() {
+  const num = app.querySelector('#ans-num'), den = app.querySelector('#ans-den'), whole = app.querySelector('#ans-whole');
+  if (num && den) {
+    num.addEventListener('keydown', e => { if (e.key === '/' || e.key === 'ArrowDown') { e.preventDefault(); den.focus(); } });
+    den.addEventListener('keydown', e => { if ((e.key === 'Backspace' && !den.value) || e.key === 'ArrowUp') { e.preventDefault(); num.focus(); } });
+  }
+  if (whole && num) whole.addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'ArrowRight') { e.preventDefault(); num.focus(); } });
+  app.querySelectorAll('[data-whole]').forEach(b => b.onclick = () => { app.querySelector('.frac-input')?.classList.add('with-whole'); b.remove(); app.querySelector('#ans-whole')?.focus(); });
+}
 
 /* ================= ИИ-наставник: чат ================= */
 
@@ -140,13 +185,14 @@ function quickReplies(i, kind) {
   if (kind === 'lesson') {
     if (c.done) return [['go-practice', 'Перейти к тренировке', true]];
     if (c.pending) return [['hint', 'Подсказка'], ['solution', 'Покажи решение']];
+    if (c.forceOffline) return [['Дальше', 'Дальше', true], ['Повтори правило', 'Повтори правило'], ['Покажи картинку', 'Картинка']];
     if (isOnline() && c.truncated) return [['Продолжи, пожалуйста', 'Продолжи', true], ['Дальше', 'Дальше']];
     return isOnline()
       ? [['Дальше', 'Дальше', true], ['Не понял, объясни по-другому', 'Не понял'], ['Покажи на картинке', 'Покажи картинку'], ['Дай ещё пример', 'Ещё пример']]
       : [['Дальше', 'Дальше', true], ['Повтори правило', 'Повтори правило'], ['Покажи картинку', 'Картинка']];
   }
-  if (isOnline() && c.truncated) return [['Продолжи, пожалуйста', 'Продолжи', true], ['Дай подсказку', 'Подсказка']];
-  return isOnline()
+  if (isOnline() && c.truncated && !c.forceOffline) return [['Продолжи, пожалуйста', 'Продолжи', true], ['Дай подсказку', 'Подсказка']];
+  return isOnline() && !c.forceOffline
     ? [['Дай подсказку', 'Подсказка'], ['Я не понимаю задачу', 'Не понимаю задачу'], ['Покажи на картинке', 'Картинка']]
     : [['Дай подсказку', 'Подсказка'], ['Покажи картинку', 'Картинка'], ['Повтори правило', 'Правило']];
 }
@@ -160,7 +206,7 @@ function chatBox(i, kind) {
     <div class="chat-quick">${quickReplies(i, kind).map(([v, l, main]) => `<button type="button" class="btn ${main ? 'btn-primary' : 'btn-ghost'} btn-sm" data-quick="${esc(v)}">${l}</button>`).join('')}</div>
     <form class="chat-form" autocomplete="off"><label class="visually-hidden" for="chat-in-${kind}">Сообщение наставнику</label>
       <input id="chat-in-${kind}" placeholder="${ph}" maxlength="400"${c.busy ? ' disabled' : ''}><button class="btn btn-primary" type="submit"${c.busy ? ' disabled' : ''}>Отправить</button></form>
-    <p class="chat-mode small muted">${online ? `Наставник: ${esc(modelName())} через OpenRouter.` : 'Наставник без ИИ — отвечает по конспекту.'} ${online ? '' : '<a href="#settings">Подключить ИИ</a>'}</p>
+    <p class="chat-mode small muted">${online && !c.forceOffline ? `Наставник: ${esc(modelName())}.` : online ? 'ИИ временно недоступен — урок идёт по конспекту.' : 'Наставник без ИИ — отвечает по конспекту.'} ${online ? '' : '<a href="#settings">Подключить ИИ</a>'}</p>
   </div>`;
 }
 
@@ -202,6 +248,7 @@ function bindChat(i, kind) {
     tutorSay(i, kind, v);
   });
   box.querySelectorAll('[data-offline]').forEach(b => b.onclick = () => offlineFallback(i, kind));
+  box.querySelectorAll('[data-retry-ai]').forEach(b => b.onclick = () => { getChat(i, kind).forceOffline = false; b.closest('p').innerHTML = '<b>Пробую снова.</b> Напиши вопрос или нажми «Дальше».'; refreshChat(i, kind); });
 }
 
 function startLesson(i) {
@@ -229,8 +276,9 @@ function nextBeat(i) {
 
 function syncHints() {
   const box = app.querySelector('#hints'), hb = app.querySelector('#hint-btn'); if (!box || !session?.task) return;
-  box.innerHTML = session.task.hints.slice(0, session.hints).map(h => `<p class="bubble">${h}</p>`).join('');
-  if (hb) { hb.disabled = session.hints >= session.task.hints.length; hb.textContent = session.hints ? 'Ещё подсказка' : 'Показать подсказку'; }
+  const all = session.task.hints || [];
+  box.innerHTML = all.slice(0, session.hints).map((h, k) => `<p class="bubble"><b>Подсказка ${k + 1}.</b> ${h}</p>`).join('');
+  if (hb) { const left = all.length - session.hints; hb.disabled = left <= 0; hb.textContent = left <= 0 ? 'Подсказок больше нет' : `Подсказка (${left})`; }
 }
 
 function lessonTaskHelp(i, what) {
@@ -258,7 +306,7 @@ function tutorSay(i, kind, text) {
     }
     refreshChat(i, kind); return;
   }
-  if (isOnline()) return aiReply(i, kind);
+  if (isOnline() && !c.forceOffline) return aiReply(i, kind);
   // офлайн-наставник
   if (kind === 'lesson' && /^дальше$/i.test(text)) nextBeat(i);
   else {
@@ -283,17 +331,25 @@ async function aiReply(i, kind, hiddenUser) {
   const history = c.msgs.filter(m => m.raw).slice(-14).map(m => ({ role: m.role, content: m.raw }));
   const msg = { role: 'assistant', html: '<p class="typing">Наставник думает…</p>', raw: null };
   c.msgs.push(msg); c.busy = true; refreshChat(i, kind);
+  const call = () => T.stream(ai, [{ role: 'system', content: sys }, ...history], txt => {
+    msg.html = T.render(txt, { streaming: true }).html || '<p class="typing">…</p>'; updateLastMsg(i, kind, msg);
+  }, { maxTokens: kind === 'lesson' ? 700 : 550, onFinish: r => { c.truncated = r === 'length'; } });
   try {
-    const text = await T.stream(ai, [{ role: 'system', content: sys }, ...history], txt => {
-      msg.html = T.render(txt, { streaming: true }).html || '<p class="typing">…</p>'; updateLastMsg(i, kind, msg);
-    }, { maxTokens: kind === 'lesson' ? 700 : 550, onFinish: r => { c.truncated = r === 'length'; } });
+    let text;
+    try { text = await call(); }
+    catch (e) { if (!/Нет связи|не отвечает/.test(e.message || '')) throw e; await new Promise(r => setTimeout(r, 1500)); text = await call(); } // один повтор при сбое сети
     const r = T.render(text);
     msg.raw = text; msg.html = r.html || '<p>…</p>';
     if (r.done && kind === 'lesson') c.done = true;
     if (kind === 'task' && session?.mode === 'practice') session.askedAi = true;
+    c.forceOffline = false;
   } catch (e) {
-    msg.error = true;
-    msg.html = `<p>${esc(e.message || 'Не получилось получить ответ.')}</p><p class="small">Пока могу помочь по конспекту: <button type="button" class="link" data-offline="1">ответить без ИИ</button></p>`;
+    // ИИ недоступен — урок не стопорится: продолжаем по конспекту
+    c.busy = false; c.forceOffline = true;
+    const idx = c.msgs.indexOf(msg); if (idx >= 0) c.msgs.splice(idx, 1);
+    c.msgs.push({ role: 'assistant', error: true, html: `<p class="small"><b>ИИ сейчас не отвечает</b> — ${esc(e.message || 'нет связи')} Продолжаю по конспекту. <button type="button" class="link" data-retry-ai>Попробовать ИИ снова</button></p>` });
+    offlineFallback(i, kind);
+    return;
   } finally {
     c.busy = false; refreshChat(i, kind);
   }
@@ -303,9 +359,56 @@ async function aiReply(i, kind, hiddenUser) {
 function offlineFallback(i, kind) {
   const c = getChat(i, kind), t = topics[i], task = kind === 'task' ? session?.task : null;
   const last = [...c.msgs].reverse().find(m => m.role === 'user' && !m.error);
-  if (kind === 'lesson' && (!last || /^(дальше|начни урок)/i.test(last.raw || ''))) nextBeat(i);
+  if (kind === 'lesson' && c.beat < 0 && c.msgs.some(m => m.role === 'assistant' && m.raw)) c.beat = 0; // приветствие уже было от ИИ
+  if (kind === 'lesson' && (!last || /^(дальше|начни урок|продолжи)/i.test(last.raw || ''))) nextBeat(i);
   else c.msgs.push({ role: 'assistant', html: T.localAnswer(t, last?.raw || 'правило', task, c.hint).html });
   refreshChat(i, kind);
+}
+
+/* ================= Звуки ================= */
+
+let audioCtx = null;
+// Короткие тихие звуки на ответы; выключаются в профиле
+function sfx(kind) {
+  if (state.settings.sound === false) return;
+  try {
+    audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
+    const notes = { ok: [660, 880], wrong: [330, 262], win: [523, 659, 784, 1047] }[kind] || [];
+    notes.forEach((hz, k) => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain(), t0 = audioCtx.currentTime + k * 0.11;
+      o.type = kind === 'wrong' ? 'triangle' : 'sine'; o.frequency.value = hz;
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.07, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
+      o.connect(g).connect(audioCtx.destination); o.start(t0); o.stop(t0 + 0.25);
+    });
+  } catch {}
+}
+
+/* ================= Знакомство с интерфейсом ================= */
+
+const TOUR = [
+  { sel: '.hero-next [data-continue]', title: 'Главная кнопка', text: 'Всегда ведёт к следующему шагу. Не знаешь, что делать, — жми «Продолжить».' },
+  { sel: '#path', title: 'Твой путь', text: 'Кружки — темы по порядку. Зелёный — освоено, жёлтый — ты здесь. Нажми на любой кружок, чтобы открыть тему.' },
+  { sel: '.hud', title: 'Звёзды и огонёк', text: 'Звёзды — за решённые задачи. Огонёк — сколько дней подряд ты занимаешься.' },
+  { sel: 'nav', title: 'Меню', text: 'Путь, все темы, награды и профиль. В профиле можно поменять имя и подключить ИИ-наставника.' },
+];
+function startTour(k = 0) {
+  document.querySelectorAll('.tour-hole, .tour-tip').forEach(el => el.remove());
+  if (k >= TOUR.length) { state.toured = true; save(); return; }
+  const step = TOUR[k], el = [...document.querySelectorAll(step.sel)].find(e => e.offsetParent !== null || getComputedStyle(e).position === 'fixed');
+  if (!el) return startTour(k + 1);
+  el.scrollIntoView({ block: 'center', behavior: 'instant' });
+  const r = el.getBoundingClientRect(), pad = 8;
+  const hole = document.createElement('div'); hole.className = 'tour-hole';
+  Object.assign(hole.style, { left: r.left - pad + 'px', top: r.top - pad + 'px', width: r.width + pad * 2 + 'px', height: Math.min(r.height, innerHeight * 0.6) + pad * 2 + 'px' });
+  const tip = document.createElement('div'); tip.className = 'tour-tip'; tip.setAttribute('role', 'dialog'); tip.setAttribute('aria-label', step.title);
+  tip.innerHTML = `<p class="tour-count">${k + 1} из ${TOUR.length}</p><h3>${step.title}</h3><p>${step.text}</p>
+    <div class="row-actions"><button class="btn btn-primary" data-tour-next>${k + 1 < TOUR.length ? 'Дальше' : 'Понятно!'}</button><button class="btn btn-ghost" data-tour-skip>Пропустить</button></div>`;
+  document.body.append(hole, tip);
+  const below = r.bottom + 200 < innerHeight, tw = Math.min(340, innerWidth - 32);
+  Object.assign(tip.style, { width: tw + 'px', left: Math.max(16, Math.min(innerWidth - tw - 16, r.left)) + 'px', top: (below ? Math.min(r.bottom + 16, innerHeight - 220) : Math.max(16, r.top - 216)) + 'px' });
+  tip.querySelector('[data-tour-next]').onclick = () => startTour(k + 1);
+  tip.querySelector('[data-tour-skip]').onclick = () => startTour(TOUR.length);
+  tip.querySelector('[data-tour-next]').focus();
 }
 
 /* ================= Награды: тосты, праздник, счётчики ================= */
@@ -356,46 +459,81 @@ function celebrate(ev, { quiet = false } = {}) {
 
 /* ================= Главная ================= */
 
+// Какой шаг темы сейчас: урок → тренировка → проверка
+function stepStates(i) {
+  const t = topics[i], m = meta(i), need = A.need(pace()), c = chats[`${t.id}:lesson`];
+  if (t.legacy) return { learn: 'done', practice: pct(i) >= DONE ? 'done' : 'now', check: 'done', next: 'practice' };
+  const mast = pct(i) >= DONE;
+  const learned = mast || m.practice > 0 || (c && c.done);
+  const practiced = mast || m.practice >= need;
+  const next = mast ? 'practice' : !learned ? 'learn' : !practiced ? 'practice' : 'check';
+  return { learn: learned ? 'done' : next === 'learn' ? 'now' : 'next', practice: practiced ? 'done' : next === 'practice' ? 'now' : 'next', check: mast ? 'done' : next === 'check' ? 'now' : 'next', next };
+}
+const STAGE_SAY = {
+  learn: 'Урок с наставником: картинки, правило и пример',
+  practice: 'Тренировка: задачи с подсказками',
+  check: 'Проверка: 4 задачи без подсказок',
+  review: 'Повторение: 2 задачи, чтобы не забыть',
+};
+
+// Что откроет большая кнопка «Продолжить»
+function continueTarget() {
+  const due = dueReviews();
+  if (due.length) return { i: due[0], stage: 'review', title: topics[due[0]].title, say: STAGE_SAY.review, reason: 'Пора повторить — это займёт пару минут.' };
+  const ns = nextStep(), st = stepStates(ns.i);
+  return { i: ns.i, stage: st.next, title: topics[ns.i].title, say: STAGE_SAY[st.next], reason: ns.reason };
+}
+
 function home() {
-  const ns = nextStep(), cur = currentStop(), t = topics[ns.i], due = dueReviews(), p = pace();
+  const ct = continueTarget(), p = pace(), cur = currentStop();
   const hour = new Date().getHours();
   const hello = hour < 12 ? 'Доброе утро' : hour < 18 ? 'Добрый день' : 'Добрый вечер';
-  const stops = ROUTE.map((i, k) => {
-    const cls = i === cur ? 'is-current' : 'is-' + (status(i) === 'done' ? 'done' : status(i) === 'started' ? 'started' : 'todo');
-    return `<button class="stop ${cls}${k % 2 ? ' below' : ''}" data-lesson="${i}" aria-label="${topics[i].title}: ${statusText(i)}">
-      <span class="dot">${status(i) === 'done' ? '✓' : k + 1}</span><span class="label">${topics[i].short || topics[i].title}</span></button>`;
+  const firstTime = !state.answers && !state.diag.step;
+  const x = [0, 1, 2, 1, 0, -1, -2, -1, 0];
+  const nodes = ROUTE.map((i, k) => {
+    const st = status(i), isCur = i === ct.i, due = dueReviews().includes(i), steps = stepStates(i);
+    const sub = st === 'done' ? (due ? 'Пора повторить' : 'Освоено') : isCur ? 'Ты здесь' : st === 'started' ? 'Начато' : 'Можно открыть';
+    return `<li class="node is-${st}${isCur ? ' is-current' : ''}${due ? ' is-due' : ''}${x[k % x.length] > 0 ? ' left' : ''}" style="--x:${x[k % x.length]}">
+      ${isCur ? `<button class="node-bubble" data-continue>${ct.stage === 'review' ? 'Повторить' : steps.next === 'learn' && !meta(i).practice ? 'Начать' : 'Продолжить'}</button>` : ''}
+      <button class="node-btn" data-lesson="${i}" style="--p:${pct(i)}" aria-label="${topics[i].title}: ${sub}">
+        <span class="node-face">${st === 'done' && !due ? '✓' : due ? G.icon('repeat', 26) : k + 1}</span>
+      </button>
+      <div class="node-label"><b>${topics[i].short || topics[i].title}</b><span>${sub}</span></div>
+    </li>`;
   }).join('');
-  return head(`${hello}, ${esc(state.settings.name)}!`, 'Вот твой маршрут по разделу «Обыкновенные дроби». Ты сейчас здесь — на выделенной точке.') + `
-  <section aria-label="Маршрут по разделу «Обыкновенные дроби»" class="route" id="route"><svg class="vector" aria-hidden="true"></svg>${stops}</section>
-  <div class="layout">
-    <div class="stack">
-      ${due.length ? `<div class="sheet review-due"><h2>Повторить сегодня</h2><p class="muted">Две задачи на тему, которую ты уже освоил, — чтобы не забылось.</p><div class="review-list">${due.map(i => `<button class="btn btn-ghost" data-review="${i}">${topics[i].title}</button>`).join('')}</div></div>` : ''}
-      <div class="sheet next">
-        <div><h2>${ns.reason ? 'Сначала повторим' : 'Следующий шаг'}: ${t.title}</h2><p class="muted">${ns.reason || t.goal || t.idea}</p></div>
-        <div class="actions"><button class="btn btn-primary" data-lesson="${ns.i}">${meta(ns.i).practice ? 'Продолжить' : 'Начать урок'}</button><span class="muted small">${p === 'fast' ? '7–10' : p === 'slow' ? '15–20' : '10–15'} минут</span></div>
-      </div>
-      <div class="facts">
-        <div class="fact"><strong>${mastered()}<small> из ${topics.length}</small></strong><span>тем освоено</span></div>
-        <div class="fact"><strong>${checked()}<small> из ${topics.length}</small></strong><span>тем начато</span></div>
-        <div class="fact"><strong>${state.answers}</strong><span>ответов дано</span></div>
-      </div>
-      ${todayCard()}
+  return `<div class="page-head home-head"><h1>${hello}, ${esc(state.settings.name)}!</h1></div>
+  <section class="hero-next" aria-label="Следующий шаг">
+    <div class="hero-text">
+      <p class="hero-kicker">${ct.stage === 'review' ? 'Повторение' : ct.reason ? 'Сначала повторим' : 'Продолжай отсюда'}</p>
+      <h2>${ct.title}</h2>
+      <p class="muted">${ct.reason || ct.say}</p>
+      ${ct.stage !== 'review' && !topics[ct.i].legacy ? miniSteps(ct.i) : ''}
     </div>
+    <button class="btn btn-primary btn-big btn-go" data-continue>${G.icon('rocket', 22)} Продолжить</button>
+  </section>
+  <div class="layout home-layout">
+    <section class="path-wrap" aria-label="Мой путь по теме «Обыкновенные дроби»">
+      <div class="path-head"><h2>Мой путь: обыкновенные дроби</h2><span class="muted small">${ROUTE.filter(i => pct(i) >= DONE).length} из ${ROUTE.length} тем освоено</span></div>
+      <ol class="path" id="path"><svg class="path-line" aria-hidden="true"></svg>${nodes}
+        <li class="node node-finish" style="--x:0"><span class="finish-flag">${G.icon('flag', 30)}</span><div class="node-label"><b>Финиш</b><span>Покоритель дробей</span></div></li>
+      </ol>
+    </section>
     <div class="stack side">
+      ${firstTime ? `<div class="sheet note"><h3>Не знаешь, с чего начать?</h3><p>Пройди быстрый тест из 6 задач — и путь подстроится под тебя.</p><button class="btn btn-primary" data-go="diagnostic">Пройти тест</button></div>` : ''}
+      ${todayCard()}
       <div class="sheet pace pace-${p}">
         <h3>Твой темп: ${A.PACE[p].label.toLowerCase()}</h3>
-        <p class="muted small">${A.PACE[p].say} Темп подстраивается сам — по тому, как ты решаешь.</p>
-        ${state.attempts.length < 4 ? '<p class="small muted">Реши ещё несколько задач — и маршрут подстроится под тебя.</p>' : ''}
+        <p class="muted small">${A.PACE[p].say}</p>
       </div>
-      <div class="sheet knowledge">
-        <h3>Что ты уже знаешь</h3>
-        <p class="muted small" style="margin-top:6px">Средний прогресс по начатым темам — <b>${knowledge()}%</b>. Темы, которые ты ещё не открывал, не считаются пробелами.</p>
-        ${SECTIONS.map(s => { const ix = topics.map((t, i) => i).filter(i => topics[i].section === s); const v = Math.round(ix.reduce((a, i) => a + pct(i), 0) / ix.length); return `<div class="row"><span>${s}</span><b>${v}%</b>${bar(v)}</div>`; }).join('')}
-        <button class="btn btn-ghost" data-go="diagnostic" style="margin-top:6px">Пройти диагностику</button>
-      </div>
-      <div class="sheet note"><h3>Наставник ${isOnline() ? 'на связи' : 'работает по конспекту'}</h3><p>${isOnline() ? `Ведёт урок, отвечает на вопросы и рисует дроби. Модель: ${esc(modelName())}.` : 'Ведёт урок по методичке. Чтобы он отвечал на любые вопросы, подключи ИИ в настройках.'}</p>${isOnline() ? '' : '<button class="link" data-go="settings">Подключить ИИ</button>'}</div>
+      <div class="sheet small-note"><h3>Наставник ${isOnline() ? 'на связи' : 'работает по конспекту'}</h3><p class="muted small">${isOnline() ? `Ведёт урок, отвечает на вопросы и рисует дроби (${esc(modelName())}).` : 'Ведёт урок по методичке. Чтобы он отвечал на любые вопросы, подключи ИИ в профиле.'}</p></div>
     </div>
   </div>`;
+}
+
+// Три точки шагов темы: ✓ готово, ● сейчас, ○ потом
+function miniSteps(i) {
+  const st = stepStates(i);
+  return `<ol class="mini-steps">${STAGES.map(([id, name]) => `<li class="is-${st[id]}"><span>${st[id] === 'done' ? '✓' : ''}</span>${name}</li>`).join('')}</ol>`;
 }
 
 function todayCard() {
@@ -419,23 +557,14 @@ function week() {
 }
 
 function drawRoute() {
-  const box = document.querySelector('#route'); if (!box) return;
-  const svg = box.querySelector('svg'), W = box.clientWidth, H = box.clientHeight;
-  if (!W || getComputedStyle(svg).display === 'none') return;
-  const n = ROUTE.length;
-  // сплошная линия — пройденная часть пути: до последней начатой темы
-  const cur = Math.max(ROUTE.indexOf(currentStop()), ...ROUTE.map((i, k) => pct(i) > 0 ? k : 0));
-  const pts = ROUTE.map((_, k) => [W * (0.06 + 0.86 * k / (n - 1)), H * (0.82 - 0.64 * Math.pow(k / (n - 1), 0.85))]);
-  box.querySelectorAll('.stop').forEach((el, k) => { el.style.left = pts[k][0] + 'px'; el.style.top = pts[k][1] + 'px'; });
-  const P = a => a.map(p => p.join(',')).join(' ');
-  const last = pts[n - 1], prev = pts[n - 2], ang = Math.atan2(last[1] - prev[1], last[0] - prev[0]);
-  const tip = [last[0] + 34 * Math.cos(ang), last[1] + 34 * Math.sin(ang)];
-  const hw = (a, d) => [tip[0] - 16 * Math.cos(ang) + d * 9 * Math.cos(ang + a), tip[1] - 16 * Math.sin(ang) + d * 9 * Math.sin(ang + a)];
-  svg.innerHTML = `<defs><linearGradient id="holo-grad" x1="0" x2="1"><stop offset="0" stop-color="#7EE0C3"/><stop offset=".45" stop-color="#8F7CFF"/><stop offset="1" stop-color="#FF7EB8"/></linearGradient></defs><line class="axis" x1="0" y1="${H - 1}" x2="${W}" y2="${H - 1}"/>
-    <polyline class="todo" points="${P(pts.slice(Math.max(cur, 0)).concat([tip]))}"/>
-    <polyline class="done" points="${P(pts.slice(0, cur + 1))}"/>
-    <polygon class="head" points="${P([tip, hw(Math.PI / 2, 1), hw(Math.PI / 2, -1)])}"/>`;
-  const done = svg.querySelector('.done'); if (done) done.style.setProperty('--len', Math.ceil(done.getTotalLength()) + 1);
+  const box = document.querySelector('#path'); if (!box) return;
+  const svg = box.querySelector('.path-line'), b = box.getBoundingClientRect();
+  const pts = [...box.querySelectorAll('.node-btn, .finish-flag')].map(el => { const r = el.getBoundingClientRect(); return [r.left - b.left + r.width / 2, r.top - b.top + r.height / 2]; });
+  if (pts.length < 2) return;
+  svg.setAttribute('width', b.width); svg.setAttribute('height', b.height);
+  const lastDone = Math.max(-1, ...ROUTE.map((i, k) => pct(i) >= DONE ? k : -1)) + 1; // до текущей темы — сплошная
+  const seg = (a, z) => pts.slice(a, z + 1).map((p, k) => `${k ? 'L' : 'M'}${p[0]},${p[1]}`).join(' ');
+  svg.innerHTML = `<path class="todo" d="${seg(0, pts.length - 1)}"/>${lastDone > 0 ? `<path class="done" d="${seg(0, Math.min(lastDone, pts.length - 1))}"/>` : ''}`;
 }
 
 /* ================= Карта и материалы ================= */
@@ -443,48 +572,60 @@ function drawRoute() {
 const filters = cur => `<div class="filters" role="group" aria-label="Фильтр по разделам">${['Все', ...SECTIONS].map(s => `<button class="chip" data-filter="${s}" aria-pressed="${s === cur}">${s}</button>`).join('')}</div>`;
 
 function mapPage(filter = 'Все') {
-  const cur = currentStop();
-  return head('Карта знаний', 'Вся программа на одном листе. Открывай любую тему — порядок подсказывает маршрут, но не запрещает.') + filters(filter) +
+  const cur = continueTarget().i;
+  return head('Все темы', 'Можно открыть любую тему. «Урок» — объяснение с наставником, «Конспект» — коротко прочитать правило и примеры.') + filters(filter) +
     SECTIONS.filter(s => filter === 'Все' || s === filter).map(s => {
       const ix = topics.map((t, i) => i).filter(i => topics[i].section === s), done = ix.filter(i => pct(i) >= DONE).length;
-      return `<section class="section"><h2>${s === 'Дроби' ? 'Обыкновенные дроби' : s} <small>освоено ${done} из ${ix.length}</small></h2><div class="topics">${ix.map(i => `
-        <button class="topic is-${status(i)}${i === cur ? ' is-current' : ''}" data-lesson="${i}">
-          <h3>${topics[i].title}</h3><span class="status">${i === cur ? 'Следующий шаг маршрута' : statusText(i)}${topics[i].legacy ? ' · краткое занятие' : ''}</span>${bar(pct(i))}
-        </button>`).join('')}</div></section>`;
+      return `<section class="section"><h2>${s === 'Дроби' ? 'Обыкновенные дроби' : s} <small>освоено ${done} из ${ix.length}</small></h2><div class="topics">${ix.map(i => {
+        const t = topics[i];
+        return `<article class="topic is-${status(i)}${i === cur ? ' is-current' : ''}">
+          <h3>${t.title}</h3>
+          <span class="status">${i === cur ? 'Ты здесь' : statusText(i)}${t.legacy ? ' · пока одна задача' : ''}</span>
+          ${t.legacy ? '' : miniSteps(i)}
+          <div class="topic-actions"><button class="btn btn-primary btn-sm" data-lesson="${i}">${t.legacy ? 'Решить задачу' : pct(i) >= DONE ? 'Повторить урок' : 'Урок'}</button>${t.legacy ? '' : `<button class="btn btn-ghost btn-sm" data-lesson="${i}" data-tab="notes">Конспект</button>`}</div>
+        </article>`; }).join('')}</div></section>`;
     }).join('');
 }
-
-function library(filter = 'Все') {
-  const list = topics.map((t, i) => i).filter(i => filter === 'Все' || topics[i].section === filter);
-  return head('Материалы', 'Методички по темам: чему научишься, наглядная модель, правило, разобранные примеры и частые ошибки.') + filters(filter) +
-    `<div class="topics">${list.map(i => { const t = topics[i]; return `<article class="topic"><h3>${t.title}</h3><p class="muted small">${t.goal || t.idea}</p>
-      <span class="status">${t.legacy ? 'Методичка готовится — пока одна задача' : `${t.explain.examples.length} разобранных примера · ${t.mistakes.length} частые ошибки`}</span>
-      <button class="link" data-lesson="${i}" data-tab="notes" style="margin-top:auto;align-self:flex-start">${t.legacy ? 'Решить задачу' : 'Открыть конспект'}</button></article>`; }).join('')}</div>`;
-}
+const library = filter => mapPage(filter);
 
 /* ================= Занятие ================= */
 
 let learnTab = 'tutor';
 
+const DO_NOW = {
+  learn: () => learnTab === 'tutor' ? 'Читай наставника и нажимай «Дальше». Что-то непонятно — напиши вопрос в поле внизу.' : 'Прочитай правило и примеры. Потом нажми «Начать тренировку».',
+  practice: () => 'Реши задачу и нажми «Проверить». Застрял — жми «Подсказка» или спроси наставника.',
+  check: () => 'Подсказок нет. Из 4 задач нужно решить хотя бы 3 — тогда тема засчитается.',
+  review: () => 'Две задачи на тему, которую ты уже освоил, — чтобы не забылось.',
+};
+
 function lessonPage(i, stage) {
   const t = topics[i];
   if (t.legacy) stage = 'practice';
-  const tabs = t.legacy ? '' : `<div class="stages" role="navigation" aria-label="Этапы занятия">${STAGES.map(([id, name], k) =>
-    `<button class="stage${id === stage ? ' on' : ''}" data-stage="${id}" ${id === stage ? 'aria-current="step"' : ''}><b>${k + 1}</b>${name}</button>`).join('')}</div>`;
-  const req = (t.requires || []).map(id => byId[id]).filter(x => x != null);
-  const reqHtml = req.length ? `<p class="requires small">Опирается на: ${req.map(r => `<button class="link" data-lesson="${r}">${topics[r].title}</button>${pct(r) >= DONE ? ' ✓' : ''}`).join(', ')}</p>` : '';
+  const st = stepStates(i), need = A.need(pace()), m = meta(i);
+  const sub = { learn: st.learn === 'done' ? 'Пройдено' : 'Картинки и правило', practice: st.practice === 'done' ? 'Готово' : `${Math.min(m.practice, need)} из ${need} задач`, check: st.check === 'done' ? 'Тема освоена' : 'Нужно 3 из 4' };
+  const steps = t.legacy || stage === 'review' ? '' : `<ol class="stepper" aria-label="Шаги темы">${STAGES.map(([id, name], k) => `
+    <li><button class="step is-${st[id]}${id === stage ? ' on' : ''}" data-stage="${id}"${id === stage ? ' aria-current="step"' : ''}>
+      <span class="step-n">${st[id] === 'done' ? '✓' : k + 1}</span><span class="step-t"><b>${name}</b><small>${sub[id]}</small></span>
+    </button></li>`).join('')}</ol>`;
+  const req = (t.requires || []).map(id => byId[id]).filter(x => x != null && pct(x) < DONE);
+  const reqHtml = req.length && stage === 'learn' ? `<p class="requires small">Пригодится тема ${req.map(r => `<button class="link" data-lesson="${r}">«${topics[r].title}»</button>`).join(' и ')} — её можно повторить в любой момент.</p>` : '';
   const body = stage === 'learn' ? learnStage(i) : stage === 'check' ? checkStage(i, 'check') : stage === 'review' ? checkStage(i, 'review') : practiceStage(i);
-  return head(t.title, t.legacy ? t.idea : `После этой темы ты сможешь: ${t.goal.charAt(0).toLowerCase() + t.goal.slice(1)}`) + tabs + reqHtml + body;
+  return `<div class="lesson-top"><button class="btn btn-ghost btn-sm back" data-go="home">← К пути</button></div>
+    <div class="page-head"><h1>${t.title}</h1></div>
+    ${steps}
+    <p class="do-now">${G.icon('target', 20)}<span><b>Что делать сейчас:</b> ${DO_NOW[stage] ? DO_NOW[stage]() : ''}</span></p>
+    ${reqHtml}${body}`;
 }
 
 function learnStage(i) {
   const t = topics[i], e = t.explain;
-  const tabBtns = `<div class="learn-tabs" role="tablist" aria-label="Как изучать">
-    <button role="tab" class="chip" data-learn-tab="tutor" aria-selected="${learnTab === 'tutor'}" aria-pressed="${learnTab === 'tutor'}">Урок с наставником</button>
-    <button role="tab" class="chip" data-learn-tab="notes" aria-selected="${learnTab === 'notes'}" aria-pressed="${learnTab === 'notes'}">Конспект</button></div>`;
+  const tabBtns = `<div class="segmented" role="group" aria-label="Как изучать">
+    <button data-learn-tab="tutor" aria-pressed="${learnTab === 'tutor'}">${G.icon('chat', 18)} С наставником</button>
+    <button data-learn-tab="notes" aria-pressed="${learnTab === 'notes'}">${G.icon('book', 18)} Конспект</button></div>`;
   const side = `<aside class="stack side">
-      <div class="sheet"><h3>Лаборатория дробей</h3><p class="muted small">Меняй числа и смотри, как выглядит дробь на полоске, круге и прямой.</p>${V.labHtml('lab-side', { n: 3, d: 5, k: 1 })}</div>
-      <div class="sheet"><h3>Готов потренироваться?</h3><p class="muted small">Задачи каждый раз новые и подстраиваются под твой темп.</p><button class="btn btn-primary" data-stage="practice">Начать тренировку</button></div>
+      <div class="sheet"><h3>Готов потренироваться?</h3><p class="muted small">Задачи каждый раз новые и подстраиваются под твой темп.</p><button class="btn btn-primary btn-big" data-stage="practice">Начать тренировку →</button></div>
+      <details class="sheet lab-box" ${matchMedia('(min-width: 761px)').matches ? 'open' : ''}><summary><h3>Лаборатория дробей</h3><span class="muted small">Нажимай + и −, чтобы увидеть дробь</span></summary>${V.labHtml('lab-side', { n: 3, d: 5, k: 1 })}</details>
     </aside>`;
   if (learnTab === 'tutor') {
     return tabBtns + `<div class="layout"><section class="sheet tutor-lesson" aria-label="Урок с наставником">${chatBox(i, 'lesson')}</section>${side}</div>`;
@@ -514,19 +655,17 @@ function newPracticeTask(i) {
 function practiceStage(i) {
   const t = topics[i], m = meta(i), p = pace();
   if (!session || session.i !== i || session.mode !== 'practice') newPracticeTask(i);
-  const task = session.task, need = A.need(p);
+  const task = session.task, need = A.need(p), ready = m.practice >= need;
   return `<div class="layout">
-    <section class="sheet task" aria-labelledby="q">${t.legacy ? '' : `<p class="task-meta small muted">Уровень задач ${dots(m.level || 2)} · твой темп: ${A.PACE[p].label.toLowerCase()}</p>`}${taskCard(task)}</section>
+    <section class="sheet task" aria-labelledby="q">
+      ${t.legacy ? '' : `<div class="task-progress"><span>Решено ${Math.min(m.practice, need)} из ${need}</span>${bar(Math.round(Math.min(m.practice, need) / need * 100))}<span class="task-meta" title="Сложность задач подстраивается под тебя">Сложность ${dots(m.level || 2)}</span></div>`}
+      ${taskCard(task, { hints: true })}
+    </section>
     <aside class="stack side">
-      <div class="sheet tutor" aria-label="Подсказки">
-        <h3>Подсказки</h3>
-        <p class="muted small" style="margin-top:4px">${session.autoHint ? 'Первую подсказку открыли сразу — так будет легче начать.' : 'Открывай по одной — сначала попробуй сам.'}</p>
-        <div id="hints">${task.hints.slice(0, session.hints).map(h => `<p class="bubble">${h}</p>`).join('')}</div>
-        <button class="btn btn-ghost" id="hint-btn"${session.hints >= task.hints.length ? ' disabled' : ''}>${session.hints ? 'Ещё подсказка' : 'Показать подсказку'}</button>
-        ${t.legacy ? '' : `<div class="streak"><h3>Тренировка</h3><p class="small muted">Решено верно: <b>${m.practice}</b>. ${m.practice >= need ? 'Можно переходить к проверке.' : `До проверки советуем решить ещё ${need - m.practice}.`}</p>
-        <button class="btn ${m.practice >= need ? 'btn-primary' : 'btn-ghost'}" data-stage="check">Перейти к проверке</button></div>`}
-      </div>
-      ${t.legacy ? '' : `<div class="sheet"><h3>Наставник</h3>${chatBox(i, 'task')}</div>`}
+      ${t.legacy ? '' : `<div class="sheet streak ${ready ? 'ready' : ''}"><h3>${ready ? 'Можно проверять себя!' : 'Тренировка'}</h3>
+        <p class="small muted">${ready ? 'Ты решил достаточно задач. Можешь потренироваться ещё или перейти к проверке.' : `Реши ещё ${need - m.practice} ${plural(need - m.practice, 'задачу', 'задачи', 'задач')} — потом проверка.`}</p>
+        <button class="btn ${ready ? 'btn-primary' : 'btn-ghost'}" data-stage="check">Перейти к проверке</button></div>
+      <div class="sheet"><h3>Спроси наставника</h3>${chatBox(i, 'task')}</div>`}
     </aside>
   </div>`;
 }
@@ -649,7 +788,7 @@ function teacher() {
 
 function settings() {
   const s = state.settings;
-  return head('Настройки', 'Как к тебе обращаться, как объяснять и как подключить ИИ-наставника.') + `
+  return head('Профиль', 'Имя, цель дня, звуки и ИИ-наставник.') + `
   <div class="layout settings">
     <div class="stack">
       <form class="sheet" id="settings-form">
@@ -657,9 +796,14 @@ function settings() {
         <label class="field">Имя ученика<input name="name" id="set-name" value="${esc(s.name)}" maxlength="30" required></label>
         <label class="field">Цель дня<select name="goal" id="set-goal">${[3, 5, 10].map(n => `<option value="${n}"${game().goal === n ? ' selected' : ''}>${n} задач в день</option>`).join('')}</select></label>
         <label class="field">Как объяснять<select name="style" id="set-style"><option value="steps"${s.style === 'steps' ? ' selected' : ''}>Коротко и по шагам</option><option value="visual"${s.style === 'visual' ? ' selected' : ''}>Через наглядные примеры</option></select></label>
+        <label class="switch"><input type="checkbox" name="sound" id="set-sound"${state.settings.sound === false ? '' : ' checked'}> Звуки при ответах</label>
         <button class="btn btn-primary" type="submit">Сохранить</button>
         <div class="feedback" id="feedback" role="status" aria-live="polite"></div>
       </form>
+      <div class="sheet"><h2>Помощь</h2><p class="muted small">Короткая экскурсия по главному экрану: где кнопка «Продолжить», путь, звёзды и меню.</p>
+        <button class="btn btn-ghost" id="tour-again">Показать подсказки снова</button></div>
+      <div class="sheet"><h2>Для взрослых</h2><p class="muted small">Отчёт по темам, темпу и частым ошибкам, а также быстрый тест, чтобы подобрать маршрут.</p>
+        <div class="row-actions"><button class="btn btn-ghost" data-go="teacher">Отчёт для учителя</button><button class="btn btn-ghost" data-go="diagnostic">Диагностика</button></div></div>
       <form class="sheet" id="ai-form" autocomplete="off">
         <h2>ИИ-наставник</h2>
         <p class="muted small">Наставник работает на моделях DeepSeek через OpenRouter. Без подключения он ведёт урок по конспекту и отвечает на простые вопросы.</p>
@@ -701,12 +845,13 @@ function render() {
   const lessonStage = stage || (topics[i].legacy || meta(i).practice ? 'practice' : 'learn');
   document.querySelector('#crumb').textContent = page === 'lesson' ? topics[i].title : pages[page];
   document.title = (page === 'home' ? '' : (page === 'lesson' ? topics[i].title : pages[page]) + ' — ') + 'Вектор';
-  document.querySelectorAll('nav button[data-page]').forEach(b => b.dataset.page === page ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
+  document.querySelectorAll('.sidebar [data-page]').forEach(b => (b.dataset.page === page || (page === 'library' && b.dataset.page === 'map')) ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
   document.querySelector('#student-name').textContent = state.settings.name;
   document.querySelector('#avatar').textContent = (state.settings.name[0] || 'А').toUpperCase();
   app.innerHTML = ({ home, map: () => mapPage(filterState.map), diagnostic, library: () => library(filterState.library), awards, teacher, settings, lesson: () => lessonPage(i, lessonStage) })[page]();
   bind(page, i, lessonStage);
   hud();
+  if (page === 'home' && !state.toured && !navigator.webdriver) setTimeout(() => route().page === 'home' && startTour(0), 600);
   requestAnimationFrame(drawRoute);
 }
 
@@ -726,6 +871,7 @@ const EVENT_TEXT = {
 
 function bind(page, i, stage) {
   app.querySelectorAll('[data-go]').forEach(b => b.onclick = () => location.hash = b.dataset.go);
+  app.querySelectorAll('[data-continue]').forEach(b => b.onclick = () => { const ct = continueTarget(); session = null; if (ct.stage === 'learn') learnTab = 'tutor'; location.hash = `lesson/${ct.i}/${ct.stage}`; });
   app.querySelectorAll('[data-lesson]').forEach(b => b.onclick = () => { session = null; if (b.dataset.tab) learnTab = b.dataset.tab; location.hash = 'lesson/' + b.dataset.lesson + (b.dataset.tab && !topics[+b.dataset.lesson].legacy ? '/learn' : ''); });
   app.querySelectorAll('[data-review]').forEach(b => b.onclick = () => { session = null; location.hash = `lesson/${b.dataset.review}/review`; });
   app.querySelectorAll('[data-stage]').forEach(b => b.onclick = () => { session = null; location.hash = `lesson/${i}/${b.dataset.stage}`; });
@@ -751,10 +897,12 @@ function bind(page, i, stage) {
     const s = session, fb = app.querySelector('#feedback');
     form.onsubmit = e => {
       e.preventDefault();
-      const value = readAnswer(form, e);
       if (s.answered) return;
+      const got = readAnswer(form, e);
+      if (got.error) { fb.className = 'feedback bad'; fb.innerHTML = got.error; return; }
+      const value = got.value;
       const r = check(value, s.task);
-      if (r.empty || r.unreadable) { fb.className = 'feedback bad'; fb.innerHTML = r.msg; return; }
+      if (r.empty || r.unreadable) { fb.className = 'feedback bad'; fb.innerHTML = r.empty ? 'Сначала впиши ответ в клеточки.' : r.msg; return; }
       markActivity();
       const m = meta(i), t = topics[i];
       if (r.mistake) m.errors[r.mistake] = (m.errors[r.mistake] || 0) + 1;
@@ -766,8 +914,12 @@ function bind(page, i, stage) {
           if (r.mistake) s.lastMistake = r.mistake;
           m.errorsTotal++; G.wrong(game());
           const ev = t.legacy ? [] : A.afterAttempt(m, { solved: false, firstTry: false, hints: s.hints, sec: 0, mistake: r.mistake }, pace());
-          fb.className = 'feedback bad';
-          fb.innerHTML = feedbackFor(r, s.task, i) + eventsHtml(ev, i) + (t.legacy ? '' : ` <button class="link" id="ask-tutor">Разобрать с наставником</button>`);
+          fb.className = 'feedback bad big';
+          fb.innerHTML = `<p class="fb-title">${G.icon('repeat', 22)} Пока не так — попробуй ещё раз</p><p>${feedbackFor(r, s.task, i)}</p>` + eventsHtml(ev, i) +
+            `<div class="fb-actions"><button class="btn btn-primary" id="try-again">Исправить ответ</button>${s.hints < s.task.hints.length ? '<button class="btn btn-ghost" id="fb-hint">Подсказка</button>' : ''}${t.legacy ? '' : '<button class="btn btn-ghost" id="ask-tutor">Разобрать с наставником</button>'}</div>`;
+          fb.querySelector('#try-again').onclick = () => { const inp = app.querySelector('#ans-num'); if (inp) { inp.focus(); inp.select(); } };
+          const fh = fb.querySelector('#fb-hint'); if (fh) fh.onclick = () => app.querySelector('#hint-btn')?.click();
+          sfx('wrong');
           const ask = fb.querySelector('#ask-tutor');
           if (ask) ask.onclick = () => { tutorSay(i, 'task', `Я ответил «${value}», но не получилось. Помоги понять, где ошибка.`); app.querySelector('.chat-task')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
           bindEventButtons(fb, i);
@@ -783,13 +935,17 @@ function bind(page, i, stage) {
           state.attempts = [...state.attempts, { topic: t.id, firstTry, hints, sec, level: m.level, ai: !!s.askedAi }].slice(-60);
           setPct(i, Math.max(pct(i), Math.min(70, 10 + m.practice * 15)));
         } else setPct(i, 100);
-        fb.className = 'feedback';
-        fb.innerHTML = feedbackFor(r, s.task, i) + eventsHtml(ev, i) +
-          (!t.legacy && A.fastTrack(m, pace()) ? `<p class="fast-track">Похоже, ты это уже знаешь. Можно сразу к проверке. <button class="btn btn-primary btn-sm" data-stage-now="check">К проверке</button></p>` : '') +
-          ` <button class="link" id="next-task">Следующая задача</button>`;
-        fb.querySelector('#next-task').onclick = () => { newPracticeTask(i); render(); app.querySelector('#answer')?.focus(); };
+        const need = A.need(pace()), justReady = !t.legacy && m.practice === need;
+        fb.className = 'feedback big';
+        fb.innerHTML = `<p class="fb-title">${G.icon('star', 22)} Верно!</p><p>${feedbackFor(r, s.task, i).replace(/^<b>Верно!<\/b>\s*/, '')}</p>` + eventsHtml(ev, i) +
+          (!t.legacy && A.fastTrack(m, pace()) ? `<p class="fast-track">Похоже, ты это уже знаешь — можно сразу к проверке.</p>` : '') +
+          (justReady ? `<p class="fast-track">Ты решил ${need} ${plural(need, 'задачу', 'задачи', 'задач')} — можно проверить себя!</p>` : '') +
+          `<div class="fb-actions"><button class="btn btn-primary btn-big" id="next-task">Следующая задача →</button>${!t.legacy && (justReady || A.fastTrack(m, pace()) || m.practice > need) ? '<button class="btn btn-ghost" data-stage-now="check">К проверке</button>' : ''}</div>`;
+        form.querySelectorAll('input,button').forEach(el => el.disabled = true);
+        fb.querySelector('#next-task').onclick = () => { newPracticeTask(i); render(); app.querySelector('#ans-num')?.focus(); };
+        fb.querySelector('#next-task').focus({ preventScroll: true });
+        sfx('ok');
         bindEventButtons(fb, i);
-        const st = app.querySelector('.streak .small b'); if (st) st.textContent = m.practice;
         save(); celebrate(G.solved(game(), today(), { firstTry, hints, wrongBefore: s.tries.length - 1 })); return;
       }
       // проверка и повторение: один ответ на задачу
@@ -797,24 +953,24 @@ function bind(page, i, stage) {
       const ok = r.ok && !r.almost;
       if (ok) s.right++; else if (r.mistake) s.found.push(r.mistake);
       if (s.mode === 'check') { const ce = G.checkAnswer(game(), today(), ok); s.stars = (s.stars || 0) + ce.reduce((a, e) => a + e.n, 0); celebrate(ce, { quiet: true }); }
-      fb.className = 'feedback' + (ok ? '' : ' bad');
-      fb.innerHTML = ok ? '<b>Верно.</b>' : `<b>Неверно.</b> Решение: ${s.task.solution}`;
-      fb.insertAdjacentHTML('beforeend', ` <button class="btn btn-primary btn-sm" id="next-task">${s.k + 1 < s.total ? 'Дальше' : 'Результат'}</button>`);
+      fb.className = 'feedback big' + (ok ? '' : ' bad');
+      fb.innerHTML = ok ? `<p class="fb-title">${G.icon('star', 22)} Верно</p>` : `<p class="fb-title">Не совсем</p><p>Решение: ${s.task.solution}</p>`;
+      fb.insertAdjacentHTML('beforeend', `<div class="fb-actions"><button class="btn btn-primary btn-big" id="next-task">${s.k + 1 < s.total ? 'Следующая задача →' : 'Узнать результат →'}</button></div>`);
+      sfx(ok ? 'ok' : 'wrong');
       form.querySelectorAll('input,button').forEach(el => el.disabled = true);
       fb.querySelector('#next-task').onclick = () => {
         s.k++; s.answered = false; s.task = topics[i].generate(2);
         if (s.k >= s.total) finishSession(i);
-        render(); app.querySelector('#answer')?.focus();
-        if (gameEvents) { celebrate(gameEvents); gameEvents = null; }
+        render(); app.querySelector('#ans-num')?.focus();
+        if (gameEvents) { if (gameEvents.some(e => e.type === 'mastered')) sfx('win'); celebrate(gameEvents); gameEvents = null; }
       };
       fb.querySelector('#next-task').focus();
       save();
     };
     const hb = app.querySelector('#hint-btn');
-    if (hb) hb.onclick = () => {
-      app.querySelector('#hints').insertAdjacentHTML('beforeend', `<p class="bubble">${s.task.hints[s.hints++]}</p>`);
-      if (s.hints >= s.task.hints.length) hb.disabled = true; else hb.textContent = 'Ещё подсказка';
-    };
+    if (hb) hb.onclick = () => { if (s.hints < s.task.hints.length) { s.hints++; syncHints(); } };
+    syncHints();
+    bindAnswerKeys();
   }
   const retry = app.querySelector('#retry');
   if (retry) retry.onclick = () => { session = null; render(); };
@@ -822,8 +978,9 @@ function bind(page, i, stage) {
   const dform = app.querySelector('#diag-form');
   if (dform) dform.onsubmit = e => {
     e.preventDefault();
-    const value = readAnswer(dform, e), k = state.diag.step, ti = DIAG[k];
-    const r = check(value, diagTask.task);
+    const got = readAnswer(dform, e), k = state.diag.step, ti = DIAG[k];
+    if (got.error) { app.querySelector('#feedback').textContent = got.error; return; }
+    const value = got.value, r = check(value, diagTask.task);
     if (r.empty) { app.querySelector('#feedback').textContent = 'Впиши ответ — или напиши 0, если не знаешь.'; return; }
     markActivity();
     const ok = r.ok && !r.almost, sec = Math.round((Date.now() - diagTask.started) / 1000);
@@ -833,23 +990,26 @@ function bind(page, i, stage) {
     state.diag.results[k] = ok; state.diag.step++; diagTask = null; save(); render();
     if (state.diag.step >= DIAG.length) celebrate(G.diag(game(), today()));
   };
+  if (dform) bindAnswerKeys();
   const restart = app.querySelector('#diag-restart');
   if (restart) restart.onclick = () => { state.diag = { step: 0, results: [] }; save(); render(); };
 
   const sform = app.querySelector('#settings-form');
   if (sform) sform.onsubmit = e => {
     e.preventDefault();
-    state.settings = { name: sform.name.value.trim() || 'Ученик', style: sform.style.value }; game().goal = +sform.goal.value || 5; save();
+    state.settings = { name: sform.name.value.trim() || 'Ученик', style: sform.style.value, sound: sform.sound.checked }; game().goal = +sform.goal.value || 5; save();
     document.querySelector('#student-name').textContent = state.settings.name;
     document.querySelector('#avatar').textContent = state.settings.name[0].toUpperCase();
     app.querySelector('#feedback').textContent = 'Сохранено.';
   };
+  const ta = app.querySelector('#tour-again');
+  if (ta) ta.onclick = () => { state.toured = false; save(); location.hash = 'home'; };
   const aform = app.querySelector('#ai-form');
   if (aform) bindAiForm(aform);
 }
 
 function eventsHtml(ev, i) {
-  return ev.map(e => `<p class="adapt-note">${EVENT_TEXT[e.type](e, i)}${e.type === 'struggle' ? ' <button class="link" data-ask="1">Спросить наставника</button>' : ''}${e.type === 'same-mistake' ? ' <button class="link" data-stage-now="learn">Открыть урок</button>' : ''}</p>`).join('');
+  return ev.map(e => `<p class="adapt-note">${EVENT_TEXT[e.type](e, i)}${e.type === 'struggle' ? ' <button class="btn btn-ghost btn-sm" data-ask="1">Спросить наставника</button>' : ''}${e.type === 'same-mistake' ? ' <button class="btn btn-ghost btn-sm" data-stage-now="learn">Посмотреть урок</button>' : ''}</p>`).join('');
 }
 function bindEventButtons(fb, i) {
   fb.querySelectorAll('[data-stage-now]').forEach(b => b.onclick = () => { session = null; if (b.dataset.stageNow === 'learn') learnTab = 'tutor'; location.hash = `lesson/${i}/${b.dataset.stageNow}`; });
@@ -915,7 +1075,7 @@ function finishSession(i) {
 
 /* ================= Запуск ================= */
 
-document.querySelectorAll('nav button[data-page]').forEach(b => b.onclick = () => location.hash = b.dataset.page);
+document.querySelectorAll('.sidebar [data-page]').forEach(b => b.onclick = () => location.hash = b.dataset.page);
 // Сброс в два нажатия — без системного confirm()
 const resetBtn = document.querySelector('#reset'); let resetArmed;
 resetBtn.onclick = () => {
@@ -929,10 +1089,10 @@ addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
 const SKIN_FONTS = {
   orbit: 'family=Unbounded:wght@500;700',
   pop: 'family=Dela+Gothic+One&family=Rubik:wght@400;500;600;700',
-  holo: 'family=Comfortaa:wght@500;700&family=Nunito:wght@400;600;700;800',
+  pixel: 'family=Press+Start+2P&family=Rubik:wght@400;500;600;700;800',
 };
 function setSkin(name) {
-  if (!['notebook', 'orbit', 'pop', 'holo'].includes(name)) name = 'notebook';
+  if (!['notebook', 'orbit', 'pop', 'pixel'].includes(name)) name = 'notebook';
   document.documentElement.dataset.skin = name;
   if (SKIN_FONTS[name] && !document.getElementById('font-' + name)) {
     const l = document.createElement('link'); l.id = 'font-' + name; l.rel = 'stylesheet';

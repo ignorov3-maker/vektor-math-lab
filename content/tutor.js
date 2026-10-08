@@ -122,7 +122,7 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
       const body = { model: cfg.model || DEFAULT_CFG.model, messages, stream: true, max_tokens: withReasoningOff ? maxTokens : maxTokens + 600, temperature: 0.4 };
       if (withReasoningOff) body.reasoning = { enabled: false }; else body.reasoning = { exclude: true };
       try { return await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal }); }
-      catch (e) { if (e.name === 'AbortError') throw e; throw new TutorError('Нет связи с сервером ИИ. Проверь интернет или адрес прокси.'); }
+      catch (e) { if (e.name === 'AbortError') throw e; throw new TutorError('Нет связи с сервером ИИ. Мешать может слабый интернет, VPN или блокировщик рекламы.'); }
     };
     let res = await send(true);
     if (res.status === 400) {
