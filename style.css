@@ -332,10 +332,10 @@ th{font-size:14px;color:var(--ink-2);font-weight:600}
 /* ---------- Лаборатория дробей ---------- */
 .lab{display:grid;gap:12px;margin-top:10px}
 .lab-controls{display:grid;gap:8px}
-.stepper{display:grid;grid-template-columns:1fr auto auto auto;align-items:center;gap:6px;font-size:14px;color:var(--ink-2)}
-.stepper button{width:34px;height:34px;border-radius:50%;border:1.5px solid var(--line);background:var(--sheet);font-size:18px;font-weight:700;line-height:1;color:var(--ink)}
-.stepper button:hover{border-color:var(--green)}
-.stepper output{min-width:2ch;text-align:center;font-weight:800;font-size:18px;color:var(--ink)}
+.lab-stepper{display:grid;grid-template-columns:1fr auto auto auto;align-items:center;gap:6px;font-size:14px;color:var(--ink-2)}
+.lab-stepper button{width:34px;height:34px;border-radius:50%;border:1.5px solid var(--line);background:var(--sheet);font-size:18px;font-weight:700;line-height:1;color:var(--ink)}
+.lab-stepper button:hover{border-color:var(--green)}
+.lab-stepper output{min-width:2ch;text-align:center;font-weight:800;font-size:18px;color:var(--ink)}
 .lab-view{display:grid;gap:8px;justify-items:center}
 .lab-big{font-size:34px;font-weight:800;display:flex;align-items:center;gap:8px;font-family:var(--font-display)}
 .lab-figs{display:grid;gap:8px;justify-items:center;width:100%}
@@ -408,7 +408,7 @@ code{font-size:.9em;background:var(--tint);padding:1px 5px;border-radius:4px}
 .goal-ring::before{content:'';grid-area:1/1;width:66px;height:66px;border-radius:50%;background:var(--sheet)}
 .goal-ring b{grid-area:1/1;z-index:1;font-size:24px;font-family:var(--font-display)}
 .goal-ring small{font-size:13px;color:var(--ink-2)}
-[data-skin="orbit"] .goal-ring::before,[data-skin="holo"] .goal-ring::before{background:var(--paper)}
+[data-skin="orbit"] .goal-ring::before{background:var(--paper)}
 
 .rank-card .rank-top{display:flex;gap:14px;align-items:center;margin-bottom:12px}
 .rank-card .rank-top p{margin:0}
@@ -452,3 +452,167 @@ code{font-size:.9em;background:var(--tint);padding:1px 5px;border-radius:4px}
   [data-skin="pop"] .stop .label{font-size:12px;padding:2px 5px;max-width:96px}
 }
 @media (prefers-reduced-motion:reduce){.toast{animation:none}}
+
+/* =========================================================
+   Удобство для детей: путь, шаги, крупные действия
+   ========================================================= */
+.btn-big{padding:15px 26px;font-size:18px;border-radius:calc(var(--radius) + 4px);min-height:52px}
+.btn{min-height:44px}
+.btn-sm{min-height:36px}
+.home-head{margin-bottom:16px}
+
+/* — Главная кнопка «Продолжить» — */
+.hero-next{display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-bottom:28px;
+  padding:24px 28px;border-radius:calc(var(--radius) + 8px);background:var(--sheet);border:var(--border-w) solid var(--line);border-left:8px solid var(--green);box-shadow:var(--shadow)}
+.hero-kicker{margin:0 0 4px;font-size:14px;font-weight:700;color:var(--green-dark)}
+.hero-next h2{font-size:26px;margin-bottom:4px}
+.hero-next p{margin:0}
+.btn-go{font-size:20px;padding:16px 30px}
+.btn-go .ico{stroke:currentColor}
+.mini-steps{list-style:none;display:flex;gap:6px 16px;flex-wrap:wrap;padding:0;margin:12px 0 0;font-size:14px;color:var(--ink-2)}
+.mini-steps li{display:flex;align-items:center;gap:6px}
+.mini-steps li span{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;border:2px solid var(--dash);font-size:12px;font-weight:800}
+.mini-steps li.is-done span{background:var(--green);border-color:var(--green);color:var(--on-accent)}
+.mini-steps li.is-now{color:var(--ink);font-weight:700}
+.mini-steps li.is-now span{border-color:var(--green);box-shadow:inset 0 0 0 4px var(--sheet);background:var(--green)}
+
+/* — Путь — */
+.path-wrap{background:var(--sheet);border:var(--border-w) solid var(--line);border-radius:var(--radius);padding:22px 16px 28px;box-shadow:var(--shadow)}
+.path-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;padding:0 8px;margin-bottom:8px}
+.path-head h2{font-size:19px}
+.path{list-style:none;margin:0;padding:12px 0 0;position:relative;display:flex;flex-direction:column;align-items:center;gap:6px}
+.path-line{position:absolute;inset:0;pointer-events:none;overflow:visible}
+.path-line .todo{fill:none;stroke:var(--dash);stroke-width:5;stroke-dasharray:2 12;stroke-linecap:round}
+.path-line .done{fill:none;stroke:var(--green);stroke-width:7;stroke-linecap:round}
+.node{position:relative;display:flex;flex-direction:column;align-items:center;transform:translateX(calc(var(--x) * 64px));z-index:1;padding:4px 0}
+.node-btn{--p:0;width:78px;height:78px;border-radius:50%;border:0;padding:6px;cursor:pointer;
+  background:conic-gradient(var(--green) calc(var(--p) * 1%), var(--tint) 0);transition:transform .15s}
+.node-btn:hover{transform:scale(1.06)}
+.node-face{width:100%;height:100%;border-radius:50%;display:grid;place-items:center;font-size:24px;font-weight:800;
+  background:var(--sheet);color:var(--ink-2);border:3px solid var(--dash);font-family:var(--font-display)}
+.node.is-started .node-face{border-color:var(--green);color:var(--green-dark)}
+.node.is-done .node-face{background:var(--green);border-color:var(--green);color:var(--on-accent);font-size:30px}
+.node.is-due .node-face{background:var(--amber-soft);border-color:var(--warn-line);color:var(--amber-ink)}
+.node.is-current .node-btn{box-shadow:0 0 0 7px var(--marker)}
+.node.is-current .node-face{border-color:var(--green);color:var(--green-dark)}
+.node-label{display:flex;flex-direction:column;align-items:center;text-align:center;margin-top:6px;max-width:170px;line-height:1.25;background:var(--sheet);padding:2px 6px;border-radius:6px}
+.node-label b{font-size:15px}
+.node-label span{font-size:13px;color:var(--ink-2)}
+.node.is-current .node-label span{color:var(--green-dark);font-weight:700}
+.node-bubble{position:relative;margin-bottom:10px;padding:8px 16px;border-radius:12px;border:0;background:var(--green);color:var(--on-accent);font-weight:800;font-size:16px;cursor:pointer;
+  box-shadow:0 6px 16px -8px rgba(0,0,0,.35);animation:bob 1.8s ease-in-out infinite}
+.node-bubble::after{content:'';position:absolute;left:50%;bottom:-7px;margin-left:-8px;border:8px solid transparent;border-bottom:0;border-top-color:var(--green)}
+@keyframes bob{50%{transform:translateY(-4px)}}
+.node-finish .finish-flag{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;background:var(--tint);border:3px dashed var(--dash);color:var(--ink-2)}
+.node-finish .ico{stroke:currentColor}
+.home-layout{align-items:start}
+.small-note h3{font-size:16px}
+
+/* — Шаги урока — */
+.lesson-top{margin:-8px 0 8px}
+.back{font-weight:700}
+.stepper{list-style:none;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:0;margin:4px 0 14px}
+.step{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:12px 14px;border-radius:calc(var(--radius) + 6px);
+  border:2px solid var(--line);background:var(--sheet);color:var(--ink);min-height:64px}
+.step:hover{border-color:var(--green)}
+.step-n{width:34px;height:34px;flex-shrink:0;border-radius:50%;display:grid;place-items:center;font-weight:800;background:var(--tint);color:var(--ink-2)}
+.step-t{display:flex;flex-direction:column;line-height:1.2}
+.step-t b{font-size:16px}
+.step-t small{font-size:13px;color:var(--ink-2)}
+.step.is-done .step-n{background:var(--green);color:var(--on-accent)}
+.step.is-now{border-color:var(--green)}
+.step.on{border-color:var(--green);background:var(--green-soft);box-shadow:inset 0 0 0 1px var(--green)}
+.step.on .step-n{background:var(--green);color:var(--on-accent)}
+.do-now{display:flex;gap:10px;align-items:flex-start;margin:0 0 18px;padding:12px 16px;border-radius:var(--radius);background:var(--amber-soft);color:var(--note-ink);font-size:16px;max-width:none}
+.do-now .ico{stroke:var(--amber-ink);margin-top:2px}
+.segmented{display:inline-flex;gap:4px;padding:4px;border-radius:999px;background:var(--tint);margin:0 0 16px}
+.segmented button{display:inline-flex;align-items:center;gap:8px;border:0;background:none;padding:9px 18px;border-radius:999px;font-weight:700;font-size:15px;color:var(--ink-2);min-height:40px}
+.segmented button[aria-pressed="true"]{background:var(--sheet);color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.lab-box summary{cursor:pointer;list-style:none;display:flex;flex-direction:column;gap:2px}
+.lab-box summary::-webkit-details-marker{display:none}
+.lab-box summary h3::after{content:' ▾';color:var(--ink-2)}
+.lab-box:not([open]) summary h3::after{content:' ▸'}
+
+/* — Ввод ответа клеточками — */
+.answer-row{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.frac-input{display:flex;align-items:center;gap:10px}
+.fi-whole{display:none;flex-direction:column;align-items:center;gap:4px;font-size:12px;color:var(--ink-2)}
+.frac-input.with-whole .fi-whole{display:flex}
+.fi-frac{display:grid;justify-items:center;gap:6px}
+.fi-frac i{display:block;width:84px;height:4px;border-radius:2px;background:var(--ink)}
+.frac-input input,.num-input input{width:84px;height:56px;text-align:center;font-size:28px;font-weight:800;border:2px solid var(--dash);border-radius:10px;background:var(--field);color:var(--ink);font-family:var(--font-body);padding:0}
+.fi-whole input{width:64px;height:64px}
+.num-input input{width:140px;height:64px}
+.frac-input input:focus,.num-input input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 4px var(--green-soft)}
+.frac-input input::placeholder,.num-input input::placeholder{color:var(--dash);font-weight:700}
+.fi-help{margin:10px 0 0}
+.choices{gap:14px}
+.choice{min-width:76px;min-height:64px;font-size:30px}
+.hint-zone{margin-top:18px;padding-top:14px;border-top:1px dashed var(--line);display:grid;gap:10px;justify-items:start}
+.hint-zone .bubble{margin:0;background:var(--amber-soft);color:var(--note-ink);border-radius:var(--radius);padding:12px 14px;font-size:16px}
+.task-progress{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;font-size:14px;color:var(--ink-2);margin-bottom:14px}
+.task-progress .bar{height:10px}
+.streak.ready{border-left:6px solid var(--green)}
+
+/* — Обратная связь — */
+.feedback.big{padding:16px 18px;border-radius:calc(var(--radius) + 4px);font-size:17px}
+.feedback.big p{margin:0 0 8px}
+.fb-title{display:flex;align-items:center;gap:8px;font-size:21px;font-weight:800;font-family:var(--font-display)}
+.feedback.big:not(.bad) .fb-title .ico{stroke:#C99A06;fill:var(--marker)}
+.feedback.bad .fb-title .ico{stroke:var(--amber-ink)}
+.fb-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.topic-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto}
+.topic .mini-steps{margin:0}
+
+/* — Меню для взрослых и профиль — */
+.adult-links{display:grid;gap:2px;margin-top:4px;padding-top:14px;border-top:1px solid var(--line)}
+.adult-links span{font-size:12px;color:var(--ink-2);padding:0 12px 4px}
+.adult-links button{border:0;background:none;text-align:left;padding:7px 12px;border-radius:var(--radius);color:var(--ink-2);font-size:14px}
+.adult-links button:hover,.adult-links button[aria-current="page"]{background:var(--tint);color:var(--ink)}
+.switch{display:flex;align-items:center;gap:10px;margin:4px 0 18px;font-weight:600}
+.switch input{width:20px;height:20px;accent-color:var(--green)}
+
+/* — Знакомство с интерфейсом — */
+.tour-hole{position:fixed;z-index:40;border-radius:16px;box-shadow:0 0 0 9999px rgba(15,20,40,.62);pointer-events:none;transition:all .25s}
+.tour-tip{position:fixed;z-index:41;background:var(--sheet);color:var(--ink);border-radius:16px;padding:18px 20px;box-shadow:0 20px 50px -20px rgba(0,0,0,.6)}
+.tour-tip h3{margin:0 0 6px;font-size:19px}
+.tour-tip p{margin:0 0 6px;font-size:16px}
+.tour-count{font-size:13px!important;color:var(--ink-2)}
+
+/* — Телефон — */
+@media (max-width:760px){
+  nav{grid-template-columns:repeat(4,1fr)!important}
+  nav button{font-size:12px!important;padding:7px 0!important}
+  .adult-links{display:none}
+  .hero-next{padding:18px;gap:14px}
+  .hero-next h2{font-size:22px}
+  .btn-go{width:100%;justify-content:center}
+  .node{transform:translateX(calc(var(--x) * 38px))}
+  .node-btn{width:70px;height:70px}
+  .stepper{gap:6px}
+  .step{flex-direction:column;align-items:flex-start;gap:6px;padding:10px;min-height:0}
+  .step-t b{font-size:14px}
+  .step-t small{font-size:12px}
+  .answer-row{gap:14px}
+  .answer-row .btn-big{width:100%;justify-content:center}
+  .frac-input input{width:76px;height:52px}
+  .task-progress{grid-template-columns:auto 1fr}
+  .task-progress .task-meta{grid-column:1/-1}
+  .segmented{display:flex}
+  .segmented button{flex:1;justify-content:center;padding:9px 8px}
+}
+@media (prefers-reduced-motion:reduce){.node-bubble{animation:none}.node-btn{transition:none}}
+
+/* подписи пути — сбоку от кружков, чтобы линия не перечёркивала текст */
+@media (min-width:761px){
+  .path .node{display:grid;grid-template-columns:1fr 78px 1fr;column-gap:16px;align-items:center;width:100%;max-width:560px}
+  .path .node-bubble{grid-column:1/-1;grid-row:1;justify-self:center}
+  .path .node-btn,.path .finish-flag{grid-column:2;grid-row:2}
+  .path .finish-flag{justify-self:center}
+  .path .node-label{grid-column:3;grid-row:2;justify-self:start;align-items:flex-start;text-align:left;margin:0}
+  .path .node.left .node-label{grid-column:1;justify-self:end;align-items:flex-end;text-align:right}
+  .path{gap:14px}
+}
+/* уведомления — сверху справа, не закрывают кнопки */
+.toasts{left:auto;right:24px;top:24px;bottom:auto;transform:none;justify-items:end}
+@media (max-width:760px){.toasts{left:16px;right:16px;top:64px;bottom:auto!important;justify-items:center;width:auto}}

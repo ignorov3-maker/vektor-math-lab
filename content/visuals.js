@@ -100,9 +100,9 @@
   function labHtml(id, start = { n: 3, d: 5, k: 1 }) {
     return `<div class="lab" id="${id}" data-n="${start.n}" data-d="${start.d}" data-k="${start.k}">
       <div class="lab-controls">
-        <div class="stepper"><span>Взяли частей</span><button type="button" data-act="n-" aria-label="Меньше частей">−</button><output data-out="n">${start.n}</output><button type="button" data-act="n+" aria-label="Больше частей">+</button></div>
-        <div class="stepper"><span>Разделили на</span><button type="button" data-act="d-" aria-label="Меньше долей">−</button><output data-out="d">${start.d}</output><button type="button" data-act="d+" aria-label="Больше долей">+</button></div>
-        <div class="stepper"><span>Разрезать каждую долю ещё на</span><button type="button" data-act="k-" aria-label="Меньше">−</button><output data-out="k">${start.k}</output><button type="button" data-act="k+" aria-label="Больше">+</button></div>
+        <div class="lab-stepper"><span>Взяли частей</span><button type="button" data-act="n-" aria-label="Меньше частей">−</button><output data-out="n">${start.n}</output><button type="button" data-act="n+" aria-label="Больше частей">+</button></div>
+        <div class="lab-stepper"><span>Разделили на</span><button type="button" data-act="d-" aria-label="Меньше долей">−</button><output data-out="d">${start.d}</output><button type="button" data-act="d+" aria-label="Больше долей">+</button></div>
+        <div class="lab-stepper"><span>Разрезать каждую долю ещё на</span><button type="button" data-act="k-" aria-label="Меньше">−</button><output data-out="k">${start.k}</output><button type="button" data-act="k+" aria-label="Больше">+</button></div>
       </div>
       <div class="lab-view" aria-live="polite"></div>
     </div>`;
