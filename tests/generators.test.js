@@ -1,6 +1,7 @@
 // Запуск: node tests/generators.test.js
 globalThis.window = globalThis;
 require('../content/check.js');
+require('../content/visuals.js');
 require('../content/fractions.js');
 const { check, parse } = window.VEKTOR_CHECK;
 let fails = 0, total = 0;

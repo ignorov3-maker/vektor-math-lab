@@ -616,3 +616,25 @@ code{font-size:.9em;background:var(--tint);padding:1px 5px;border-radius:4px}
 /* уведомления — сверху справа, не закрывают кнопки */
 .toasts{left:auto;right:24px;top:24px;bottom:auto;transform:none;justify-items:end}
 @media (max-width:760px){.toasts{left:16px;right:16px;top:64px;bottom:auto!important;justify-items:center;width:auto}}
+
+/* дробь с подписями и подписи у клеточек ответа */
+.frac-labeled{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:14px;align-items:center;margin:12px 0;padding:12px 16px;border-radius:var(--radius);background:var(--tint);max-width:520px}
+.fl-frac{grid-row:1/3;font-size:44px;font-weight:800;font-family:var(--font-display);line-height:1}
+.fl-top,.fl-bot{font-size:15px;line-height:1.3;color:var(--ink-2);padding:4px 0}
+.fl-top{border-bottom:2px solid var(--line)}
+.fl-top b,.fl-bot b{color:var(--ink);font-size:18px}
+.rule .frac-labeled{background:var(--sheet)}
+.lab-view .frac-labeled{margin:0;max-width:100%}
+.fi-frac{grid-template-columns:auto auto;column-gap:10px;align-items:center;justify-items:start}
+.fi-frac i{grid-column:1}
+.fi-lab{font-size:13px;color:var(--ink-2)}
+.chat-answer{display:block;padding:12px;border-radius:var(--radius);background:var(--amber-soft)}
+.chat-answer .fi-help{margin-top:8px}
+@media (max-width:760px){.fl-frac{font-size:36px}.fl-top,.fl-bot{font-size:14px}}
+
+/* правила — по пунктам, пример — отдельной строкой */
+.rule-body>*:first-child{margin-top:0}.rule-body>*:last-child{margin-bottom:0}
+.rule-list{margin:6px 0;padding-left:22px;font-size:17px}
+.rule-list li{margin:8px 0;line-height:1.5}
+.rule-ex{margin:8px 0 0;font-size:16px;color:var(--ink-2)}
+.msg-body .rule-list{font-size:16px}
