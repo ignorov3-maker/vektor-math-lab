@@ -117,14 +117,14 @@ function answerInput(task, button) {
     <div class="frac-input${mixed ? ' with-whole' : ''}" role="group" aria-label="Твой ответ — дробь">
       <label class="fi-whole"><input id="ans-whole" inputmode="numeric" autocomplete="off" aria-label="Целая часть"><span>целые</span></label>
       <div class="fi-frac">
-        <input id="ans-num" inputmode="numeric" autocomplete="off" aria-label="Числитель — верхнее число" placeholder="?">
-        <i aria-hidden="true"></i>
-        <input id="ans-den" inputmode="numeric" autocomplete="off" aria-label="Знаменатель — нижнее число" placeholder="?">
+        <input id="ans-num" inputmode="numeric" autocomplete="off" aria-label="Числитель — верхнее число" placeholder="?"><span class="fi-lab" aria-hidden="true">числитель</span>
+        <i aria-hidden="true"></i><span></span>
+        <input id="ans-den" inputmode="numeric" autocomplete="off" aria-label="Знаменатель — нижнее число" placeholder="?"><span class="fi-lab" aria-hidden="true">знаменатель</span>
       </div>
     </div>
     <button class="btn btn-primary btn-big" type="submit">${button}</button>
   </div>
-  <p class="fi-help small muted">Сверху — сколько частей взяли, снизу — на сколько частей делили. Ответ целый? Впиши его сверху, низ оставь пустым.${mixed ? '' : ' <button type="button" class="link small" data-whole>Добавить целую часть</button>'}</p>`;
+  <p class="fi-help small muted">Ответ — целое число? Впиши его в верхнюю клеточку, нижнюю оставь пустой.${mixed ? '' : ' <button type="button" class="link small" data-whole>Есть целая часть</button>'}</p>`;
 }
 
 function taskCard(task, { formId = 'answer-form', button = 'Проверить', exam = false, hints = false } = {}) {
@@ -204,8 +204,8 @@ function chatBox(i, kind) {
   return `<div class="chat chat-${kind}" data-chat="${kind}">${steps}
     <div class="chat-log" aria-live="polite">${c.msgs.filter(m => !m.hidden).map(msgHtml).join('') || (kind === 'task' ? '<p class="muted small chat-empty">Застрял? Спроси наставника — он не скажет ответ, но поможет дойти до него самому.</p>' : '')}</div>
     <div class="chat-quick">${quickReplies(i, kind).map(([v, l, main]) => `<button type="button" class="btn ${main ? 'btn-primary' : 'btn-ghost'} btn-sm" data-quick="${esc(v)}">${l}</button>`).join('')}</div>
-    <form class="chat-form" autocomplete="off"><label class="visually-hidden" for="chat-in-${kind}">Сообщение наставнику</label>
-      <input id="chat-in-${kind}" placeholder="${ph}" maxlength="400"${c.busy ? ' disabled' : ''}><button class="btn btn-primary" type="submit"${c.busy ? ' disabled' : ''}>Отправить</button></form>
+    ${kind === 'lesson' && c.pending ? `<form class="chat-form chat-answer" autocomplete="off">${answerInput(c.pending.task, 'Проверить')}</form>` : `<form class="chat-form" autocomplete="off"><label class="visually-hidden" for="chat-in-${kind}">Сообщение наставнику</label>
+      <input id="chat-in-${kind}" placeholder="${ph}" maxlength="400"${c.busy ? ' disabled' : ''}><button class="btn btn-primary" type="submit"${c.busy ? ' disabled' : ''}>Отправить</button></form>`}
     <p class="chat-mode small muted">${online && !c.forceOffline ? `Наставник: ${esc(modelName())}.` : online ? 'ИИ временно недоступен — урок идёт по конспекту.' : 'Наставник без ИИ — отвечает по конспекту.'} ${online ? '' : '<a href="#settings">Подключить ИИ</a>'}</p>
   </div>`;
 }
@@ -236,9 +236,19 @@ function updateLastMsg(i, kind, m) {
 
 function bindChat(i, kind) {
   const box = app.querySelector(`.chat[data-chat="${kind}"]`); if (!box) return;
-  box.querySelector('.chat-form').onsubmit = e => {
+  const cf = box.querySelector('.chat-form');
+  if (cf.classList.contains('chat-answer')) {
+    cf.onsubmit = e => {
+      e.preventDefault();
+      const got = readAnswer(cf, e);
+      if (got.error || !got.value) { getChat(i, kind).msgs.push({ role: 'assistant', html: `<p>${got.error || 'Впиши ответ в клеточки.'}</p>` }); refreshChat(i, kind); return; }
+      tutorSay(i, kind, got.value);
+    };
+    bindAnswerKeys();
+    setTimeout(() => cf.querySelector('#ans-num')?.focus({ preventScroll: true }), 0);
+  } else cf.onsubmit = e => {
     e.preventDefault();
-    const inp = box.querySelector('input'), v = inp.value.trim(); if (!v) return;
+    const inp = cf.querySelector('input'), v = inp.value.trim(); if (!v) return;
     inp.value = ''; tutorSay(i, kind, v);
   };
   box.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => {
@@ -291,7 +301,7 @@ function lessonTaskHelp(i, what) {
 function tutorSay(i, kind, text) {
   const c = getChat(i, kind);
   if (c.busy) return;
-  c.msgs.push({ role: 'user', html: `<p>${esc(text)}</p>`, raw: text });
+  c.msgs.push({ role: 'user', html: T.render(String(text).replace(/\[\[|\]\]/g, '')).html, raw: text, hidden: /^дальше$/i.test(text) });
   state.asked = (state.asked || 0) + 1; save();
   if (!c.pending && !/^(дальше|продолжи)/i.test(text)) celebrate(G.asked(game()));
   if (kind === 'lesson' && c.pending) { // ответ на задачу внутри урока проверяет код
@@ -635,7 +645,7 @@ function learnStage(i) {
       <h2>Как это устроено</h2>
       <p>${e.model}</p>
       ${figure(e.figure)}<p class="figure-caption">${e.figureCaption}</p>
-      <div class="rule"><h3>Правило</h3><p>${e.rule}</p></div>
+      <div class="rule"><h3>Правило</h3><div class="rule-body">${e.rule}</div></div>
       <h2>Разберём на примерах</h2>
       ${e.examples.map(x => `<div class="worked"><p class="worked-q">${x.q}</p><ol>${x.steps.map(s => `<li>${s}</li>`).join('')}</ol></div>`).join('')}
       <h2>Где чаще всего ошибаются</h2>

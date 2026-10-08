@@ -63,10 +63,14 @@ async def main():
             if 'go-practice' in labels: break
             if 'solution' in labels:
                 ans=await pg.evaluate("getChat(2,'lesson').pending.task.answer")
-                await pg.fill('#chat-in-lesson', ans); await pg.click('.chat-lesson .chat-form button'); continue
+                if await pg.locator('.chat-answer .choice').count(): await pg.click(f'.chat-answer .choice[value="{ans}"]')
+                else: await pg.evaluate("v => fillAnswer(v)", ans); await pg.click('.chat-answer button[type=submit]')
+                continue
             await pg.click('.chat-lesson [data-quick="Дальше"]')
         rep('офлайн-урок проходится до кнопки тренировки', 'go-practice' in labels)
         rep('задача в уроке проверена кодом', 'Верно!' in await pg.inner_text('.chat-lesson .chat-log'))
+        rep('«Дальше» не засоряет переписку', 'Дальше' not in [t.strip() for t in await pg.locator('.chat-lesson .msg.user').all_inner_texts()])
+        rep('правило — по пунктам', await pg.locator('.chat-lesson .rule-list li').count()>=2)
         await pg.fill('#chat-in-lesson','покажи правило'); await pg.click('.chat-lesson .chat-form button')
         rep('офлайн-вопрос получает ответ по конспекту', 'Правило' in (await pg.inner_text('.chat-lesson .chat-log'))[-300:])
         await pg.click('[data-learn-tab=notes]'); rep('вкладка «Конспект»', await pg.locator('.method .rule').count()==1)

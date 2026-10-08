@@ -48,6 +48,7 @@
     if (!fig) return '';
     const wrap = (vw, vh, label, inner) => `<div class="figure"><svg viewBox="0 0 ${vw} ${vh}" width="${vw}" height="${vh}" role="img" aria-label="${label}">${inner}</svg></div>`;
     switch (fig.type) {
+      case 'labeled': return labeled(fig.n, fig.d);
       case 'circle':
         return wrap(180, 180, `Круг из ${fig.parts} частей, ${fig.empty ?? fig.parts - fig.shaded} пустые`,
           fig.empty != null ? circleSvg(fig.parts, fig.empty, 90, 90, 80, { emptyIsEaten: true }) : circleSvg(fig.parts, fig.shaded, 90, 90, 80));
@@ -77,6 +78,15 @@
     return '';
   }
 
+  // Дробь с подписями: что значит верхнее и нижнее число
+  function labeled(n, d) {
+    return `<div class="frac-labeled" role="img" aria-label="Дробь ${n}/${d}: числитель ${n}, знаменатель ${d}">
+      <span class="fl-frac">${f(n, d)}</span>
+      <span class="fl-top"><b>${n}</b> — числитель (верхнее число): сколько частей взяли</span>
+      <span class="fl-bot"><b>${d}</b> — знаменатель (нижнее число): на сколько равных частей разделили целое</span>
+    </div>`;
+  }
+
   /* ---------- Теги рисунков в ответах наставника ----------
      [[полоска 3/5]]  [[круг 3/8]]  [[прямая 3/4]]
      [[сравнить 1/3 1/5]]  [[прямоугольник 2/3 3/4]]  [[смешанное 2 1/3]]       */
@@ -87,6 +97,7 @@
     // синонимы, которые модель иногда пишет вместо названий из списка
     t = t.replace(/^(дробь|доля|полоса)\s/, 'полоска ').replace(/^(торт|пирог)\s/, 'круг ').replace(/^(отрезок|луч|числовая прямая)\s/, 'прямая ').replace(/^(сравни|сравнение)\s/, 'сравнить ');
     let m;
+    if ((m = t.match(new RegExp(`^(подпиши|подписи|подписанная|части)\\s+${FR}$`))) && ok(+m[2], +m[3]) && +m[3] > 0) return { type: 'labeled', n: +m[2], d: +m[3] };
     if ((m = t.match(new RegExp(`^(полоска|bar)\\s+${FR}$`))) && ok(+m[2], +m[3]) && +m[2] <= +m[3]) return { type: 'bar', parts: +m[3], shaded: +m[2] };
     if ((m = t.match(new RegExp(`^(круг|пицца|circle)\\s+${FR}$`))) && ok(+m[2], +m[3], 16) && +m[2] <= +m[3]) return { type: 'circle', parts: +m[3], shaded: +m[2] };
     if ((m = t.match(new RegExp(`^(прямая|line)\\s+${FR}$`))) && ok(+m[2], +m[3], 16)) return { type: 'line', n: +m[2], d: +m[3] };
@@ -115,7 +126,7 @@
     const view = el.querySelector('.lab-view');
     const whole = n >= d;
     view.innerHTML = `
-      <div class="lab-big">${k > 1 ? `${f(n, d)} = ${f(N, D)}` : f(n, d)}</div>
+      ${k > 1 ? `<div class="lab-big">${f(n, d)} = ${f(N, D)}</div>` : labeled(n, d)}
       <div class="lab-figs">
         <svg viewBox="0 0 ${W} 46" width="${W}" height="46" role="img" aria-label="Полоска: ${N} из ${D}">${barSvg(D, Math.min(N, D))}</svg>
         <svg viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Круг: ${N} из ${D}">${circleSvg(D, Math.min(N, D), 60, 60, 54)}</svg>
@@ -138,5 +149,5 @@
     });
   }
 
-  window.VEKTOR_VISUALS = { f, figure, figureFromTag, labHtml, labBind };
+  window.VEKTOR_VISUALS = { f, figure, figureFromTag, labHtml, labBind, labeled };
 })();
