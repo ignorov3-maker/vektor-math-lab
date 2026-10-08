@@ -116,37 +116,54 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
       headers['HTTP-Referer'] = location.origin && location.origin !== 'null' ? location.origin : 'https://github.com/ignorov3-maker/vektor-math-lab';
       headers['X-OpenRouter-Title'] = 'Vektor';
     }
-    const body = { model: cfg.model || DEFAULT_CFG.model, messages, stream: true, max_tokens: maxTokens, temperature: 0.4, reasoning: { enabled: false } };
-    let res;
-    try { res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal }); }
-    catch (e) { if (e.name === 'AbortError') throw e; throw new TutorError('Нет связи с сервером ИИ. Проверь интернет или адрес прокси.'); }
+    // Рассуждения модели выключаем: наставнику нужен быстрый короткий ответ.
+    // Если модель не умеет выключать рассуждения (400), повторяем запрос без этого параметра.
+    const send = async withReasoningOff => {
+      const body = { model: cfg.model || DEFAULT_CFG.model, messages, stream: true, max_tokens: withReasoningOff ? maxTokens : maxTokens + 600, temperature: 0.4 };
+      if (withReasoningOff) body.reasoning = { enabled: false }; else body.reasoning = { exclude: true };
+      try { return await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal }); }
+      catch (e) { if (e.name === 'AbortError') throw e; throw new TutorError('Нет связи с сервером ИИ. Проверь интернет или адрес прокси.'); }
+    };
+    let res = await send(true);
+    if (res.status === 400) {
+      let msg = ''; try { msg = (await res.clone().json()).error?.message || ''; } catch {}
+      if (/reason|think/i.test(msg)) res = await send(false);
+    }
     if (!res.ok) { let t = ''; try { t = (await res.json()).error?.message || ''; } catch {} throw new TutorError(errorFor(res.status, t)); }
     if (!res.body) throw new TutorError('Браузер не поддерживает потоковые ответы.');
 
     const reader = res.body.getReader(), dec = new TextDecoder();
     let buf = '', text = '';
-    for (;;) {
+    const handle = line => {
+      line = line.trim();
+      if (!line.startsWith('data:')) return false; // комментарии вида ": OPENROUTER PROCESSING"
+      const data = line.slice(5).trim();
+      if (data === '[DONE]') return true;
+      let obj; try { obj = JSON.parse(data); } catch { return false; }
+      // ошибка посреди потока приходит со статусом 200 и полем error
+      if (obj.error) throw new TutorError(errorFor(Number(obj.error.code) || 500, obj.error.message));
+      const piece = obj.choices?.[0]?.delta?.content;
+      if (piece) { text += piece; onText(text); }
+      return false;
+    };
+    let finished = false;
+    while (!finished) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) { if (buf) handle(buf); break; }
       buf += dec.decode(value, { stream: true });
       let nl;
       while ((nl = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
-        if (!line.startsWith('data:')) continue; // комментарии вида ": OPENROUTER PROCESSING"
-        const data = line.slice(5).trim();
-        if (data === '[DONE]') return text;
-        let obj; try { obj = JSON.parse(data); } catch { continue; }
-        if (obj.error) throw new TutorError(errorFor(obj.error.code || 500, obj.error.message));
-        const piece = obj.choices?.[0]?.delta?.content;
-        if (piece) { text += piece; onText(text); }
+        const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
+        if (handle(line)) { finished = true; break; }
       }
     }
+    if (finished) { try { reader.cancel(); } catch {} }
+    if (!text.trim()) throw new TutorError('Наставник прислал пустой ответ. Попробуй спросить ещё раз или выбери другую модель в настройках.');
     return text;
   }
 
   async function testConnection(cfg) {
-    const t = await stream(cfg, [{ role: 'user', content: 'Ответь одним словом: готово' }], () => {}, { maxTokens: 10 });
-    if (!t.trim()) throw new TutorError('Модель ответила пустым сообщением. Попробуй другую модель.');
+    const t = await stream(cfg, [{ role: 'user', content: 'Ответь одним словом: готово' }], () => {}, { maxTokens: 20 });
     return t.trim();
   }
 

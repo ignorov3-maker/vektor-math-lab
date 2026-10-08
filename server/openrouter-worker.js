@@ -40,7 +40,7 @@ export default {
     const model = models.includes(body.model) ? body.model : models[0];
     const maxTokens = Math.min(Number(body.max_tokens) || 450, Number(env.MAX_TOKENS) || 500);
 
-    const upstream = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const call = reasoningOff => fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
@@ -52,11 +52,16 @@ export default {
         model,
         messages: body.messages.map(m => ({ role: m.role === 'system' ? 'system' : m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '').slice(0, 8000) })),
         stream: true,
-        max_tokens: maxTokens,
+        max_tokens: reasoningOff ? maxTokens : maxTokens + 600,
         temperature: typeof body.temperature === 'number' ? Math.min(1, Math.max(0, body.temperature)) : 0.4,
-        reasoning: { enabled: false },
+        reasoning: reasoningOff ? { enabled: false } : { exclude: true },
       }),
     });
+    let upstream = await call(true);
+    if (upstream.status === 400) {
+      const msg = await upstream.clone().text();
+      if (/reason|think/i.test(msg)) upstream = await call(false); // модель не умеет выключать рассуждения
+    }
 
     // Поток пересылаем как есть (SSE)
     return new Response(upstream.body, {

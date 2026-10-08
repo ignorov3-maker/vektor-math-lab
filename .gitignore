@@ -1,0 +1,7 @@
+# ключи и секреты никогда не коммитим
+.dev.vars
+.env
+*.key
+server/.wrangler/
+node_modules/
+__pycache__/

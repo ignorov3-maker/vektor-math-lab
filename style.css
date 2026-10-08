@@ -378,3 +378,6 @@ code{font-size:.9em;background:var(--tint);padding:1px 5px;border-radius:4px}
   .chat-form .btn{padding:10px 14px}
 }
 @media (prefers-reduced-motion:reduce){.typing::after{animation:none;content:'…'}.chat-log{scroll-behavior:auto}}
+/* дети сеток не распирают колонку на узком экране */
+.layout>*,.stack>*{min-width:0}
+.chat-form input{width:100%}

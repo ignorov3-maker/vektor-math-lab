@@ -45,11 +45,24 @@ const fresh = () => ({
 });
 let state;
 try { state = Object.assign(fresh(), JSON.parse(localStorage.getItem(KEY))); } catch { state = fresh(); }
+// защита от испорченных или старых данных в браузере
+(() => {
+  const d = fresh(), isObj = v => v && typeof v === 'object' && !Array.isArray(v);
+  for (const k of ['progress', 'meta', 'diag', 'settings']) if (!isObj(state[k])) state[k] = d[k];
+  for (const k of ['attempts', 'days']) if (!Array.isArray(state[k])) state[k] = [];
+  for (const k of ['answers', 'asked']) if (!Number.isFinite(state[k])) state[k] = 0;
+  if (typeof state.settings.name !== 'string' || !state.settings.name.trim()) state.settings.name = d.settings.name;
+  if (!['steps', 'visual'].includes(state.settings.style)) state.settings.style = 'steps';
+  if (!Array.isArray(state.diag.results) || !Number.isInteger(state.diag.step)) state.diag = d.diag;
+  state.attempts = state.attempts.filter(a => a && typeof a === 'object');
+})();
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
 let ai = T.loadCfg();
 
-const today = () => new Date().toISOString().slice(0, 10);
-const addDays = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+// даты по местному времени ученика (а не по UTC)
+const isoDate = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const today = () => isoDate(new Date());
+const addDays = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return isoDate(d); };
 const meta = i => {
   const m = (state.meta[topics[i].id] ||= {});
   return Object.assign(m, { practice: 0, streak: 0, mastered: false, masteredAt: null, reviewStep: 0, reviewDue: null, errors: {},
@@ -72,12 +85,13 @@ const modelName = () => (T.MODELS.find(m => m.id === ai.model)?.name.split(' —
 
 // Что делать дальше: повторение, база для трудной темы или следующая тема маршрута
 function nextStep() {
-  const cur = currentStop(), m = meta(cur);
-  if (m.failedChecks >= 2) {
-    const weak = (topics[cur].requires || []).map(id => byId[id]).filter(r => r != null && pct(r) < DONE);
-    if (weak.length) return { i: weak[0], reason: `Сначала повтори «${topics[weak[0]].title}» — на ней держится тема «${topics[cur].title}».` };
+  // если какая-то тема дважды не сдана, а её база не освоена — сначала база
+  for (const i of ROUTE) {
+    if (pct(i) >= DONE || meta(i).failedChecks < 2) continue;
+    const weak = (topics[i].requires || []).map(id => byId[id]).filter(r => r != null && pct(r) < DONE);
+    if (weak.length) return { i: weak[0], reason: `Сначала повтори «${topics[weak[0]].title}» — на ней держится тема «${topics[i].title}».` };
   }
-  return { i: cur, reason: null };
+  return { i: currentStop(), reason: null };
 }
 
 function markActivity() {
@@ -179,6 +193,7 @@ function bindChat(i, kind) {
     if (v === 'hint' || v === 'solution') return lessonTaskHelp(i, v);
     tutorSay(i, kind, v);
   });
+  box.querySelectorAll('[data-offline]').forEach(b => b.onclick = () => offlineFallback(i, kind));
 }
 
 function startLesson(i) {
@@ -202,6 +217,12 @@ function nextBeat(i) {
     c.msgs.push({ role: 'assistant', html: b.html, lab: b.lab });
     if (b.done) c.done = true;
   }
+}
+
+function syncHints() {
+  const box = app.querySelector('#hints'), hb = app.querySelector('#hint-btn'); if (!box || !session?.task) return;
+  box.innerHTML = session.task.hints.slice(0, session.hints).map(h => `<p class="bubble">${h}</p>`).join('');
+  if (hb) { hb.disabled = session.hints >= session.task.hints.length; hb.textContent = session.hints ? 'Ещё подсказка' : 'Показать подсказку'; }
 }
 
 function lessonTaskHelp(i, what) {
@@ -233,8 +254,9 @@ function tutorSay(i, kind, text) {
   if (kind === 'lesson' && /^дальше$/i.test(text)) nextBeat(i);
   else {
     const task = kind === 'task' ? session?.task : null;
-    const r = T.localAnswer(topics[i], /^дай подсказку$/i.test(text) ? 'подскажи' : text, task, c.hint);
-    if (r.usedHint) { c.hint++; if (session && session.mode === 'practice') session.hints = Math.max(session.hints, c.hint); }
+    const hintAt = Math.max(c.hint, kind === 'task' && session ? session.hints : 0);
+    const r = T.localAnswer(topics[i], /^дай подсказку$/i.test(text) ? 'подскажи' : text, task, hintAt);
+    if (r.usedHint) { c.hint = hintAt + 1; if (kind === 'task' && session && session.mode === 'practice') { session.hints = Math.max(session.hints, c.hint); syncHints(); } }
     c.msgs.push({ role: 'assistant', html: r.html });
   }
   refreshChat(i, kind);
@@ -265,14 +287,16 @@ async function aiReply(i, kind, hiddenUser) {
     msg.html = `<p>${esc(e.message || 'Не получилось получить ответ.')}</p><p class="small">Пока могу помочь по конспекту: <button type="button" class="link" data-offline="1">ответить без ИИ</button></p>`;
   } finally {
     c.busy = false; refreshChat(i, kind);
-    const off = app.querySelector(`.chat[data-chat="${kind}"] [data-offline]`);
-    if (off) off.onclick = () => {
-      const last = [...c.msgs].reverse().find(m => m.role === 'user' && !m.hidden);
-      if (kind === 'lesson' && (!last || /^дальше|начни/i.test(last.raw || ''))) nextBeat(i);
-      else c.msgs.push({ role: 'assistant', html: T.localAnswer(t, last?.raw || 'правило', task, c.hint).html });
-      refreshChat(i, kind);
-    };
   }
+}
+
+// Ответ без ИИ после ошибки подключения
+function offlineFallback(i, kind) {
+  const c = getChat(i, kind), t = topics[i], task = kind === 'task' ? session?.task : null;
+  const last = [...c.msgs].reverse().find(m => m.role === 'user' && !m.error);
+  if (kind === 'lesson' && (!last || /^(дальше|начни урок)/i.test(last.raw || ''))) nextBeat(i);
+  else c.msgs.push({ role: 'assistant', html: T.localAnswer(t, last?.raw || 'правило', task, c.hint).html });
+  refreshChat(i, kind);
 }
 
 /* ================= Главная ================= */
@@ -321,7 +345,7 @@ function home() {
 
 function week() {
   const names = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'], now = new Date(), dow = (now.getDay() + 6) % 7;
-  return names.map((n, k) => { const d = new Date(now); d.setDate(now.getDate() - dow + k); const on = state.days.includes(d.toISOString().slice(0, 10)); return `<span>${n}<i class="${on ? 'on' : ''}" title="${on ? 'Занимался' : 'Нет занятий'}"></i></span>`; }).join('');
+  return names.map((n, k) => { const d = new Date(now); d.setDate(now.getDate() - dow + k); const on = state.days.includes(isoDate(d)); return `<span>${n}<i class="${on ? 'on' : ''}" title="${on ? 'Занимался' : 'Нет занятий'}"></i></span>`; }).join('');
 }
 
 function drawRoute() {
@@ -597,7 +621,7 @@ const EVENT_TEXT = {
 
 function bind(page, i, stage) {
   app.querySelectorAll('[data-go]').forEach(b => b.onclick = () => location.hash = b.dataset.go);
-  app.querySelectorAll('[data-lesson]').forEach(b => b.onclick = () => { session = null; if (b.dataset.tab) learnTab = b.dataset.tab; location.hash = 'lesson/' + b.dataset.lesson; });
+  app.querySelectorAll('[data-lesson]').forEach(b => b.onclick = () => { session = null; if (b.dataset.tab) learnTab = b.dataset.tab; location.hash = 'lesson/' + b.dataset.lesson + (b.dataset.tab && !topics[+b.dataset.lesson].legacy ? '/learn' : ''); });
   app.querySelectorAll('[data-review]').forEach(b => b.onclick = () => { session = null; location.hash = `lesson/${b.dataset.review}/review`; });
   app.querySelectorAll('[data-stage]').forEach(b => b.onclick = () => { session = null; location.hash = `lesson/${i}/${b.dataset.stage}`; });
   app.querySelectorAll('[data-filter]').forEach(b => b.onclick = () => { filterState[page] = b.dataset.filter; render(); });
