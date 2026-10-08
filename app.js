@@ -114,8 +114,8 @@ function answerInput(task, button) {
   if (numberOnly) return `<div class="answer-row"><label class="num-input"><span class="visually-hidden">Твой ответ</span><input id="ans-num" inputmode="numeric" autocomplete="off" placeholder="?" aria-label="Твой ответ — число"></label><button class="btn btn-primary btn-big" type="submit">${button}</button></div>`;
   const mixed = task.accept === 'mixed';
   return `<div class="answer-row">
-    <div class="frac-input${mixed ? ' with-whole' : ''}" role="group" aria-label="Твой ответ — дробь">
-      <label class="fi-whole"><input id="ans-whole" inputmode="numeric" autocomplete="off" aria-label="Целая часть"><span>целые</span></label>
+    <div class="frac-input${mixed ? ' with-whole' : ''}" role="group" aria-label="Твой ответ — ${mixed ? 'смешанное число' : 'дробь'}">
+      ${mixed ? '<label class="fi-whole"><input id="ans-whole" inputmode="numeric" autocomplete="off" aria-label="Целая часть"><span>целые</span></label>' : ''}
       <div class="fi-frac">
         <input id="ans-num" inputmode="numeric" autocomplete="off" aria-label="Числитель — верхнее число" placeholder="?"><span class="fi-lab" aria-hidden="true">числитель</span>
         <i aria-hidden="true"></i><span></span>
@@ -124,7 +124,7 @@ function answerInput(task, button) {
     </div>
     <button class="btn btn-primary btn-big" type="submit">${button}</button>
   </div>
-  <p class="fi-help small muted">Ответ — целое число? Впиши его в верхнюю клеточку, нижнюю оставь пустой.${mixed ? '' : ' <button type="button" class="link small" data-whole>Есть целая часть</button>'}</p>`;
+  ${mixed ? '<p class="fi-help small muted">Слева — целые, справа — дробная часть.</p>' : ''}`;
 }
 
 function taskCard(task, { formId = 'answer-form', button = 'Проверить', exam = false, hints = false } = {}) {
@@ -160,7 +160,6 @@ function bindAnswerKeys() {
     den.addEventListener('keydown', e => { if ((e.key === 'Backspace' && !den.value) || e.key === 'ArrowUp') { e.preventDefault(); num.focus(); } });
   }
   if (whole && num) whole.addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'ArrowRight') { e.preventDefault(); num.focus(); } });
-  app.querySelectorAll('[data-whole]').forEach(b => b.onclick = () => { app.querySelector('.frac-input')?.classList.add('with-whole'); b.remove(); app.querySelector('#ans-whole')?.focus(); });
 }
 
 /* ================= ИИ-наставник: чат ================= */
@@ -670,6 +669,7 @@ function practiceStage(i) {
     <section class="sheet task" aria-labelledby="q">
       ${t.legacy ? '' : `<div class="task-progress"><span>Решено ${Math.min(m.practice, need)} из ${need}</span>${bar(Math.round(Math.min(m.practice, need) / need * 100))}<span class="task-meta" title="Сложность задач подстраивается под тебя">Сложность ${dots(m.level || 2)}</span></div>`}
       ${taskCard(task, { hints: true })}
+      ${!t.legacy && ready ? `<div class="ready-strip" role="status"><span>${G.icon('star', 20)} Тренировка пройдена — пора проверить себя!</span><button class="btn btn-primary" data-stage="check">Проверить себя →</button></div>` : ''}
     </section>
     <aside class="stack side">
       ${t.legacy ? '' : `<div class="sheet streak ${ready ? 'ready' : ''}"><h3>${ready ? 'Можно проверять себя!' : 'Тренировка'}</h3>
@@ -947,13 +947,18 @@ function bind(page, i, stage) {
         } else setPct(i, 100);
         const need = A.need(pace()), justReady = !t.legacy && m.practice === need;
         fb.className = 'feedback big';
+        const tc = t.check || { count: 4, passScore: 3 }, extra = !t.legacy && m.practice >= need + 3;
         fb.innerHTML = `<p class="fb-title">${G.icon('star', 22)} Верно!</p><p>${feedbackFor(r, s.task, i).replace(/^<b>Верно!<\/b>\s*/, '')}</p>` + eventsHtml(ev, i) +
           (!t.legacy && A.fastTrack(m, pace()) ? `<p class="fast-track">Похоже, ты это уже знаешь — можно сразу к проверке.</p>` : '') +
-          (justReady ? `<p class="fast-track">Ты решил ${need} ${plural(need, 'задачу', 'задачи', 'задач')} — можно проверить себя!</p>` : '') +
-          `<div class="fb-actions"><button class="btn btn-primary btn-big" id="next-task">Следующая задача →</button>${!t.legacy && (justReady || A.fastTrack(m, pace()) || m.practice > need) ? '<button class="btn btn-ghost" data-stage-now="check">К проверке</button>' : ''}</div>`;
+          (justReady ? `<div class="milestone"><p class="ms-title">${G.icon('star', 24)} Тренировка пройдена: ${need} из ${need}!</p><p>Дальше — проверка: ${tc.count} ${plural(tc.count, 'задача', 'задачи', 'задач')} без подсказок, нужно ${tc.passScore} верных. Получится — откроется следующая тема.</p></div>` : '') +
+          (extra ? `<p class="fast-track">Ты решил уже ${m.practice} ${plural(m.practice, 'задачу', 'задачи', 'задач')} — этого точно хватит. Переходи к проверке!</p>` : '') +
+          (!t.legacy && m.practice >= need
+            ? `<div class="fb-actions"><button class="btn btn-primary btn-big" data-stage-now="check">Проверить себя →</button><button class="btn btn-ghost" id="next-task">Ещё задачу</button></div>`
+            : `<div class="fb-actions"><button class="btn btn-primary btn-big" id="next-task">Следующая задача →</button>${!t.legacy && A.fastTrack(m, pace()) ? '<button class="btn btn-ghost" data-stage-now="check">К проверке</button>' : ''}</div>`);
         form.querySelectorAll('input,button').forEach(el => el.disabled = true);
         fb.querySelector('#next-task').onclick = () => { newPracticeTask(i); render(); app.querySelector('#ans-num')?.focus(); };
-        fb.querySelector('#next-task').focus({ preventScroll: true });
+        (fb.querySelector('.fb-actions .btn-primary') || fb.querySelector('#next-task')).focus({ preventScroll: true });
+        fb.querySelector('.fb-actions')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         sfx('ok');
         bindEventButtons(fb, i);
         save(); celebrate(G.solved(game(), today(), { firstTry, hints, wrongBefore: s.tries.length - 1 })); return;

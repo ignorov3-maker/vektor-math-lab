@@ -26,6 +26,17 @@ ok(!r.html.includes('frac{') && !r.html.includes('$'), 'latex cleanup');
 r = T.render('Сейчас нарисую [[поло', { streaming: true });
 ok(!r.html.includes('[['), 'partial tag hidden while streaming');
 
+// картинка совпадает с текстом
+r = T.render('Слева пицца разделена на 8 частей, закрашены 4 — это 4/8. Справа 1/2.\n[[круг 3/8]]\nЗначит, 4/8 и 1/2 — одно и то же.');
+ok(r.html.includes('Две полоски: 4 из 8 и 1 из 2') && !r.html.includes('Круг из 8'), 'mismatched tag → pair from text');
+r = T.render('Закрашено 3 из 5, то есть 3/5.\n[[круг 3/8]]');
+ok(r.html.includes('Круг из 5 частей'), 'mismatched single → same type, numbers from text');
+r = T.render('Посмотри на картинку.\n[[полоска 2/7]]');
+ok(r.html.includes('Полоска из 7'), 'no fractions in text → keep tag');
+r = T.render('Это 2/3.\n[[полоска 2/3]]\n[[круг 2/3]]');
+ok((r.html.match(/<svg/g) || []).length === 1, 'only one picture per message');
+ok(!T.systemPrompt({ topic: window.VEKTOR_FRACTIONS.topics[0], mode: 'lesson' }).includes('[[круг 3/8]]'), 'prompt has no copyable concrete tag');
+
 // промпт
 const topic = window.VEKTOR_FRACTIONS.topics[3];
 const task = topic.generate(1);

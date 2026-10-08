@@ -166,8 +166,21 @@ async def main():
         await pg.click('.back'); rep('«← К пути» возвращает на главную', (await pg.evaluate("location.hash"))=='#home')
         await pg.goto(B+'#map'); rep('«Все темы»: кнопки Урок и Конспект', await pg.locator('.topic-actions .btn').count()>=17)
         rep('меню из 4 пунктов', await pg.locator('nav [data-page]').count()==4)
-        await pg.goto(B+'#lesson/5/practice'); await pg.wait_for_timeout(150)
-        rep('смешанное число: клеточка «целые» открывается', not await pg.evaluate("getComputedStyle(document.querySelector('.fi-whole')).display==='none'") or await pg.locator('[data-whole]').count()==1)
+        await pg.goto(B+'#lesson/0/practice'); await pg.wait_for_timeout(150)
+        rep('обычная дробь: клеточки «целые» нет', await pg.locator('.fi-whole').count()==0 and await pg.locator('[data-whole]').count()==0)
+        mixed_ok = await pg.evaluate("(() => { const d=document.createElement('form'); d.className='answer'; d.innerHTML=answerInput({answer:'2 1/3',accept:'mixed'},'Проверить'); app.appendChild(d); const w=d.querySelector('.fi-whole'); const ok=!!w && getComputedStyle(w).display!=='none'; d.remove(); return ok; })()")
+        rep('смешанное число: клеточка «целые» видна', mixed_ok)
+        await pg.goto(B+'#home'); await pg.goto(B+'#lesson/3/practice'); await pg.wait_for_timeout(150)
+        seen_ms = False
+        for _ in range(6):
+            await pg.evaluate("fillAnswer(session.task.answer)"); await pg.click('form.answer button[type=submit]'); await pg.wait_for_timeout(150)
+            if await pg.locator('#feedback .milestone').count(): seen_ms = True; break
+            await pg.click('#next-task'); await pg.wait_for_timeout(120)
+        rep('после нормы — «Тренировка пройдена» и путь к проверке', seen_ms and await pg.locator('#feedback [data-stage-now=check]').count()==1)
+        await pg.click('#next-task'); await pg.wait_for_timeout(150)
+        rep('после нормы внизу закреплена кнопка «Проверить себя»', await pg.locator('.ready-strip').count()==1 and await pg.evaluate("getComputedStyle(document.querySelector('.ready-strip')).position")=='sticky')
+        await pg.click('.ready-strip [data-stage=check]'); await pg.wait_for_timeout(150)
+        rep('кнопка ведёт на проверку', (await pg.evaluate("location.hash")).endswith('/check'))
         await pg.evaluate("setSkin('pixel')"); await pg.goto(B+'#home'); await pg.wait_for_timeout(300)
         rep('стиль «Пиксель» включается', await pg.evaluate("document.documentElement.dataset.skin")=='pixel')
         await pg.evaluate("setSkin('notebook')")
