@@ -3,7 +3,7 @@
 /* ================= Модули ================= */
 
 const { check } = window.VEKTOR_CHECK;
-const V = window.VEKTOR_VISUALS, T = window.VEKTOR_TUTOR, A = window.VEKTOR_ADAPTIVE;
+const V = window.VEKTOR_VISUALS, T = window.VEKTOR_TUTOR, A = window.VEKTOR_ADAPTIVE, G = window.VEKTOR_GAME;
 const { f, figure } = V;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
@@ -32,7 +32,7 @@ const ROUTE = window.VEKTOR_FRACTIONS.topics.map((t, i) => i); // раздел �
 const DIAG = ['concept', 'reduce', 'compare', 'add-same', 'mult', 'part-of'].map(id => byId[id]);
 const DONE = 80;
 
-const pages = { home: 'Мой маршрут', map: 'Карта знаний', diagnostic: 'Диагностика', library: 'Материалы', teacher: 'Преподавателю', settings: 'Настройки', lesson: 'Занятие' };
+const pages = { home: 'Мой маршрут', map: 'Карта знаний', diagnostic: 'Диагностика', library: 'Материалы', awards: 'Награды', teacher: 'Преподавателю', settings: 'Настройки', lesson: 'Занятие' };
 const STAGES = [['learn', 'Урок'], ['practice', 'Тренировка'], ['check', 'Проверка']];
 
 /* ================= Состояние ================= */
@@ -58,6 +58,7 @@ try { state = Object.assign(fresh(), JSON.parse(localStorage.getItem(KEY))); } c
 })();
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
 let ai = T.loadCfg();
+const game = () => G.ensure(state);
 
 // даты по местному времени ученика (а не по UTC)
 const isoDate = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -108,7 +109,9 @@ const bar = v => `<div class="bar" role="progressbar" aria-valuenow="${v}" aria-
 function taskCard(task, { formId = 'answer-form', button = 'Проверить ответ', exam = false } = {}) {
   const input = task.choices
     ? `<div class="choices" role="group" aria-label="Выбери знак">${task.choices.map(c => `<button type="submit" class="btn btn-ghost choice" name="choice" value="${esc(c)}">${esc(c)}</button>`).join('')}</div>`
-    : `<label>Твой ответ<input id="answer" inputmode="text" autocomplete="off" placeholder="${esc(task.placeholder || 'число или дробь')}"></label><button class="btn btn-primary" type="submit">${button}</button>`;
+    : `<label>Твой ответ<input id="answer" inputmode="text" autocomplete="off" placeholder="${esc(task.placeholder || 'число или дробь')}"></label>
+       <div class="keypad" aria-label="Быстрый ввод"><button type="button" data-insert="/" aria-label="Знак дроби">/</button><button type="button" data-insert=" " aria-label="Пробел для смешанного числа">␣</button><button type="button" data-insert="-" aria-label="Минус">−</button></div>
+       <button class="btn btn-primary" type="submit">${button}</button>`;
   return `<p class="story">${task.story}</p>${exam && task.figureIsHint ? '' : figure(task.figure)}<p class="question" id="q">${task.question}</p>
     <form class="answer" id="${formId}" autocomplete="off">${input}</form>
     <div class="feedback" id="feedback" role="status" aria-live="polite"></div>`;
@@ -137,10 +140,12 @@ function quickReplies(i, kind) {
   if (kind === 'lesson') {
     if (c.done) return [['go-practice', 'Перейти к тренировке', true]];
     if (c.pending) return [['hint', 'Подсказка'], ['solution', 'Покажи решение']];
+    if (isOnline() && c.truncated) return [['Продолжи, пожалуйста', 'Продолжи', true], ['Дальше', 'Дальше']];
     return isOnline()
       ? [['Дальше', 'Дальше', true], ['Не понял, объясни по-другому', 'Не понял'], ['Покажи на картинке', 'Покажи картинку'], ['Дай ещё пример', 'Ещё пример']]
       : [['Дальше', 'Дальше', true], ['Повтори правило', 'Повтори правило'], ['Покажи картинку', 'Картинка']];
   }
+  if (isOnline() && c.truncated) return [['Продолжи, пожалуйста', 'Продолжи', true], ['Дай подсказку', 'Подсказка']];
   return isOnline()
     ? [['Дай подсказку', 'Подсказка'], ['Я не понимаю задачу', 'Не понимаю задачу'], ['Покажи на картинке', 'Картинка']]
     : [['Дай подсказку', 'Подсказка'], ['Покажи картинку', 'Картинка'], ['Повтори правило', 'Правило']];
@@ -149,7 +154,8 @@ function quickReplies(i, kind) {
 function chatBox(i, kind) {
   const c = getChat(i, kind), online = isOnline();
   const ph = kind === 'lesson' ? (c.pending ? 'Твой ответ, например 3/4' : 'Ответь или спроси наставника…') : 'Спроси, что непонятно…';
-  return `<div class="chat chat-${kind}" data-chat="${kind}">
+  const steps = kind === 'lesson' && c.beats && !online ? `<div class="lesson-progress"><span>Шаг ${Math.max(1, c.beat + 1)} из ${c.beats.length}</span>${bar(Math.round(Math.max(1, c.beat + 1) / c.beats.length * 100))}</div>` : '';
+  return `<div class="chat chat-${kind}" data-chat="${kind}">${steps}
     <div class="chat-log" aria-live="polite">${c.msgs.filter(m => !m.hidden).map(msgHtml).join('') || (kind === 'task' ? '<p class="muted small chat-empty">Застрял? Спроси наставника — он не скажет ответ, но поможет дойти до него самому.</p>' : '')}</div>
     <div class="chat-quick">${quickReplies(i, kind).map(([v, l, main]) => `<button type="button" class="btn ${main ? 'btn-primary' : 'btn-ghost'} btn-sm" data-quick="${esc(v)}">${l}</button>`).join('')}</div>
     <form class="chat-form" autocomplete="off"><label class="visually-hidden" for="chat-in-${kind}">Сообщение наставнику</label>
@@ -167,6 +173,8 @@ function refreshChat(i, kind) {
   box.querySelector('.chat-quick').replaceWith(nb.querySelector('.chat-quick'));
   box.querySelector('.chat-form').replaceWith(nb.querySelector('.chat-form'));
   box.querySelector('.chat-mode').replaceWith(nb.querySelector('.chat-mode'));
+  const oldSteps = box.querySelector('.lesson-progress'), newSteps = nb.querySelector('.lesson-progress');
+  if (oldSteps && newSteps) oldSteps.replaceWith(newSteps); else if (newSteps) box.prepend(newSteps);
   bindChat(i, kind);
   V.labBind(box);
   log.scrollTop = log.scrollHeight;
@@ -237,6 +245,7 @@ function tutorSay(i, kind, text) {
   if (c.busy) return;
   c.msgs.push({ role: 'user', html: `<p>${esc(text)}</p>`, raw: text });
   state.asked = (state.asked || 0) + 1; save();
+  if (!c.pending && !/^(дальше|продолжи)/i.test(text)) celebrate(G.asked(game()));
   if (kind === 'lesson' && c.pending) { // ответ на задачу внутри урока проверяет код
     const p = c.pending, r = check(text, p.task);
     if (r.empty || r.unreadable) c.msgs.push({ role: 'assistant', html: `<p>${r.msg || 'Впиши ответ числом или дробью.'}</p>` });
@@ -277,7 +286,7 @@ async function aiReply(i, kind, hiddenUser) {
   try {
     const text = await T.stream(ai, [{ role: 'system', content: sys }, ...history], txt => {
       msg.html = T.render(txt, { streaming: true }).html || '<p class="typing">…</p>'; updateLastMsg(i, kind, msg);
-    });
+    }, { maxTokens: kind === 'lesson' ? 700 : 550, onFinish: r => { c.truncated = r === 'length'; } });
     const r = T.render(text);
     msg.raw = text; msg.html = r.html || '<p>…</p>';
     if (r.done && kind === 'lesson') c.done = true;
@@ -297,6 +306,52 @@ function offlineFallback(i, kind) {
   if (kind === 'lesson' && (!last || /^(дальше|начни урок)/i.test(last.raw || ''))) nextBeat(i);
   else c.msgs.push({ role: 'assistant', html: T.localAnswer(t, last?.raw || 'правило', task, c.hint).html });
   refreshChat(i, kind);
+}
+
+/* ================= Награды: тосты, праздник, счётчики ================= */
+
+function hud() {
+  const g = game();
+  document.querySelector('#hud-stars').textContent = g.stars;
+  document.querySelector('#hud-streak').textContent = G.liveStreak(g, today());
+}
+
+function toast(html, kind = '') {
+  const box = document.querySelector('#toasts'); if (!box) return;
+  const el = document.createElement('div'); el.className = 'toast ' + kind; el.innerHTML = html;
+  box.appendChild(el);
+  while (box.children.length > 3) box.firstElementChild.remove(); // не больше трёх уведомлений сразу
+  setTimeout(() => el.classList.add('out'), 2600);
+  setTimeout(() => el.remove(), 3100);
+}
+
+function confetti() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const c = document.createElement('canvas'); c.className = 'confetti'; c.setAttribute('aria-hidden', 'true');
+  const W = c.width = innerWidth, H = c.height = innerHeight, ctx = c.getContext('2d');
+  document.body.appendChild(c);
+  const css = getComputedStyle(document.documentElement);
+  const colors = ['--green', '--marker', '--pie', '--margin', '--green-soft'].map(v => css.getPropertyValue(v).trim() || '#1E7358');
+  const parts = Array.from({ length: 140 }, () => ({ x: W / 2 + (Math.random() - .5) * W * .3, y: H * .35, vx: (Math.random() - .5) * 14, vy: -Math.random() * 13 - 4, r: Math.random() * 6 + 4, a: Math.random() * 6, va: (Math.random() - .5) * .3, c: colors[Math.floor(Math.random() * colors.length)] }));
+  const t0 = performance.now();
+  (function frame(t) {
+    ctx.clearRect(0, 0, W, H);
+    for (const p of parts) { p.vy += .42; p.x += p.vx; p.y += p.vy; p.a += p.va; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.fillStyle = p.c; ctx.fillRect(-p.r / 2, -p.r / 4, p.r, p.r / 2); ctx.restore(); }
+    if (t - t0 < 1800) requestAnimationFrame(frame); else c.remove();
+  })(t0);
+}
+
+// Показать события игры: звёзды, цель дня, достижения, освоенная тема
+function celebrate(ev, { quiet = false } = {}) {
+  if (!ev || !ev.length) return;
+  if (quiet) { hud(); save(); return; }
+  const main = ev.filter(e => e.type === 'stars' && e.why !== 'цель дня');
+  const stars = main.reduce((a, e) => a + e.n, 0);
+  if (stars) toast(`${G.icon('star', 18)}<b>+${stars}</b> ${main.length > 1 ? 'звёзд' : main[0].why}`, 'toast-stars');
+  if (ev.some(e => e.type === 'goal')) toast(`${G.icon('target', 20)}<span><b>Цель дня выполнена!</b> +5 звёзд</span>`, 'toast-goal');
+  for (const e of ev.filter(e => e.type === 'badge')) toast(`${G.icon(e.badge.icon, 22)}<span><b>Новое достижение:</b> ${e.badge.title}</span>`, 'toast-badge');
+  if (ev.some(e => e.type === 'mastered' || e.type === 'badge' || e.type === 'goal')) confetti();
+  hud(); save();
 }
 
 /* ================= Главная ================= */
@@ -324,7 +379,7 @@ function home() {
         <div class="fact"><strong>${checked()}<small> из ${topics.length}</small></strong><span>тем начато</span></div>
         <div class="fact"><strong>${state.answers}</strong><span>ответов дано</span></div>
       </div>
-      <div class="sheet"><h3>Эта неделя</h3><div class="week">${week()}</div></div>
+      ${todayCard()}
     </div>
     <div class="stack side">
       <div class="sheet pace pace-${p}">
@@ -342,6 +397,21 @@ function home() {
     </div>
   </div>`;
 }
+
+function todayCard() {
+  const g = game(), done = g.day === today() ? g.dayTasks : 0, st = G.liveStreak(g, today()), rk = G.rank(g.stars);
+  const pctGoal = Math.min(100, Math.round(done / g.goal * 100));
+  return `<div class="sheet today">
+    <div class="today-head"><h3>Сегодня</h3><button class="link small" data-go="awards">Награды</button></div>
+    <div class="today-grid">
+      <div class="goal-ring" style="--p:${pctGoal}" role="img" aria-label="Цель дня: ${Math.min(done, g.goal)} из ${g.goal} задач"><b>${Math.min(done, g.goal)}<small>/${g.goal}</small></b></div>
+      <div><p class="today-line"><b>${done >= g.goal ? 'Цель дня выполнена!' : `Ещё ${g.goal - done} ${plural(g.goal - done, 'задача', 'задачи', 'задач')} до цели дня`}</b></p>
+        <p class="muted small">${G.icon('flame', 16)} ${st ? `${st} ${plural(st, 'день', 'дня', 'дней')} подряд` : 'Начни серию дней сегодня'} · ${G.icon('star', 16)} ${g.stars} · ${rk.name}</p></div>
+    </div>
+    <div class="week">${week()}</div>
+  </div>`;
+}
+const plural = (n, one, few, many) => { const a = Math.abs(n) % 100, b = a % 10; return a > 10 && a < 20 ? many : b > 1 && b < 5 ? few : b === 1 ? one : many; };
 
 function week() {
   const names = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'], now = new Date(), dow = (now.getDay() + 6) % 7;
@@ -521,6 +591,38 @@ function diagnostic() {
   </section>`;
 }
 
+/* ================= Награды ================= */
+
+function awards() {
+  const g = game(), rk = G.rank(g.stars), st = G.liveStreak(g, today());
+  const toNext = rk.next ? rk.next.min - g.stars : 0, prog = rk.next ? Math.round((g.stars - rk.min) / (rk.next.min - rk.min) * 100) : 100;
+  return head('Награды', 'Звёзды даются за каждую решённую задачу — больше, если решил сам с первой попытки. Ошибки звёзд не отнимают.') + `
+  <div class="layout">
+    <div class="stack">
+      <div class="sheet rank-card">
+        <div class="rank-top">${G.icon('crown', 40)}<div><p class="muted small">Твоё звание</p><h2>${rk.name}</h2></div></div>
+        ${bar(prog)}
+        <p class="small muted">${rk.next ? `Ещё ${toNext} ${plural(toNext, 'звезда', 'звезды', 'звёзд')} до звания «${rk.next.name}»` : 'Высшее звание — ты настоящий гроссмейстер дробей!'}</p>
+      </div>
+      <div class="facts">
+        <div class="fact"><strong>${g.stars}</strong><span>звёзд</span></div>
+        <div class="fact"><strong>${st}</strong><span>${plural(st, 'день', 'дня', 'дней')} подряд</span></div>
+        <div class="fact"><strong>${g.earned.length}<small> из ${G.BADGES.length}</small></strong><span>достижений</span></div>
+      </div>
+      <section class="sheet"><h2>Достижения</h2>
+        <div class="badges">${G.BADGES.map(b => { const on = g.earned.includes(b.id); return `<div class="badge-card${on ? ' on' : ''}">${G.icon(b.icon, 30)}<div><b>${b.title}</b><span>${b.desc}</span></div>${on ? '' : '<span class="visually-hidden">Ещё не получено</span>'}</div>`; }).join('')}</div>
+      </section>
+    </div>
+    <div class="stack side">
+      <div class="sheet"><h3>Как получить звёзды</h3><ul class="small star-rules">
+        <li><b>+3</b> — задача с первой попытки без подсказок</li><li><b>+2</b> — с первой попытки, но с подсказкой</li>
+        <li><b>+1</b> — решил после ошибок: упорство тоже считается</li><li><b>+2</b> — каждый верный ответ в проверке</li>
+        <li><b>+10</b> — тема освоена</li><li><b>+5</b> — повторение без ошибок и выполненная цель дня</li></ul></div>
+      <div class="sheet"><h3>Звания</h3><ol class="small ranks">${G.RANKS.map(r => `<li class="${r.name === rk.name ? 'on' : ''}">${r.name} <span class="muted">— от ${r.min} ★</span></li>`).join('')}</ol></div>
+    </div>
+  </div>`;
+}
+
 /* ================= Преподавателю ================= */
 
 function teacher() {
@@ -539,7 +641,8 @@ function teacher() {
     <thead><tr><th>Тема</th><th>Прогресс</th><th>Состояние</th><th>Уровень задач</th><th>Подсказок на задачу</th><th>Частые ошибки</th><th>Что сделать</th></tr></thead>
     <tbody>${rows.map(i => { const [c, s, a] = advice(i); const m = meta(i); return `<tr><td><b>${topics[i].title}</b><br><span class="muted small">${topics[i].section}</span></td><td style="min-width:110px">${pct(i)}%${bar(pct(i))}</td><td><span class="pill ${c}">${s}</span></td><td>${topics[i].legacy || m.level == null ? '<span class="muted">—</span>' : dots(m.level)}</td><td>${hintsPer(i)}</td><td class="small">${errs(i)}</td><td>${a}${m.failedChecks >= 2 ? '<br><span class="small muted">Проверка не сдана дважды</span>' : ''}</td></tr>`; }).join('')}</tbody>
   </table></div></div>
-  <p class="muted small" style="margin-top:12px">Темп: ${A.PACE[p].label.toLowerCase()} — ${A.PACE[p].say.charAt(0).toLowerCase() + A.PACE[p].say.slice(1)} Считается по последним 15 задачам: доля решённых с первой попытки без подсказок и время на задачу.</p>`;
+  <p class="muted small" style="margin-top:12px">Мотивация: ${game().stars} звёзд, серия ${G.liveStreak(game(), today())} дн. (лучшая — ${game().bestStreak}), достижений ${game().earned.length} из ${G.BADGES.length}, цель дня — ${game().goal} задач.</p>
+  <p class="muted small">Темп: ${A.PACE[p].label.toLowerCase()} — ${A.PACE[p].say.charAt(0).toLowerCase() + A.PACE[p].say.slice(1)} Считается по последним 15 задачам: доля решённых с первой попытки без подсказок и время на задачу.</p>`;
 }
 
 /* ================= Настройки ================= */
@@ -552,6 +655,7 @@ function settings() {
       <form class="sheet" id="settings-form">
         <h2>Ученик</h2>
         <label class="field">Имя ученика<input name="name" id="set-name" value="${esc(s.name)}" maxlength="30" required></label>
+        <label class="field">Цель дня<select name="goal" id="set-goal">${[3, 5, 10].map(n => `<option value="${n}"${game().goal === n ? ' selected' : ''}>${n} задач в день</option>`).join('')}</select></label>
         <label class="field">Как объяснять<select name="style" id="set-style"><option value="steps"${s.style === 'steps' ? ' selected' : ''}>Коротко и по шагам</option><option value="visual"${s.style === 'visual' ? ' selected' : ''}>Через наглядные примеры</option></select></label>
         <button class="btn btn-primary" type="submit">Сохранить</button>
         <div class="feedback" id="feedback" role="status" aria-live="polite"></div>
@@ -600,8 +704,9 @@ function render() {
   document.querySelectorAll('nav button[data-page]').forEach(b => b.dataset.page === page ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
   document.querySelector('#student-name').textContent = state.settings.name;
   document.querySelector('#avatar').textContent = (state.settings.name[0] || 'А').toUpperCase();
-  app.innerHTML = ({ home, map: () => mapPage(filterState.map), diagnostic, library: () => library(filterState.library), teacher, settings, lesson: () => lessonPage(i, lessonStage) })[page]();
+  app.innerHTML = ({ home, map: () => mapPage(filterState.map), diagnostic, library: () => library(filterState.library), awards, teacher, settings, lesson: () => lessonPage(i, lessonStage) })[page]();
   bind(page, i, lessonStage);
+  hud();
   requestAnimationFrame(drawRoute);
 }
 
@@ -627,6 +732,11 @@ function bind(page, i, stage) {
   app.querySelectorAll('[data-filter]').forEach(b => b.onclick = () => { filterState[page] = b.dataset.filter; render(); });
   app.querySelectorAll('[data-learn-tab]').forEach(b => b.onclick = () => { learnTab = b.dataset.learnTab; render(); });
   V.labBind(app);
+  app.querySelectorAll('[data-insert]').forEach(b => b.onclick = () => {
+    const inp = app.querySelector('#answer'); if (!inp) return;
+    const a = inp.selectionStart ?? inp.value.length, z = inp.selectionEnd ?? a;
+    inp.value = inp.value.slice(0, a) + b.dataset.insert + inp.value.slice(z); inp.focus(); inp.setSelectionRange(a + 1, a + 1);
+  });
 
   if (page === 'lesson' && stage === 'learn' && learnTab === 'tutor' && !topics[i].legacy) {
     bindChat(i, 'lesson');
@@ -654,7 +764,7 @@ function bind(page, i, stage) {
         const solved = r.ok && !r.almost;
         if (!solved) {
           if (r.mistake) s.lastMistake = r.mistake;
-          m.errorsTotal++;
+          m.errorsTotal++; G.wrong(game());
           const ev = t.legacy ? [] : A.afterAttempt(m, { solved: false, firstTry: false, hints: s.hints, sec: 0, mistake: r.mistake }, pace());
           fb.className = 'feedback bad';
           fb.innerHTML = feedbackFor(r, s.task, i) + eventsHtml(ev, i) + (t.legacy ? '' : ` <button class="link" id="ask-tutor">Разобрать с наставником</button>`);
@@ -680,12 +790,13 @@ function bind(page, i, stage) {
         fb.querySelector('#next-task').onclick = () => { newPracticeTask(i); render(); app.querySelector('#answer')?.focus(); };
         bindEventButtons(fb, i);
         const st = app.querySelector('.streak .small b'); if (st) st.textContent = m.practice;
-        save(); return;
+        save(); celebrate(G.solved(game(), today(), { firstTry, hints, wrongBefore: s.tries.length - 1 })); return;
       }
       // проверка и повторение: один ответ на задачу
       s.answered = true;
       const ok = r.ok && !r.almost;
       if (ok) s.right++; else if (r.mistake) s.found.push(r.mistake);
+      if (s.mode === 'check') { const ce = G.checkAnswer(game(), today(), ok); s.stars = (s.stars || 0) + ce.reduce((a, e) => a + e.n, 0); celebrate(ce, { quiet: true }); }
       fb.className = 'feedback' + (ok ? '' : ' bad');
       fb.innerHTML = ok ? '<b>Верно.</b>' : `<b>Неверно.</b> Решение: ${s.task.solution}`;
       fb.insertAdjacentHTML('beforeend', ` <button class="btn btn-primary btn-sm" id="next-task">${s.k + 1 < s.total ? 'Дальше' : 'Результат'}</button>`);
@@ -694,6 +805,7 @@ function bind(page, i, stage) {
         s.k++; s.answered = false; s.task = topics[i].generate(2);
         if (s.k >= s.total) finishSession(i);
         render(); app.querySelector('#answer')?.focus();
+        if (gameEvents) { celebrate(gameEvents); gameEvents = null; }
       };
       fb.querySelector('#next-task').focus();
       save();
@@ -719,6 +831,7 @@ function bind(page, i, stage) {
     if (r.mistake) { const m = meta(ti); m.errors[r.mistake] = (m.errors[r.mistake] || 0) + 1; }
     state.attempts = [...state.attempts, { topic: topics[ti].id, firstTry: ok, hints: 0, sec, level: 2, diag: true }].slice(-60);
     state.diag.results[k] = ok; state.diag.step++; diagTask = null; save(); render();
+    if (state.diag.step >= DIAG.length) celebrate(G.diag(game(), today()));
   };
   const restart = app.querySelector('#diag-restart');
   if (restart) restart.onclick = () => { state.diag = { step: 0, results: [] }; save(); render(); };
@@ -726,7 +839,7 @@ function bind(page, i, stage) {
   const sform = app.querySelector('#settings-form');
   if (sform) sform.onsubmit = e => {
     e.preventDefault();
-    state.settings = { name: sform.name.value.trim() || 'Ученик', style: sform.style.value }; save();
+    state.settings = { name: sform.name.value.trim() || 'Ученик', style: sform.style.value }; game().goal = +sform.goal.value || 5; save();
     document.querySelector('#student-name').textContent = state.settings.name;
     document.querySelector('#avatar').textContent = state.settings.name[0].toUpperCase();
     app.querySelector('#feedback').textContent = 'Сохранено.';
@@ -778,12 +891,15 @@ function bindAiForm(form) {
   };
 }
 
+let gameEvents = null; // показываем после перерисовки экрана результата
 function finishSession(i) {
   const t = topics[i], s = session, m = meta(i);
   if (s.mode === 'check') {
     if (s.right >= t.check.passScore) {
       setPct(i, 100); m.mastered = true; m.masteredAt = today(); m.reviewStep = 0; m.reviewDue = addDays(today(), t.review.afterDays[0]); m.failedChecks = 0;
+      gameEvents = G.mastered(game(), ROUTE.filter(r => pct(r) >= DONE).length);
     } else m.failedChecks++;
+    if (s.stars) (gameEvents ||= []).unshift({ type: 'stars', n: s.stars, why: 'за проверку' });
   } else if (s.mode === 'review') {
     if (s.right === s.total) {
       m.reviewStep++;
@@ -792,6 +908,7 @@ function finishSession(i) {
       if (m.reviewDue && m.reviewDue <= today()) m.reviewDue = addDays(today(), 1);
       setPct(i, 100);
     } else { m.reviewDue = addDays(today(), 1); setPct(i, 85); }
+    gameEvents = G.reviewed(game(), today(), s.right === s.total);
   }
   save();
 }
