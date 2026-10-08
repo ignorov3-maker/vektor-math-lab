@@ -8,7 +8,7 @@ const seen = {};
 for (const t of window.VEKTOR_FRACTIONS.topics) {
   for (let i = 0; i < 3000; i++) {
     total++;
-    const task = t.generate();
+    const task = t.generate(1 + (i % 3));
     const html = [task.story, task.question, ...task.hints, task.solution].join(' ');
     const bad = (msg) => { fails++; if (fails < 40) console.log('FAIL', t.id, msg, task.question, task.answer); };
     if (/undefined|NaN|Infinity/.test(html)) bad('bad text');

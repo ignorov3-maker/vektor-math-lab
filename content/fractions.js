@@ -9,7 +9,7 @@
      requires                — id тем, которые нужны заранее
      explain                 — модель, правило, разобранные примеры
      mistakes                — типичные ошибки: id, название, что сказать
-     generate()              — новая задача (числа каждый раз свои)
+     generate(lv)            — новая задача; lv = 1 (проще) … 3 (сложнее)
      check / review          — правила проверки и повторения
    ========================================================= */
 (function () {
@@ -25,6 +25,7 @@
   const fracStr = (n, d) => { const [a, b] = simp(n, d); return b === 1 ? String(a) : `${a}/${b}`; };
   const fracHtml = (n, d) => { const [a, b] = simp(n, d); return b === 1 ? String(a) : f(a, b); };
   const is = (got, n, d) => got && got.kind === 'frac' && got.n === n && got.d === d;
+  const L3 = (lv, a, b, c) => [a, b, c][Math.min(3, Math.max(1, lv || 2)) - 1]; // значение по уровню
   const coprime = (lo, hi, d) => { let a; do { a = rnd(lo, hi); } while (gcd(a, d) !== 1); return a; };
 
   const DENOMS = [2, 3, 4, 5, 6, 8, 10, 12];
@@ -53,8 +54,9 @@
         { id: 'took-eaten', title: 'Посчитана не та часть', say: 'Перечитай вопрос: спрашивают, сколько осталось, а не сколько съели.' },
         { id: 'unequal-parts', title: 'Части считаются, хотя они неравные', say: 'Дробь работает только с равными частями.' },
       ],
-      generate() {
-        let n, k; do { n = rnd(3, 12); k = rnd(1, n - 1); } while (2 * k === n); // половина неоднозначна
+      generate(lv) {
+        const [lo, hi] = L3(lv, [3, 6], [4, 10], [6, 12]);
+        let n, k; do { n = rnd(lo, hi); k = rnd(1, n - 1); } while (2 * k === n); // половина неоднозначна
         if (Math.random() < 0.5) {
           return {
             story: `Пиццу разрезали на ${n} равных кусков. Съели ${k}.`,
@@ -98,8 +100,9 @@
         { id: 'only-one-part', title: 'Разделён только числитель или только знаменатель', say: 'Делить нужно оба числа на одно и то же — иначе дробь меняется.' },
         { id: 'subtract-instead', title: 'Из чисел вычитают, а не делят', say: 'Сокращение — это деление. Если из 6/8 вычесть по 2, получится 4/6, а это другая дробь.' },
       ],
-      generate() {
-        const b = pick([3, 4, 5, 6, 7, 8, 9]), a = coprime(1, b - 1, b), m = rnd(2, 6);
+      generate(lv) {
+        const b = pick(L3(lv, [3, 4, 5], [3, 4, 5, 6, 7], [5, 6, 7, 8, 9])), a = coprime(1, b - 1, b);
+        const m = rnd(...L3(lv, [2, 3], [2, 5], [3, 8]));
         const A = a * m, B = b * m;
         return {
           story: 'Сократи дробь так, чтобы её нельзя было сократить ещё раз.',
@@ -136,8 +139,8 @@
         { id: 'bigger-denominator-bigger', title: 'Считает, что больше знаменатель — больше дробь', say: 'Чем на большее число частей делят целое, тем мельче каждая часть.' },
         { id: 'compare-numerators-only', title: 'Сравнивает только числители при разных знаменателях', say: 'Числители можно сравнивать, только когда доли одинаковые, то есть знаменатели равны.' },
       ],
-      generate() {
-        const type = pick(['den', 'num', 'diff']);
+      generate(lv) {
+        const type = pick(L3(lv, ['den', 'den', 'num'], ['den', 'num', 'diff'], ['num', 'diff', 'diff']));
         let a, b, c, d;
         if (type === 'den') { b = d = rnd(5, 12); a = rnd(1, b - 1); do { c = rnd(1, d - 1); } while (c === a); }
         else if (type === 'num') { a = c = rnd(1, 4); b = rnd(a + 1, 9); do { d = rnd(a + 1, 10); } while (d === b); }
@@ -182,8 +185,8 @@
         { id: 'add-denominators', title: 'Складывает и знаменатели тоже', say: 'Знаменатель — это размер доли. От того, что долей стало больше, они не стали мельче.' },
         { id: 'subtract-denominators', title: 'Вычитает и знаменатели', say: 'Знаменатель показывает размер доли, он не меняется. Вычитай только числители.' },
       ],
-      generate() {
-        const d = rnd(4, 12), plus = Math.random() < 0.6;
+      generate(lv) {
+        const d = rnd(...L3(lv, [4, 8], [4, 12], [8, 16])), plus = Math.random() < 0.6;
         let a, b;
         if (plus) { a = rnd(1, d - 2); b = rnd(1, d - 1 - a); }
         else { a = rnd(2, d - 1); b = rnd(1, a - 1); }
@@ -220,9 +223,10 @@
         { id: 'add-denominators', title: 'Складывает числители и знаменатели', say: 'Так складывать нельзя: доли разного размера. Сначала приведи к общему знаменателю.' },
         { id: 'forgot-scale-numerators', title: 'Привёл знаменатели, но не домножил числители', say: 'Когда меняешь знаменатель, числитель надо домножить на тот же множитель.' },
       ],
-      generate() {
+      generate(lv) {
         let b, d;
-        do { b = pick(DENOMS); d = pick(DENOMS); } while (b === d || lcm(b, d) > 24);
+        const pool = L3(lv, [2, 3, 4, 6, 8, 12], DENOMS, [...DENOMS, 9, 15]), cap = L3(lv, 12, 24, 45);
+        do { b = pick(pool); d = pick(pool); } while (b === d || lcm(b, d) > cap || (lv === 1 && b % d && d % b));
         const a = coprime(1, b - 1, b), c = coprime(1, d - 1, d), L = lcm(b, d);
         let A = a, B = b, C = c, D = d, p = a * (L / b), q = c * (L / d);
         let plus = Math.random() < 0.55;
@@ -263,8 +267,9 @@
         { id: 'add-whole-to-numerator', title: 'Прибавляет целую часть к числителю', say: 'В одной целой не одна доля, а столько, сколько в знаменателе. Целую часть сначала умножь на знаменатель.' },
         { id: 'multiply-whole-numerator', title: 'Умножает целую часть на числитель', say: 'На знаменатель, а не на числитель: целое содержит столько долей, сколько показывает знаменатель.' },
       ],
-      generate() {
-        const d = rnd(2, 9), w = rnd(1, 5), n = coprime(1, d - 1, d), P = w * d + n;
+      generate(lv) {
+        const d = rnd(...L3(lv, [2, 5], [2, 9], [5, 12])), w = rnd(...L3(lv, [1, 3], [1, 5], [3, 9]));
+        const n = coprime(1, d - 1, d), P = w * d + n;
         if (Math.random() < 0.5) {
           return {
             story: 'Запиши смешанное число в виде неправильной дроби.',
@@ -305,9 +310,10 @@
         { id: 'cross-multiply', title: 'Умножает «крест-накрест»', say: 'Крест-накрест — это не умножение. Числитель на числитель, знаменатель на знаменатель.' },
         { id: 'multiply-both', title: 'Умножает на число и числитель, и знаменатель', say: 'Если умножить на число и верх, и низ, дробь не изменится. На натуральное число умножают только числитель.' },
       ],
-      generate() {
-        if (Math.random() < 0.35) {
-          const d = rnd(3, 12), a = rnd(1, d - 1), k = rnd(2, 6);
+      generate(lv) {
+        const [lo, hi] = L3(lv, [2, 5], [2, 9], [4, 12]);
+        if (Math.random() < L3(lv, 0.6, 0.35, 0.2)) {
+          const d = rnd(Math.max(3, lo), hi + 3), a = rnd(1, d - 1), k = rnd(...L3(lv, [2, 4], [2, 6], [3, 9]));
           return {
             story: 'Вычисли.', question: `${k} · ${f(a, d)} = ?`,
             answer: `${k * a}/${d}`, accept: 'equivalent',
@@ -316,7 +322,7 @@
             misc: got => (is(got, k * a, k * d) ? 'multiply-both' : null),
           };
         }
-        const b = rnd(2, 9), d = rnd(2, 9), a = rnd(1, b - 1), c = rnd(1, d - 1);
+        const b = rnd(lo, hi), d = rnd(lo, hi), a = rnd(1, b - 1), c = rnd(1, d - 1);
         return {
           story: 'Найди произведение.', question: `${f(a, b)} · ${f(c, d)} = ?`,
           answer: `${a * c}/${b * d}`, accept: 'equivalent',
@@ -346,8 +352,9 @@
         { id: 'multiply-instead-of-divide', title: 'Умножает, не перевернув делитель', say: 'Деление заменяем умножением, только перевернув вторую дробь.' },
         { id: 'flip-first', title: 'Переворачивает не ту дробь', say: 'Переворачивают делитель — дробь, на которую делят, то есть вторую.' },
       ],
-      generate() {
-        const b = rnd(2, 9), d = rnd(2, 9), a = rnd(1, b - 1), c = rnd(1, d - 1);
+      generate(lv) {
+        const [lo, hi] = L3(lv, [2, 5], [2, 9], [4, 12]);
+        const b = rnd(lo, hi), d = rnd(lo, hi), a = rnd(1, b - 1), c = rnd(1, d - 1);
         const n = a * d, m = b * c;
         return {
           story: 'Вычисли.', question: `${f(a, b)} : ${f(c, d)} = ?`,
@@ -384,8 +391,8 @@
         { id: 'only-one-step', title: 'Нашёл одну долю и остановился', say: 'Одна доля найдена. Теперь возьми столько долей, сколько в числителе.' },
         { id: 'part-instead-of-whole', title: 'В обратной задаче снова ищет часть', say: 'Целое больше своей части. Дели на числитель, умножай на знаменатель.' },
       ],
-      generate() {
-        const b = rnd(2, 9), a = coprime(1, b - 1, b), unit = rnd(2, 12);
+      generate(lv) {
+        const b = rnd(...L3(lv, [2, 5], [2, 9], [3, 12])), a = coprime(1, b - 1, b), unit = rnd(...L3(lv, [2, 6], [2, 12], [5, 20]));
         if (Math.random() < 0.55) {
           const N = unit * b, ans = unit * a;
           const ctx = pick([['В классе', 'учеников', 'занимаются спортом. Сколько это учеников?'], ['В книге', 'страниц', 'уже прочитаны. Сколько страниц прочитано?'], ['В пакете', 'конфет', 'шоколадные. Сколько шоколадных конфет?']]);

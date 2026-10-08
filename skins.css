@@ -22,7 +22,7 @@
 .skin-switch button[data-skin="orbit"]{--sw:radial-gradient(circle at 30% 30%,#FFB86B 0 18%,#6E4BFF 40%,#0E0B26 75%)}
 .skin-switch button[data-skin="pop"]{--sw:conic-gradient(#FF4FA3 0 33%,#FFD23F 0 66%,#3D5BFF 0)}
 .skin-switch button[data-skin="holo"]{--sw:conic-gradient(from 200deg,#FFD6C9,#D9C8FF,#BDE6FF,#C9F5E3,#FFD6C9)}
-@media (max-width:760px){.skin-switch>span{display:none}.skin-switch{padding:6px}}
+@media (max-width:760px){.skin-switch{position:static;margin:0 16px 16px;justify-content:center;box-shadow:none}main{padding-bottom:0}}
 
 /* место под плавающий переключатель */
 main{padding-bottom:64px}

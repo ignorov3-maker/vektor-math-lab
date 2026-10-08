@@ -1,0 +1,10 @@
+name = "vektor-tutor"
+main = "openrouter-worker.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+ALLOWED_ORIGINS = "https://ignorov3-maker.github.io"
+ALLOWED_MODELS = "deepseek/deepseek-v4-flash,deepseek/deepseek-v4.1-flash,deepseek/deepseek-v4-pro,~deepseek/deepseek-flash-latest"
+MAX_TOKENS = "500"
+# Ключ НЕ пишите сюда. Добавьте его секретом:
+#   npx wrangler secret put OPENROUTER_API_KEY
