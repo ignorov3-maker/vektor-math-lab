@@ -13,10 +13,11 @@
     const w = width / parts;
     let s = '';
     for (let k = 0; k < parts; k++) {
-      const cls = k < shaded ? (split != null && k >= split ? 'fig-on2' : 'fig-on') : (k >= parts - crossed ? 'fig-x' : 'fig-off');
+      // crossed — сколько закрашенных долей «убрали» (вычитание): зачёркиваем последние из закрашенных
+      const cls = k < shaded - crossed ? (split != null && k >= split ? 'fig-on2' : 'fig-on') : k < shaded ? 'fig-x' : 'fig-off';
       s += `<rect class="${cls}" x="${k * w + 1}" y="${y + 1}" width="${Math.max(1, w - 2)}" height="${h - 2}" rx="3"/>`;
     }
-    if (crossed) for (let k = parts - crossed; k < parts; k++) s += `<path class="fig-cross" d="M${k * w + 6} ${y + 6}L${(k + 1) * w - 6} ${y + h - 6}"/>`;
+    if (crossed) for (let k = Math.max(0, shaded - crossed); k < shaded; k++) s += `<path class="fig-cross" d="M${k * w + 6} ${y + 6}L${(k + 1) * w - 6} ${y + h - 6}"/>`;
     if (label) s += `<text class="fig-label" x="${width / 2}" y="${y - 8}" text-anchor="middle">${label}</text>`;
     return s;
   }
@@ -54,7 +55,7 @@
           fig.empty != null ? circleSvg(fig.parts, fig.empty, 90, 90, 80, { emptyIsEaten: true }) : circleSvg(fig.parts, fig.shaded, 90, 90, 80));
       case 'bar': {
         const h = fig.label ? 70 : 46;
-        return wrap(W, h, `Полоска из ${fig.parts} частей, закрашено ${fig.shaded}`, barSvg(fig.parts, fig.shaded, { split: fig.split, crossed: fig.crossed, y: fig.label ? 24 : 0, label: fig.label }));
+        return wrap(W, h, (fig.crossed ? `Полоска из ${fig.parts} частей: было закрашено ${fig.shaded}, зачёркнуто ${fig.crossed}` : `Полоска из ${fig.parts} частей, закрашено ${fig.shaded}`), barSvg(fig.parts, fig.shaded, { split: fig.split, crossed: fig.crossed, y: fig.label ? 24 : 0, label: fig.label }));
       }
       case 'pair':
         return wrap(W, 108, `Две полоски: ${fig.a[0]} из ${fig.a[1]} и ${fig.b[0]} из ${fig.b[1]}`, barSvg(fig.a[1], fig.a[0]) + barSvg(fig.b[1], fig.b[0], { y: 60 }));
