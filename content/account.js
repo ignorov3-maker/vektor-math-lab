@@ -12,7 +12,34 @@
   };
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+  // Два варианта сервера: Supabase (адрес и публичный ключ в config.js) или PHP рядом с сайтом (api/, Бегет)
+  const CFG = window.VEKTOR_CONFIG || {};
+  const SB = CFG.supabaseUrl && CFG.supabaseKey ? CFG.supabaseUrl.replace(/\/+$/, '') : '';
+  const RPC = {
+    login: b => ['vektor_login', { p_login: b.login, p_password: b.password }],
+    logout: (b, t) => ['vektor_logout', { p_token: t }],
+    state: (b, t) => ['vektor_state', { p_token: t }],
+    sync: (b, t) => ['vektor_sync', { p_token: t, p_state: b.state ?? null, p_events: b.events || [] }],
+  };
+  const STATUS = { bad_login: 401, no_session: 401, locked: 429, layout: 400, forbidden: 403, too_large: 413 };
+
   async function call(r, body, token) {
+    if (SB) {
+      const [fn, args] = RPC[r](body || {}, token);
+      const res = await fetch(`${SB}/rest/v1/rpc/${fn}`, {
+        method: 'POST', cache: 'no-store',
+        headers: { 'Content-Type': 'application/json', apikey: CFG.supabaseKey, Authorization: 'Bearer ' + CFG.supabaseKey },
+        body: JSON.stringify(args),
+      });
+      let j = null; try { j = await res.json(); } catch {}
+      if (!res.ok) {
+        const code = j && /no_session|forbidden/.exec(j.message || '');
+        const e = new Error(code ? (code[0] === 'no_session' ? 'Сессия закончилась, войди заново' : 'Нет доступа') : 'Нет связи с сервером');
+        e.status = code ? STATUS[code[0]] : res.status >= 500 ? 0 : res.status; e.code = code && code[0]; throw e;
+      }
+      if (j && j.error) { const e = new Error(j.message); e.status = STATUS[j.error] || 400; e.code = j.error; throw e; }
+      return j;
+    }
     const res = await fetch(API + '?r=' + r, {
       method: body ? 'POST' : 'GET', cache: 'no-store',
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token, 'X-Vektor-Token': token } : {}) },
@@ -23,8 +50,9 @@
     return j;
   }
 
-  // Есть ли сервер рядом с сайтом? На GitHub Pages api/ отдаётся как текст — значит, нет.
+  // Есть ли сервер? Supabase — если задан в config.js; PHP — если api/ отвечает JSON (на GitHub Pages — нет).
   async function hasServer() {
+    if (SB) return true;
     if (location.protocol === 'file:') return false;
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 2500);
     try { const r = await fetch(API + '?r=ping', { cache: 'no-store', signal: ctl.signal }); const j = await r.json(); return !!(j && j.ok); }
