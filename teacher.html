@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Кабинет учителя — Вектор</title>
+<style>
+:root{--bg:#F7F6F1;--sheet:#fff;--ink:#1D2433;--muted:#6B7280;--line:#E4E2DA;--green:#1E7358;--green-soft:#E3F1EA;--amber:#B7791F;--amber-soft:#FBF0D9;--red:#B3261E;--red-soft:#FBE3E1;--grey-soft:#F0EFEA}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+header{display:flex;align-items:center;gap:12px;padding:14px 20px;background:var(--sheet);border-bottom:1px solid var(--line)}
+header h1{font-size:18px;margin:0}header .sp{flex:1}
+main{padding:20px;max-width:1500px;margin:0 auto}
+.btn{font:inherit;border:1px solid var(--line);background:var(--sheet);border-radius:10px;padding:8px 14px;cursor:pointer}
+.btn-primary{background:var(--green);border-color:var(--green);color:#fff;font-weight:700}
+.login{max-width:380px;margin:60px auto;background:var(--sheet);border:1px solid var(--line);border-radius:14px;padding:26px}
+.login form{display:grid;gap:12px;margin-top:14px}.login label{display:grid;gap:4px;font-weight:600}
+.login input{font:inherit;font-size:17px;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px}
+.msg{color:var(--red);min-height:1.2em;margin:0}
+.kpis{display:flex;flex-wrap:wrap;gap:12px;margin:0 0 16px}
+.kpi{background:var(--sheet);border:1px solid var(--line);border-radius:12px;padding:10px 16px;min-width:140px}
+.kpi b{display:block;font-size:24px}.kpi span{color:var(--muted);font-size:13px}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 12px}
+.bar select,.bar input{font:inherit;padding:7px 10px;border:1px solid var(--line);border-radius:9px;background:var(--sheet)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:13px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+.wrap{overflow:auto;background:var(--sheet);border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap}
+th{position:sticky;top:0;background:var(--sheet);font-size:12px;color:var(--muted);font-weight:600;vertical-align:bottom}
+th.topic{writing-mode:vertical-rl;transform:rotate(180deg);height:150px;white-space:normal;max-width:34px;text-align:left}
+td.name{text-align:left;font-weight:600}td.left{text-align:left}
+.c{display:inline-block;min-width:30px;padding:3px 4px;border-radius:6px;font-size:12px;font-weight:700}
+.c0{background:var(--grey-soft);color:#A3A3A3}.c1{background:var(--amber-soft);color:var(--amber)}.c2{background:var(--green-soft);color:var(--green)}.c3{background:var(--red-soft);color:var(--red)}
+.online{color:var(--green);font-weight:700}.muted{color:var(--muted)}
+tr.stuck td.name::after{content:" · нужна помощь";color:var(--red);font-weight:600;font-size:12px}
+.foot{color:var(--muted);font-size:13px;margin-top:10px}
+</style>
+</head>
+<body>
+<header><h1>Вектор · кабинет учителя</h1><span class="sp"></span><span id="who" class="muted"></span><button class="btn" id="logout" hidden>Выйти</button></header>
+<main id="root"></main>
+<script src="config.js"></script>
+<script src="content/check.js"></script>
+<script src="content/visuals.js"></script>
+<script src="content/fractions.js"></script>
+<script>
+(() => {
+  const CFG = window.VEKTOR_CONFIG || {}, SB = (CFG.supabaseUrl || '').replace(/\/+$/, '');
+  const TOPICS = window.VEKTOR_FRACTIONS.topics.map(t => ({ id: t.id, title: t.title }));
+  const KEY = 'vektor-teacher', root = document.getElementById('root');
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  let sess = null; try { sess = JSON.parse(sessionStorage.getItem(KEY)); } catch {}
+  let data = [], timer = null, filter = { cls: '', q: '', only: '' };
+
+  async function rpc(fn, args) {
+    const r = await fetch(`${SB}/rest/v1/rpc/${fn}`, { method: 'POST', cache: 'no-store',
+      headers: { 'Content-Type': 'application/json', apikey: CFG.supabaseKey, Authorization: 'Bearer ' + CFG.supabaseKey }, body: JSON.stringify(args) });
+    let j = null; try { j = await r.json(); } catch {}
+    if (!r.ok) { const e = new Error(/no_session/.test(j && j.message) ? 'Сессия закончилась, войдите заново' : 'Нет связи с сервером'); e.auth = /no_session|forbidden/.test(j && j.message); throw e; }
+    if (j && j.error) throw new Error(j.message);
+    return j;
+  }
+
+  function loginView(msg) {
+    clearInterval(timer); document.getElementById('logout').hidden = true; document.getElementById('who').textContent = '';
+    if (!SB) { root.innerHTML = '<div class="login"><h2>Сервер не подключён</h2><p>Заполните config.js.</p></div>'; return; }
+    root.innerHTML = `<div class="login"><h2 style="margin:0">Вход для учителя</h2>
+      <form id="f"><label>Логин<input name="login" autocomplete="username" required></label>
+      <label>Пароль<input name="password" type="password" autocomplete="current-password" required></label>
+      <p class="msg" id="m">${esc(msg || '')}</p><button class="btn btn-primary">Войти</button></form></div>`;
+    const f = document.getElementById('f');
+    f.onsubmit = async e => {
+      e.preventDefault(); document.getElementById('m').textContent = '';
+      try {
+        const r = await rpc('vektor_teacher_login', { p_login: f.login.value, p_password: f.password.value });
+        sess = { token: r.token, name: r.name || f.login.value }; sessionStorage.setItem(KEY, JSON.stringify(sess)); start();
+      } catch (err) { document.getElementById('m').textContent = err.message; }
+    };
+  }
+
+  const ago = ts => {
+    if (!ts) return '<span class="muted">не входил</span>';
+    const m = Math.round((Date.now() / 1000 - ts) / 60);
+    if (m < 5) return '<span class="online">сейчас</span>';
+    if (m < 60) return m + ' мин назад';
+    if (m < 1440) return Math.round(m / 60) + ' ч назад';
+    return new Date(ts * 1000).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+  };
+  const cell = t => {
+    if (!t) return '<span class="c c0">—</span>';
+    if (t.m) return '<span class="c c2" title="Тема освоена">✓</span>';
+    if (t.f >= 2) return `<span class="c c3" title="Проверка не сдана ${t.f} раза">✗${t.f}</span>`;
+    return `<span class="c c1" title="Решено задач в тренировке">${t.p}</span>`;
+  };
+  const num = l => +(/(\d+)$/.exec(l) || [0, 0])[1];
+  const stuck = s => Object.values(s.topics || {}).some(t => !t.m && t.f >= 2);
+
+  function render() {
+    const classes = [...new Set(data.map(s => s.class).filter(Boolean))].sort();
+    let rows = data.slice().sort((a, b) => num(a.login) - num(b.login));
+    if (filter.cls) rows = rows.filter(s => s.class === filter.cls);
+    if (filter.q) rows = rows.filter(s => (s.login + ' ' + (s.label || '')).toLowerCase().includes(filter.q.toLowerCase()));
+    if (filter.only === 'active') rows = rows.filter(s => s.last_seen);
+    if (filter.only === 'stuck') rows = rows.filter(stuck);
+    const now = Date.now() / 1000, all = filter.cls ? data.filter(s => s.class === filter.cls) : data;
+    const online = all.filter(s => s.last_seen && now - s.last_seen < 300).length, came = all.filter(s => s.last_seen).length;
+    const answers = all.reduce((a, s) => a + (s.answers || 0), 0), mastered = all.reduce((a, s) => a + (s.mastered || 0), 0);
+    root.innerHTML = `
+      <div class="kpis">
+        <div class="kpi"><b>${online}</b><span>сейчас в сети</span></div>
+        <div class="kpi"><b>${came} из ${all.length}</b><span>уже входили</span></div>
+        <div class="kpi"><b>${answers}</b><span>ответов на задачи</span></div>
+        <div class="kpi"><b>${mastered}</b><span>тем освоено</span></div>
+        <div class="kpi"><b>${all.filter(stuck).length}</b><span>нужна помощь</span></div>
+      </div>
+      <div class="bar">
+        ${classes.length > 1 ? `<select id="cls"><option value="">Все классы</option>${classes.map(c => `<option ${c === filter.cls ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>` : ''}
+        <select id="only"><option value="">Все ученики</option><option value="active" ${filter.only === 'active' ? 'selected' : ''}>Только входившие</option><option value="stuck" ${filter.only === 'stuck' ? 'selected' : ''}>Нужна помощь</option></select>
+        <input id="q" placeholder="Поиск: ученик17" value="${esc(filter.q)}">
+        <span class="sp" style="flex:1"></span>
+        <div class="legend"><span><i style="background:var(--grey-soft)"></i>не начата</span><span><i style="background:var(--amber-soft)"></i>в работе (решено задач)</span><span><i style="background:var(--green-soft)"></i>освоена</span><span><i style="background:var(--red-soft)"></i>проверка не сдана 2+ раза</span></div>
+      </div>
+      <div class="wrap"><table>
+        <thead><tr><th class="left">Ученик</th>${classes.length > 1 ? '<th>Класс</th>' : ''}<th>Последний вход</th><th>Ответов</th><th>Освоено</th>
+          ${TOPICS.map((t, i) => `<th class="topic" title="${esc(t.title)}">${i + 1}. ${esc(t.title)}</th>`).join('')}<th>★</th></tr></thead>
+        <tbody>${rows.map(s => `<tr class="${stuck(s) ? 'stuck' : ''}"><td class="name">${esc(s.label ? s.label + ' (' + s.login + ')' : s.login)}</td>
+          ${classes.length > 1 ? `<td>${esc(s.class || '')}</td>` : ''}<td>${ago(s.last_seen)}</td><td>${s.answers || 0}</td><td>${s.mastered || 0} из ${TOPICS.length}</td>
+          ${TOPICS.map(t => `<td>${cell((s.topics || {})[t.id])}</td>`).join('')}<td>${s.stars || 0}</td></tr>`).join('') || `<tr><td colspan="20" class="muted">Нет учеников</td></tr>`}</tbody>
+      </table></div>
+      <p class="foot">Обновляется само каждые 20 секунд · ${new Date().toLocaleTimeString('ru-RU')}</p>`;
+    const bind = (id, k) => { const el = document.getElementById(id); if (el) el.oninput = () => { filter[k] = el.value; render(); if (k === 'q') { const q = document.getElementById('q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }; };
+    bind('cls', 'cls'); bind('only', 'only'); bind('q', 'q');
+  }
+
+  async function load() {
+    try { data = (await rpc('vektor_teacher_class', { p_token: sess.token })).students || []; render(); }
+    catch (err) { if (err.auth) { sessionStorage.removeItem(KEY); sess = null; loginView(err.message); } }
+  }
+
+  function start() {
+    document.getElementById('who').textContent = sess.name || '';
+    const lo = document.getElementById('logout'); lo.hidden = false;
+    lo.onclick = async () => { try { await rpc('vektor_logout', { p_token: sess.token }); } catch {} sessionStorage.removeItem(KEY); sess = null; loginView(); };
+    root.innerHTML = '<p class="muted">Загружаем класс…</p>';
+    load(); clearInterval(timer); timer = setInterval(() => { if (!document.hidden) load(); }, 20000);
+  }
+
+  sess && sess.token ? start() : loginView();
+})();
+</script>
+</body>
+</html>

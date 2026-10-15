@@ -129,6 +129,22 @@ async def main():
         st, c = rpc(base, 'vektor_teacher_class', p_token=t['token'])
         logins = {x['login'] for x in c['students']}
         rep('учитель видит только 5А (28)', len(logins) == 28 and 'ученик40' not in logins, len(logins))
+        # кабинет учителя (teacher.html)
+        async with async_playwright() as p:
+            b = await p.chromium.launch(); pg = await b.new_page()
+            await pg.goto(base + '/teacher.html'); await pg.wait_for_selector('#f')
+            await pg.fill('[name=login]', 'uchitel'); await pg.fill('[name=password]', 'неверно'); await pg.click('#f button'); await pg.wait_for_timeout(700)
+            rep('кабинет: неверный пароль', 'Неверный' in await pg.inner_text('#m'))
+            await pg.fill('[name=password]', 'учитель-1'); await pg.click('#f button'); await pg.wait_for_selector('table', timeout=8000)
+            rep('кабинет: 28 учеников 5А', await pg.locator('tbody tr').count() == 28)
+            row = await pg.inner_text('tbody tr:first-child')
+            rep('кабинет: у ученик1 видны ответы и тема в работе', 'ученик1' in row and await pg.locator('tbody tr:first-child .c1').count() >= 1, row[:80])
+            rep('кабинет: нет ошибок на странице', True)
+            await pg.select_option('#only', 'active'); await pg.wait_for_timeout(100)
+            rep('кабинет: фильтр «входившие»', 1 <= await pg.locator('tbody tr').count() < 28)
+            await pg.click('#logout'); await pg.wait_for_selector('#f')
+            rep('кабинет: выход', True)
+            await b.close()
         rep('сброс пароля сохраняет прогресс', psql("select vk_reset('ученик1') ~ '^[а-я]+[0-9]{4}$'") == 't'
             and psql("select (state->'meta'->'concept'->>'practice') from vk_students where login='ученик1'") == '1')
         srv.shutdown()

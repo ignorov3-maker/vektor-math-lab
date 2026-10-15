@@ -149,7 +149,10 @@ begin
       'mastered', (select count(*) from jsonb_each(coalesce(s.state->'meta', '{}')) m where (m.value->>'mastered')::boolean),
       'failed_checks', (select coalesce(sum((m.value->>'failedChecks')::int), 0) from jsonb_each(coalesce(s.state->'meta', '{}')) m),
       'answers', coalesce((s.state->>'answers')::int, 0),
-      'stars', coalesce((s.state->'game'->>'stars')::int, 0)) order by s.id)
+      'stars', coalesce((s.state->'game'->>'stars')::int, 0),
+      'topics', (select coalesce(jsonb_object_agg(m.key, jsonb_build_object('p', coalesce((m.value->>'practice')::int, 0),
+          'm', coalesce((m.value->>'mastered')::boolean, false), 'f', coalesce((m.value->>'failedChecks')::int, 0))), '{}')
+        from jsonb_each(coalesce(s.state->'meta', '{}')) m)) order by s.id)
     from vk_students s left join vk_classes c on c.id = s.class_id
     where t.is_admin or s.class_id = any(t.class_ids)), '[]'));
 end $$;
