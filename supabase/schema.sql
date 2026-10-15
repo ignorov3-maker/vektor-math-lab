@@ -216,3 +216,34 @@ end $$;
 revoke execute on all functions in schema public from public, anon, authenticated;
 grant execute on function vektor_login(text, text), vektor_logout(text), vektor_state(text),
   vektor_sync(text, jsonb, jsonb), vektor_teacher_login(text, text), vektor_teacher_class(text) to anon, authenticated;
+
+-- ---------- ИИ-наставник (этап 3) ----------
+-- Учёт сообщений к ИИ: 30 в день на ученика и общий дневной потолок (Ф-16).
+create table if not exists vk_ai_usage (
+  student_id int not null references vk_students(id) on delete cascade, day date not null default current_date,
+  n int not null default 0, primary key (student_id, day));
+create table if not exists vk_settings (key text primary key, value jsonb not null);
+insert into vk_settings values ('ai', '{"enabled": true, "per_student_day": 30, "total_day": 3000}') on conflict (key) do nothing;
+alter table vk_ai_usage enable row level security;
+alter table vk_settings enable row level security;
+revoke all on vk_ai_usage, vk_settings from anon, authenticated;
+
+-- Вызывает только серверная функция tutor (service_role): проверяет сессию ученика и списывает одно сообщение
+create or replace function vk_ai_take(p_token text) returns jsonb
+language plpgsql security definer set search_path = public, extensions as $$
+declare uid int; cfg jsonb; mine int; total int;
+begin
+  begin uid := vk_auth(p_token, 'student');
+  exception when others then return jsonb_build_object('ok', false, 'reason', 'no_session'); end;
+  select value into cfg from vk_settings where key = 'ai';
+  if not coalesce((cfg->>'enabled')::boolean, false) then return jsonb_build_object('ok', false, 'reason', 'disabled'); end if;
+  select coalesce(sum(n), 0) into total from vk_ai_usage where day = current_date;
+  if total >= coalesce((cfg->>'total_day')::int, 3000) then return jsonb_build_object('ok', false, 'reason', 'total_limit'); end if;
+  insert into vk_ai_usage (student_id) values (uid) on conflict (student_id, day) do nothing;
+  update vk_ai_usage set n = n + 1 where student_id = uid and day = current_date
+    and n < coalesce((cfg->>'per_student_day')::int, 30) returning n into mine;
+  if mine is null then return jsonb_build_object('ok', false, 'reason', 'student_limit'); end if;
+  return jsonb_build_object('ok', true, 'student_id', uid, 'n', mine);
+end $$;
+revoke execute on function vk_ai_take(text) from public, anon, authenticated;
+do $$ begin grant execute on function vk_ai_take(text) to service_role; exception when undefined_object then null; end $$;

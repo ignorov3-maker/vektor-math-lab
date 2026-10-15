@@ -340,7 +340,7 @@ async function aiReply(i, kind, hiddenUser) {
   const sys = T.systemPrompt({
     topic: t, mode: kind === 'lesson' ? 'lesson' : 'task', task,
     attempts: kind === 'task' ? (session?.tries || []) : [], mistake: kind === 'task' && session?.lastMistake ? mistakeOf(i, session.lastMistake) : null,
-    pace: pace(), style: state.settings.style, name: state.settings.name,
+    pace: pace(), style: state.settings.style, // имя ученика в ИИ не передаём (Д-06)
   });
   const history = c.msgs.filter(m => m.raw).slice(-14).map(m => ({ role: m.role, content: m.raw }));
   const msg = { role: 'assistant', html: '<p class="typing">Наставник думает…</p>', raw: null };

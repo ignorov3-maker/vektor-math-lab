@@ -67,7 +67,8 @@ tr.stuck td.name::after{content:" · нужна помощь";color:var(--red);f
     root.innerHTML = `<div class="login"><h2 style="margin:0">Вход для учителя</h2>
       <form id="f"><label>Логин<input name="login" autocomplete="username" required></label>
       <label>Пароль<input name="password" type="password" autocomplete="current-password" required></label>
-      <p class="msg" id="m">${esc(msg || '')}</p><button class="btn btn-primary">Войти</button></form></div>`;
+      <p class="msg" id="m">${esc(msg || '')}</p><button class="btn btn-primary">Войти</button></form>
+      <p class="muted" style="margin:16px 0 0">Я ученик — <a href="./">вход для ученика →</a></p></div>`;
     const f = document.getElementById('f');
     f.onsubmit = async e => {
       e.preventDefault(); document.getElementById('m').textContent = '';

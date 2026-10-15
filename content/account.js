@@ -74,7 +74,8 @@
         <label class="show-pass"><input type="checkbox" id="show-pass"> Показать пароль</label>
         <p class="feedback ${msg ? 'bad' : ''}" id="login-msg" role="alert">${msg ? esc(msg) : ''}</p>
         <button class="btn btn-primary btn-big" type="submit">Войти</button>
-      </form></section>`;
+      </form>
+      <div class="role-switch"><span>Я учитель</span><a class="btn btn-ghost btn-sm" href="teacher.html">Вход для учителя →</a></div></section>`;
     const f = document.getElementById('login-form'), out = document.getElementById('login-msg');
     document.getElementById('show-pass').onchange = e => { f.password.type = e.target.checked ? 'text' : 'password'; };
     const latin = /[a-z]/i;

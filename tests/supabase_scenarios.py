@@ -10,6 +10,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 PG = os.environ.get('VEKTOR_PG', 'host=/var/tmp/vpg port=5499 user=postgres')
 DB = 'vk_test_' + secrets.token_hex(3)
 results = []
+FN_PORT = FAKE_PORT = 0
 def rep(name, ok, extra=''):
     results.append(ok); print(('OK  ' if ok else 'FAIL'), name, extra)
 
@@ -33,6 +34,16 @@ class H(http.server.SimpleHTTPRequestHandler):
             self.send_response(200); self.send_header('Content-Type', 'text/javascript'); self.end_headers(); self.wfile.write(b); return
         super().do_GET()
     def do_POST(self):
+        if self.path.startswith('/functions/v1/tutor'):
+            data = self.rfile.read(int(self.headers['Content-Length'] or 0))
+            req = urllib.request.Request(f'http://127.0.0.1:{FN_PORT}/', data=data, headers={'Content-Type': 'application/json'})
+            try: res = urllib.request.urlopen(req); code, out, ct = res.status, res.read(), res.headers.get('Content-Type')
+            except urllib.error.HTTPError as e: code, out, ct = e.code, e.read(), 'application/json'
+            self.send_response(code); self.send_header('Content-Type', ct); self.end_headers(); self.wfile.write(out); return
+        if self.path == '/rest/v1/rpc/vk_ai_take' and self.headers.get('apikey') == 'service-test':
+            args = json.loads(self.rfile.read(int(self.headers['Content-Length'] or 0)) or b'{}')
+            out = psql(f"select vk_ai_take({lit(args.get('p_token'))})::text")
+            self.send_response(200); self.send_header('Content-Type', 'application/json'); self.end_headers(); self.wfile.write(out.encode()); return
         if not self.path.startswith('/rest/v1/rpc/') or self.headers.get('apikey') != 'anon-test':
             self.send_response(401); self.end_headers(); return
         fn = self.path.rsplit('/', 1)[1]
@@ -79,6 +90,13 @@ async def main():
         srv = http.server.ThreadingHTTPServer(('127.0.0.1', port), H)
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         base = f'http://127.0.0.1:{port}'
+        global FN_PORT, FAKE_PORT
+        def fp():
+            q = socket.socket(); q.bind(('127.0.0.1', 0)); n = q.getsockname()[1]; q.close(); return n
+        FN_PORT, FAKE_PORT = fp(), fp()
+        fn = subprocess.Popen(['bun', str(ROOT / 'tests/tutor_fn_shim.ts')], env={**os.environ, 'FN_PORT': str(FN_PORT), 'FAKE_PORT': str(FAKE_PORT), 'SB_URL': base},
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        fn.stdout.readline()
         async with async_playwright() as p:
             b = await p.chromium.launch()
             ctx = await b.new_context(); pg = await ctx.new_page()
@@ -98,6 +116,26 @@ async def main():
             rep('прогресс на сервере', psql("select (state->'meta'->'concept'->>'practice')::int from vk_students where login='ученик1'") == '1')
             rep('событие attempt в журнале', psql("select count(*) from vk_events where type='attempt'") == '1')
 
+            # ИИ-наставник через серверную функцию (этап 3)
+            psql("update vk_settings set value = '{\"enabled\": true, \"per_student_day\": 2, \"total_day\": 100}' where key = 'ai'")
+            rep('наставник: режим «сервер Вектора»', await pg.evaluate("ai.mode") == 'vektor' and await pg.evaluate("isOnline()"))
+            await pg.goto(base + '/#lesson/1/practice'); await pg.wait_for_timeout(400)
+            await pg.fill('#chat-in-task', 'мой телефон 8 916 123-45-67, помоги'); await pg.click('.chat-task .chat-form button'); await pg.wait_for_timeout(1500)
+            rep('наставник ответил через сервер', 'на сколько частей' in await pg.inner_text('.chat-task .chat-log'))
+            last = json.loads(urllib.request.urlopen(f'http://127.0.0.1:{FAKE_PORT}/last').read())
+            user_txt = ' '.join(m['content'] for m in last['body']['messages'] if m['role'] == 'user')
+            sys_txt = ' '.join(m['content'] for m in last['body']['messages'] if m['role'] == 'system')
+            rep('ключ модели — только на сервере', last['auth'] == 'Bearer sk-test' and 'token' not in last['body'])
+            rep('телефон вырезан из текста ребёнка', '916' not in user_txt and 'номер скрыт' in user_txt, user_txt[:80])
+            rep('имя ученика не уходит в модель', 'Ученик 1' not in sys_txt and 'зовут' not in sys_txt)
+            await pg.fill('#chat-in-task', 'ещё подсказку'); await pg.click('.chat-task .chat-form button'); await pg.wait_for_timeout(1200)
+            await pg.fill('#chat-in-task', 'и ещё'); await pg.click('.chat-task .chat-form button'); await pg.wait_for_timeout(1500)
+            rep('лимит в день: понятное сообщение и урок не ломается', '30 вопросов' in await pg.inner_text('.chat-task') or 'конспект' in await pg.inner_text('.chat-task'))
+            st, j = rpc(base, 'vektor_login', p_login='ученик2', p_password='компас1234')
+            r = urllib.request.Request(base + '/functions/v1/tutor', data=json.dumps({'token': 'x' * 64, 'messages': [{'role': 'user', 'content': 'hi'}]}).encode(), headers={'Content-Type': 'application/json'})
+            try: urllib.request.urlopen(r); code = 200
+            except urllib.error.HTTPError as e: code = e.code
+            rep('без входа наставник не отвечает (401)', code == 401, code)
             await ctx.set_offline(True)
             await pg.evaluate("logEvent('test_offline', {k: 1}); save()"); await pg.wait_for_timeout(2200)
             rep('без сети — «Нет связи»', 'Нет связи' in await pg.inner_text('#sync-status'))
@@ -147,7 +185,7 @@ async def main():
             await b.close()
         rep('сброс пароля сохраняет прогресс', psql("select vk_reset('ученик1') ~ '^[а-я]+[0-9]{4}$'") == 't'
             and psql("select (state->'meta'->'concept'->>'practice') from vk_students where login='ученик1'") == '1')
-        srv.shutdown()
+        srv.shutdown(); fn.terminate()
     finally:
         psql(f'drop database if exists {DB} with (force)', db='postgres')
     print(f'\nИТОГО: {sum(results)} из {len(results)}')
