@@ -59,7 +59,9 @@ try { state = Object.assign(fresh(), JSON.parse(localStorage.getItem(KEY))); } c
   if (!Array.isArray(state.diag.results) || !Number.isInteger(state.diag.step)) state.diag = d.diag;
   state.attempts = state.attempts.filter(a => a && typeof a === 'object');
 })();
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} if (window.VEKTOR_SYNC) window.VEKTOR_SYNC.push(state); };
+// журнал событий для анализа пилота (раздел 7 ТЗ); без сервера ничего не делает
+const logEvent = (type, data) => { if (window.VEKTOR_SYNC) window.VEKTOR_SYNC.event(type, data); };
 let ai = T.loadCfg();
 const game = () => G.ensure(state);
 
@@ -917,6 +919,8 @@ function bind(page, i, stage) {
       if (got.error) { fb.className = 'feedback bad'; fb.innerHTML = got.error; return; }
       const value = got.value;
       const r = check(value, s.task);
+      logEvent('attempt', { topic: topics[i].id, mode: s.mode, level: s.mode === 'practice' ? meta(i).level : null, question: String(s.task.question || '').replace(/<[^>]+>/g, '').slice(0, 200),
+        answer: String(value).slice(0, 40), ok: !!(r.ok && !r.almost), try: (s.tries ? s.tries.length : 0) + 1, hints: s.hints || 0, mistake: r.mistake || null, sec: Math.round((Date.now() - (s.started || Date.now())) / 1000) });
       if (r.empty || r.unreadable) { fb.className = 'feedback bad'; fb.innerHTML = r.empty ? 'Сначала впиши ответ в клеточки.' : r.msg; return; }
       markActivity();
       const m = meta(i), t = topics[i];
@@ -1075,11 +1079,13 @@ function bindAiForm(form) {
 let gameEvents = null; // показываем после перерисовки экрана результата
 function finishSession(i) {
   const t = topics[i], s = session, m = meta(i);
+  logEvent(s.mode === 'check' ? 'check_result' : 'review_result', { topic: t.id, right: s.right, total: s.total, passed: s.mode === 'check' ? s.right >= t.check.passScore : s.right === s.total });
   if (s.mode === 'check') {
     if (s.right >= t.check.passScore) {
       const already = m.mastered;
       setPct(i, 100); m.failedChecks = 0;
       if (!already) { m.mastered = true; m.masteredAt = today(); m.reviewStep = 0; m.reviewDue = addDays(today(), t.review.afterDays[0]); }
+      if (!already) logEvent('mastery', { topic: t.id });
       if (!already) gameEvents = G.mastered(game(), ROUTE.filter(r => pct(r) >= DONE).length); // Д-02
     } else m.failedChecks++;
     if (s.stars) (gameEvents ||= []).unshift({ type: 'stars', n: s.stars, why: 'за проверку' });

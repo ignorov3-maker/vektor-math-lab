@@ -647,3 +647,17 @@ code{font-size:.9em;background:var(--tint);padding:1px 5px;border-radius:4px}
 .milestone .ms-title svg{fill:var(--gold,#E8B931)}
 .milestone p:last-child{margin:0}
 @media (max-width:760px){.ready-strip{bottom:calc(76px + env(safe-area-inset-bottom,0px))}}
+
+/* Вход по логину с бумажки (Ф-03) и статус сохранения */
+.login{max-width:420px;margin:40px auto;padding:28px}
+.login h1{margin:0 0 6px;font-size:28px}
+.login form{display:grid;gap:14px;margin-top:18px}
+.login label{display:grid;gap:6px;font-weight:700}
+.login input[name]{font:inherit;font-size:22px;padding:12px 14px;border-radius:12px;border:2px solid var(--line,#ccc);background:var(--sheet,#fff);color:inherit}
+.login input[name]:focus{outline:3px solid var(--green,#1E7358);outline-offset:1px}
+.login .show-pass{display:flex;align-items:center;gap:8px;font-weight:500}
+.login .feedback:empty{display:none}
+body.logged-out .sidebar,body.logged-out .skin-switch,body.logged-out footer,body.logged-out header .crumbs,body.logged-out header .badge{visibility:hidden}
+.sync-status{font-size:14px;color:var(--muted,#666);margin-left:auto;margin-right:10px}
+.sync-status[data-state=offline]{color:#B3261E;font-weight:700}
+@media (max-width:760px){.sync-status{display:none}}

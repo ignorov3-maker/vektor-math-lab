@@ -5,3 +5,6 @@
 server/.wrangler/
 node_modules/
 __pycache__/
+api/config.local.php
+api/tools/out/
+*.sqlite
