@@ -106,9 +106,20 @@ async def main():
         await pg.click('.hero-next [data-continue]'); await pg.wait_for_timeout(200)
         for k in range(2): await answer(pg, await pg.evaluate("session.task.answer")); await pg.click('#next-task')
         due=await pg.evaluate("state.meta['concept'].reviewDue"); rep('повторение: следующая дата через 3 дня', due==await pg.evaluate("addDays(state.meta['concept'].masteredAt,3)"), due)
-        # 9. Краткие темы (без методички)
-        await pg.goto(B+'#lesson/9'); await pg.wait_for_timeout(100); await answer(pg,'3'); rep('краткая тема решается', 'Верно' in await pg.inner_text('#feedback'))
-        await pg.goto(B+'#lesson/9/check'); rep('краткая тема не ломается на /check', await pg.locator('#answer-form').count()==1)
+        # Д-02: повторная проверка освоенной темы звёзд не даёт
+        st0=await pg.evaluate("state.game.stars"); await pg.goto(B+'#lesson/0/check'); await pg.wait_for_timeout(100)
+        for k in range(4): await answer(pg, await pg.evaluate("session.task.answer")); await pg.click('#next-task')
+        rep('Д-02: повторная проверка не даёт звёзд', await pg.evaluate("state.game.stars")==st0)
+        # Д-01: повторение по адресу для неосвоенной темы не засчитывает тему
+        await pg.goto(B+'#lesson/5/review'); await pg.wait_for_timeout(150)
+        rep('Д-01: повторение неосвоенной темы закрыто', await pg.evaluate("session ? session.mode : 'none'")!='review' and await pg.evaluate("pct(5)")<100)
+        # Ф-10: заглушки других разделов скрыты
+        await pg.goto(B+'#map'); await pg.wait_for_timeout(150)
+        rep('Ф-10: на карте только 9 тем дробей', await pg.evaluate("topics.length")==9 and 'Проценты' not in await pg.inner_text('#app'))
+        # 9. Краткие темы (без методички) — только в демо-режиме ?demo=all
+        D=B+'?demo=all'
+        await pg.goto(D+'#lesson/9'); await pg.wait_for_timeout(150); await answer(pg,'3'); rep('краткая тема решается', 'Верно' in await pg.inner_text('#feedback'))
+        await pg.goto(D+'#lesson/9/check'); rep('краткая тема не ломается на /check', await pg.locator('#answer-form').count()==1)
         # 10. Материалы → конспект открывает урок, а не тренировку
         await pg.goto(B+'#library'); await pg.click('[data-lesson="2"][data-tab="notes"]'); await pg.wait_for_timeout(200)
         rep('«Открыть конспект» ведёт в конспект', await pg.locator('.method').count()==1, await pg.evaluate("location.hash"))

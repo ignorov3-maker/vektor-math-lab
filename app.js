@@ -25,9 +25,11 @@ const legacy = [
     task: { story: 'Прямоугольник имеет длину 6 см и ширину 4 см.', question: 'Чему равна его площадь в см²?', answer: '24', hints: ['Площадь = длина · ширина.', '6 · 4 = ?'] } },
 ].map(t => ({ ...t, legacy: true, generate: () => ({ ...t.task, accept: 'exact', solution: `Ответ: ${t.task.answer}.` }) }));
 
-const topics = [...window.VEKTOR_FRACTIONS.topics, ...legacy];
+// Ф-10: в пилотной версии видны только 9 тем дробей; заглушки других разделов скрыты (?demo=all вернёт их)
+const SHOW_LEGACY = /[?&]demo=all\b/.test(location.search);
+const topics = [...window.VEKTOR_FRACTIONS.topics, ...(SHOW_LEGACY ? legacy : [])];
 const byId = Object.fromEntries(topics.map((t, i) => [t.id, i]));
-const SECTIONS = ['Дроби', 'Отношения', 'Геометрия'];
+const SECTIONS = SHOW_LEGACY ? ['Дроби', 'Отношения', 'Геометрия'] : ['Дроби'];
 const ROUTE = window.VEKTOR_FRACTIONS.topics.map((t, i) => i); // раздел «Дроби» — настоящая последовательность тем
 const DIAG = ['concept', 'reduce', 'compare', 'add-same', 'mult', 'part-of'].map(id => byId[id]);
 const DONE = 80;
@@ -78,6 +80,7 @@ const knowledge = () => { const c = topics.map((t, i) => pct(i)).filter(Boolean)
 const currentStop = () => ROUTE.find(i => pct(i) < DONE) ?? ROUTE[ROUTE.length - 1];
 const status = i => pct(i) >= DONE ? 'done' : pct(i) > 0 ? 'started' : 'todo';
 const statusText = i => ({ done: 'Освоено', started: `Начато, ${pct(i)}%`, todo: 'Ещё не начато' })[status(i)];
+const reviewOpen = m => !!(m && m.mastered && m.reviewDue && m.reviewDue <= today());
 const dueReviews = () => topics.map((t, i) => i).filter(i => { const m = state.meta[topics[i].id]; return m && m.reviewDue && m.reviewDue <= today(); });
 const mistakeOf = (i, id) => (topics[i].mistakes || []).find(m => m.id === id);
 const pace = () => A.pace(state.attempts);
@@ -611,6 +614,8 @@ const DO_NOW = {
 function lessonPage(i, stage) {
   const t = topics[i];
   if (t.legacy) stage = 'practice';
+  // Д-01: повторение только для освоенной темы, когда подошёл его день
+  if (stage === 'review' && !reviewOpen(meta(i))) stage = meta(i).practice ? 'practice' : 'learn';
   const st = stepStates(i), need = A.need(pace()), m = meta(i);
   const sub = { learn: st.learn === 'done' ? 'Пройдено' : 'Картинки и правило', practice: st.practice === 'done' ? 'Готово' : `${Math.min(m.practice, need)} из ${need} задач`, check: st.check === 'done' ? 'Тема освоена' : 'Нужно 3 из 4' };
   const steps = t.legacy || stage === 'review' ? '' : `<ol class="stepper" aria-label="Шаги темы">${STAGES.map(([id, name], k) => `
@@ -967,7 +972,8 @@ function bind(page, i, stage) {
       s.answered = true;
       const ok = r.ok && !r.almost;
       if (ok) s.right++; else if (r.mistake) s.found.push(r.mistake);
-      if (s.mode === 'check') { const ce = G.checkAnswer(game(), today(), ok); s.stars = (s.stars || 0) + ce.reduce((a, e) => a + e.n, 0); celebrate(ce, { quiet: true }); }
+      if (s.mode === 'check' && !meta(i).mastered) { const ce = G.checkAnswer(game(), today(), ok); // Д-02: звёзды за проверку — один раз на тему
+        s.stars = (s.stars || 0) + ce.reduce((a, e) => a + e.n, 0); celebrate(ce, { quiet: true }); }
       fb.className = 'feedback big' + (ok ? '' : ' bad');
       fb.innerHTML = ok ? `<p class="fb-title">${G.icon('star', 22)} Верно</p>` : `<p class="fb-title">Не совсем</p><p>Решение: ${s.task.solution}</p>`;
       fb.insertAdjacentHTML('beforeend', `<div class="fb-actions"><button class="btn btn-primary btn-big" id="next-task">${s.k + 1 < s.total ? 'Следующая задача →' : 'Узнать результат →'}</button></div>`);
@@ -1071,11 +1077,13 @@ function finishSession(i) {
   const t = topics[i], s = session, m = meta(i);
   if (s.mode === 'check') {
     if (s.right >= t.check.passScore) {
-      setPct(i, 100); m.mastered = true; m.masteredAt = today(); m.reviewStep = 0; m.reviewDue = addDays(today(), t.review.afterDays[0]); m.failedChecks = 0;
-      gameEvents = G.mastered(game(), ROUTE.filter(r => pct(r) >= DONE).length);
+      const already = m.mastered;
+      setPct(i, 100); m.failedChecks = 0;
+      if (!already) { m.mastered = true; m.masteredAt = today(); m.reviewStep = 0; m.reviewDue = addDays(today(), t.review.afterDays[0]); }
+      if (!already) gameEvents = G.mastered(game(), ROUTE.filter(r => pct(r) >= DONE).length); // Д-02
     } else m.failedChecks++;
     if (s.stars) (gameEvents ||= []).unshift({ type: 'stars', n: s.stars, why: 'за проверку' });
-  } else if (s.mode === 'review') {
+  } else if (s.mode === 'review' && m.mastered) {
     if (s.right === s.total) {
       m.reviewStep++;
       const days = t.review.afterDays;
@@ -1101,18 +1109,10 @@ resetBtn.onclick = () => {
 addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
 
 // ---------- Скины ----------
-const SKIN_FONTS = {
-  orbit: 'family=Unbounded:wght@500;700',
-  pop: 'family=Dela+Gothic+One&family=Rubik:wght@400;500;600;700',
-  pixel: 'family=Press+Start+2P&family=Rubik:wght@400;500;600;700;800',
-};
 function setSkin(name) {
   if (!['notebook', 'orbit', 'pop', 'pixel'].includes(name)) name = 'notebook';
   document.documentElement.dataset.skin = name;
-  if (SKIN_FONTS[name] && !document.getElementById('font-' + name)) {
-    const l = document.createElement('link'); l.id = 'font-' + name; l.rel = 'stylesheet';
-    l.href = `https://fonts.googleapis.com/css2?${SKIN_FONTS[name]}&display=swap`; document.head.appendChild(l);
-  }
+  // Шрифты со сторонних серверов не грузим (Д-07): IP детей не должны уходить в Google.
   document.querySelectorAll('.skin-switch button').forEach(b => b.setAttribute('aria-pressed', b.dataset.skin === name));
   try { localStorage.setItem('vektor-skin', name); } catch {}
   requestAnimationFrame(drawRoute);
