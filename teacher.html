@@ -34,6 +34,9 @@ td.name{text-align:left;font-weight:600}td.left{text-align:left}
 .online{color:var(--green);font-weight:700}.muted{color:var(--muted)}
 tr.stuck td.name::after{content:" · нужна помощь";color:var(--red);font-weight:600;font-size:12px}
 .foot{color:var(--muted);font-size:13px;margin-top:10px}
+.tests{display:grid;gap:8px;margin:0 0 16px;background:var(--sheet);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.trow{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.tchip{color:var(--muted)}.tchip.on{color:var(--green);font-weight:700}
 </style>
 </head>
 <body>
@@ -50,7 +53,7 @@ tr.stuck td.name::after{content:" · нужна помощь";color:var(--red);f
   const KEY = 'vektor-teacher', root = document.getElementById('root');
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   let sess = null; try { sess = JSON.parse(sessionStorage.getItem(KEY)); } catch {}
-  let data = [], timer = null, filter = { cls: '', q: '', only: '' };
+  let data = [], tests = { classes: [], scores: {} }, timer = null, filter = { cls: '', q: '', only: '' };
 
   async function rpc(fn, args) {
     const r = await fetch(`${SB}/rest/v1/rpc/${fn}`, { method: 'POST', cache: 'no-store',
@@ -106,7 +109,13 @@ tr.stuck td.name::after{content:" · нужна помощь";color:var(--red);f
     const now = Date.now() / 1000, all = filter.cls ? data.filter(s => s.class === filter.cls) : data;
     const online = all.filter(s => s.last_seen && now - s.last_seen < 300).length, came = all.filter(s => s.last_seen).length;
     const answers = all.reduce((a, s) => a + (s.answers || 0), 0), mastered = all.reduce((a, s) => a + (s.mastered || 0), 0);
+    const tcls = (tests.classes || []).filter(c => !filter.cls || c.name === filter.cls);
+    const tbtn = (c, ph) => { const t = (c.tests || {})[ph] || {}; const name = ph === 'pre' ? 'Входной тест' : 'Итоговый тест';
+      if (t.open) { const m = Math.max(0, Math.round((Date.parse(t.closes_at) - Date.now()) / 60000));
+        return `<span class="tchip on">${name}: идёт, осталось ${m} мин</span><button class="btn" data-test="${esc(c.name)}|${ph}|0">Закрыть</button>`; }
+      return `<span class="tchip">${name}${t.opened_at ? ': закрыт' : ''}</span><button class="btn" data-test="${esc(c.name)}|${ph}|1">${t.opened_at ? 'Открыть снова' : 'Открыть на 40 мин'}</button>`; };
     root.innerHTML = `
+      ${tcls.length ? `<div class="tests">${tcls.map(c => `<div class="trow"><b>${esc(c.name)}</b>${c.group === 'control' ? '<span class="muted">контрольный</span>' : ''}${tbtn(c, 'pre')}${tbtn(c, 'post')}</div>`).join('')}</div>` : ''}
       <div class="kpis">
         <div class="kpi"><b>${online}</b><span>сейчас в сети</span></div>
         <div class="kpi"><b>${came} из ${all.length}</b><span>уже входили</span></div>
@@ -118,23 +127,44 @@ tr.stuck td.name::after{content:" · нужна помощь";color:var(--red);f
         ${classes.length > 1 ? `<select id="cls"><option value="">Все классы</option>${classes.map(c => `<option ${c === filter.cls ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>` : ''}
         <select id="only"><option value="">Все ученики</option><option value="active" ${filter.only === 'active' ? 'selected' : ''}>Только входившие</option><option value="stuck" ${filter.only === 'stuck' ? 'selected' : ''}>Нужна помощь</option></select>
         <input id="q" placeholder="Поиск: ученик17" value="${esc(filter.q)}">
+        <button class="btn" id="csv">Скачать CSV</button>
         <span class="sp" style="flex:1"></span>
         <div class="legend"><span><i style="background:var(--grey-soft)"></i>не начата</span><span><i style="background:var(--amber-soft)"></i>в работе (решено задач)</span><span><i style="background:var(--green-soft)"></i>освоена</span><span><i style="background:var(--red-soft)"></i>проверка не сдана 2+ раза</span></div>
       </div>
       <div class="wrap"><table>
         <thead><tr><th class="left">Ученик</th>${classes.length > 1 ? '<th>Класс</th>' : ''}<th>Последний вход</th><th>Ответов</th><th>Освоено</th>
-          ${TOPICS.map((t, i) => `<th class="topic" title="${esc(t.title)}">${i + 1}. ${esc(t.title)}</th>`).join('')}<th>★</th></tr></thead>
+          ${TOPICS.map((t, i) => `<th class="topic" title="${esc(t.title)}">${i + 1}. ${esc(t.title)}</th>`).join('')}<th>★</th><th>Тест до</th><th>Тест после</th><th>Сигналы ИИ</th></tr></thead>
         <tbody>${rows.map(s => `<tr class="${stuck(s) ? 'stuck' : ''}"><td class="name">${esc(s.label ? s.label + ' (' + s.login + ')' : s.login)}</td>
           ${classes.length > 1 ? `<td>${esc(s.class || '')}</td>` : ''}<td>${ago(s.last_seen)}</td><td>${s.answers || 0}</td><td>${s.mastered || 0} из ${TOPICS.length}</td>
-          ${TOPICS.map(t => `<td>${cell((s.topics || {})[t.id])}</td>`).join('')}<td>${s.stars || 0}</td></tr>`).join('') || `<tr><td colspan="20" class="muted">Нет учеников</td></tr>`}</tbody>
+          ${TOPICS.map(t => `<td>${cell((s.topics || {})[t.id])}</td>`).join('')}<td>${s.stars || 0}</td><td>${esc(((tests.scores || {})[s.login] || {}).pre || '—')}</td><td>${esc(((tests.scores || {})[s.login] || {}).post || '—')}</td><td>${(s.flags || []).length ? `<span class="c c3" title="${esc(s.flags.join(' · '))}">⚠ ${s.flags.length}</span>` : ''}</td></tr>`).join('') || `<tr><td colspan="20" class="muted">Нет учеников</td></tr>`}</tbody>
       </table></div>
       <p class="foot">Обновляется само каждые 20 секунд · ${new Date().toLocaleTimeString('ru-RU')}</p>`;
     const bind = (id, k) => { const el = document.getElementById(id); if (el) el.oninput = () => { filter[k] = el.value; render(); if (k === 'q') { const q = document.getElementById('q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }; };
     bind('cls', 'cls'); bind('only', 'only'); bind('q', 'q');
+    document.getElementById('csv').onclick = () => csv(rows);
+    root.querySelectorAll('[data-test]').forEach(b => b.onclick = async () => {
+      const [cls, ph, open] = b.dataset.test.split('|'); b.disabled = true;
+      try { await rpc('vektor_teacher_test', { p_token: sess.token, p_class: cls, p_phase: ph, p_open: open === '1', p_minutes: 40 }); } catch (e) { b.textContent = e.message; return; }
+      load();
+    });
+  }
+
+  // Ф-26: выгрузка класса в CSV (Excel открывает кириллицу благодаря BOM)
+  function csv(rows) {
+    const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const head = ['Логин', 'Класс', 'Последний вход', 'Ответов', 'Освоено тем', ...TOPICS.map(t => t.title), 'Звёзды', 'Тест до', 'Тест после'];
+    const lines = rows.map(s => [s.login, s.class, s.last_seen ? new Date(s.last_seen * 1000).toLocaleString('ru-RU') : '', s.answers || 0, s.mastered || 0,
+      ...TOPICS.map(t => { const x = (s.topics || {})[t.id]; return !x ? '' : x.m ? 'освоена' : x.f >= 2 ? `не сдана ${x.f}` : `решено ${x.p}`; }),
+      s.stars || 0, ((tests.scores || {})[s.login] || {}).pre || '', ((tests.scores || {})[s.login] || {}).post || '']);
+    const blob = new Blob(['\uFEFF' + [head, ...lines].map(r => r.map(q).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `vektor-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
   }
 
   async function load() {
-    try { data = (await rpc('vektor_teacher_class', { p_token: sess.token })).students || []; render(); }
+    try {
+      const [a, b] = await Promise.all([rpc('vektor_teacher_class', { p_token: sess.token }), rpc('vektor_teacher_tests', { p_token: sess.token }).catch(() => ({ classes: [], scores: {} }))]);
+      data = a.students || []; tests = b; render();
+    }
     catch (err) { if (err.auth) { sessionStorage.removeItem(KEY); sess = null; loginView(err.message); } }
   }
 

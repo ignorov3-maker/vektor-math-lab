@@ -60,6 +60,16 @@ try { state = Object.assign(fresh(), JSON.parse(localStorage.getItem(KEY))); } c
   state.attempts = state.attempts.filter(a => a && typeof a === 'object');
 })();
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} if (window.VEKTOR_SYNC) window.VEKTOR_SYNC.push(state); };
+// Ф-31: «Как тебе занятие?» — 5 смайликов, один раз за занятие, можно пропустить (только с сервером)
+const MOODS = ['😣', '🙁', '😐', '🙂', '😄'];
+const moodAsked = () => { try { return sessionStorage.getItem('vektor-mood') === today(); } catch { return true; } };
+const moodBox = () => !window.VEKTOR_SYNC || moodAsked() ? '' : `<div class="mood" role="group" aria-label="Как тебе занятие?"><span>Как тебе занятие?</span>${MOODS.map((m, k) => `<button type="button" data-mood="${k + 1}" aria-label="${k + 1} из 5">${m}</button>`).join('')}</div>`;
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-mood]'); if (!b) return;
+  logEvent('feedback', { mood: +b.dataset.mood, topic: location.hash.split('/')[1] || null });
+  try { sessionStorage.setItem('vektor-mood', today()); } catch {}
+  b.closest('.mood').innerHTML = '<span>Спасибо!</span>';
+});
 // журнал событий для анализа пилота (раздел 7 ТЗ); без сервера ничего не делает
 const logEvent = (type, data) => { if (window.VEKTOR_SYNC) window.VEKTOR_SYNC.event(type, data); };
 let ai = T.loadCfg();
@@ -714,6 +724,7 @@ function resultView(i) {
       <p>Верно ${s.right} из ${s.total}. ${pass ? 'Повторение придёт завтра, потом через 3 и через 7 дней.' : `Нужно хотя бы ${t.check.passScore}. Вернись к уроку — и попробуй снова.`}</p>
       ${found.length ? `<h3>Что заметили</h3><ul class="mistakes">${found.map(x => `<li><b>${x.title}.</b> ${x.say}</li>`).join('')}</ul>` : ''}
       ${advice}
+      ${moodBox()}
       <div class="row-actions">${pass
         ? `${next != null ? `<button class="btn btn-primary" data-lesson="${next}">Дальше: ${topics[next].title}</button>` : ''}<button class="btn btn-ghost" data-go="home">К маршруту</button>`
         : `${advice ? `<button class="btn btn-primary" data-lesson="${weak[0]}">Повторить «${topics[weak[0]].title}»</button>` : ''}<button class="btn ${advice ? 'btn-ghost' : 'btn-primary'}" data-stage="learn">К уроку</button><button class="btn btn-ghost" id="retry">Ещё раз</button>`}</div>
@@ -722,6 +733,7 @@ function resultView(i) {
   return `<section class="sheet result ${pass ? 'pass' : 'fail'}" style="max-width:760px">
     <h2>${pass ? 'Отлично, тема не забылась' : 'Стоит освежить'}</h2>
     <p>Верно ${s.right} из ${s.total}. ${pass ? (m.reviewDue ? `Следующее повторение — ${new Date(m.reviewDue + 'T12:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}.` : 'Все три повторения пройдены — тема закреплена.') : 'Повторение вернётся завтра. Если хочешь, загляни в урок.'}</p>
+    ${moodBox()}
     <div class="row-actions"><button class="btn btn-primary" data-go="home">К маршруту</button>${pass ? '' : '<button class="btn btn-ghost" data-stage="learn">К уроку</button>'}</div>
   </section>`;
 }

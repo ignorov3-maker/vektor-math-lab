@@ -40,6 +40,10 @@ class H(http.server.SimpleHTTPRequestHandler):
             try: res = urllib.request.urlopen(req); code, out, ct = res.status, res.read(), res.headers.get('Content-Type')
             except urllib.error.HTTPError as e: code, out, ct = e.code, e.read(), 'application/json'
             self.send_response(code); self.send_header('Content-Type', ct); self.end_headers(); self.wfile.write(out); return
+        if self.path == '/rest/v1/vk_events' and self.headers.get('apikey') == 'service-test':
+            e = json.loads(self.rfile.read(int(self.headers['Content-Length'] or 0)))
+            psql(f"insert into vk_events (event_id, student_id, type, data) values ({lit(e['event_id'])}, {int(e['student_id'])}, {lit(e['type'])}, {lit(e['data'])})")
+            self.send_response(201); self.end_headers(); return
         if self.path == '/rest/v1/rpc/vk_ai_take' and self.headers.get('apikey') == 'service-test':
             args = json.loads(self.rfile.read(int(self.headers['Content-Length'] or 0)) or b'{}')
             out = psql(f"select vk_ai_take({lit(args.get('p_token'))})::text")
@@ -72,7 +76,8 @@ async def main():
         psql("do $$ begin create role anon nologin; exception when duplicate_object then null; end $$;"
              "do $$ begin create role authenticated nologin; exception when duplicate_object then null; end $$;")
         subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase/schema.sql')], check=True, capture_output=True)
-        subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase/schema.sql')], check=True, capture_output=True)
+        for f in ('test.sql', 'admin.sql'):
+            subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase' / f)], check=True, capture_output=True)
         rep('схема накатывается повторно', True)
         rep('vk_seed: 80 профилей с паролями', psql("select count(*) from vk_seed(80, '5А:1-28,5Б:29-56,5В:57-80') where password ~ '^[а-я]+[0-9]{4}$'") == '80')
         rep('пароли не повторяются', psql("select count(distinct pass_hash) from vk_students") == '80')
@@ -128,6 +133,9 @@ async def main():
             rep('ключ модели — только на сервере', last['auth'] == 'Bearer sk-test' and 'token' not in last['body'])
             rep('телефон вырезан из текста ребёнка', '916' not in user_txt and 'номер скрыт' in user_txt, user_txt[:80])
             rep('имя ученика не уходит в модель', 'Ученик 1' not in sys_txt and 'зовут' not in sys_txt)
+            await pg.fill('#chat-in-task', 'ты сука тупая'); await pg.click('.chat-task .chat-form button'); await pg.wait_for_timeout(1500)
+            _log = await pg.inner_text('.chat-task .chat-log'); rep('модерация: мягкий ответ ребёнку', 'вернёмся к математике' in _log, _log[-200:])
+            rep('модерация: сигнал учителю записан', psql("select count(*) from vk_events where type='ai_flag'") == '1')
             await pg.fill('#chat-in-task', 'ещё подсказку'); await pg.click('.chat-task .chat-form button'); await pg.wait_for_timeout(1200)
             await pg.fill('#chat-in-task', 'и ещё'); await pg.click('.chat-task .chat-form button'); await pg.wait_for_timeout(1500)
             rep('лимит в день: понятное сообщение и урок не ломается', '30 вопросов' in await pg.inner_text('.chat-task') or 'конспект' in await pg.inner_text('.chat-task'))
@@ -183,6 +191,43 @@ async def main():
             await pg.click('#logout'); await pg.wait_for_selector('#f')
             rep('кабинет: выход', True)
             await b.close()
+        # Тест до/после: учитель открывает, ученик решает, сервер проверяет (Ф-27–Ф-29)
+        async with async_playwright() as p:
+            b = await p.chromium.launch()
+            tp = await b.new_page(); await tp.goto(base + '/teacher.html'); await tp.wait_for_selector('#f')
+            await tp.fill('[name=login]', 'uchitel'); await tp.fill('[name=password]', 'учитель-1'); await tp.click('#f button'); await tp.wait_for_selector('table', timeout=8000)
+            rep('кабинет: панель тестов', await tp.locator('[data-test="5А|pre|1"]').count() == 1)
+            await tp.click('[data-test="5А|pre|1"]'); await tp.wait_for_timeout(1200)
+            rep('кабинет: тест открыт', 'идёт' in await tp.inner_text('.tests'))
+            form = psql("select form from vk_tests where phase='pre'")
+            sp = await b.new_page(); await login(sp, base, 'ученик2', 'компас1234'); await sp.wait_for_selector('.test', timeout=8000)
+            rep('ученик видит тест без подсказок и меню', await sp.locator('.test-list li').count() == 18 and not await sp.locator('#hint-btn').count())
+            rep('в браузер не пришли правильные ответы', await sp.evaluate("document.documentElement.innerHTML.includes('data-answer')") is False)
+            ans = dict(x.split('|', 1) for x in psql(f"select n || '|' || answer from vk_test_items where form='{form}' order by n").splitlines())
+            for li in await sp.locator('.test-list li').all():
+                n = await li.get_attribute('data-n')
+                if int(n) > 15: continue  # три последних оставим пустыми
+                a_ = ans[n]
+                if a_ in '<=>': await li.locator(f'[data-sign="{a_}"]').click()
+                else: await li.locator('input').fill(a_ if int(n) != 2 else '4/6'); await li.locator('input').dispatch_event('change')
+            await sp.wait_for_timeout(1500)
+            await sp.click('#test-finish'); rep('предупреждение о пустых ответах', 'Не отвечено 3' in await sp.inner_text('#test-finish'))
+            await sp.click('#test-finish'); await sp.wait_for_selector('text=Тест сдан', timeout=8000)
+            rep('сервер посчитал балл (14 из 18: несокращённая дробь не засчитана)', psql("select score || '/' || total from vk_test_done where phase='pre'") == '14/18',
+                psql("select score || '/' || total from vk_test_done"))
+            await tp.reload(); await tp.wait_for_selector('table', timeout=8000)
+            rep('кабинет: балл ученика виден', '14/18' in await tp.inner_text('table'))
+            # контрольная группа: только тест
+            psql("select vk_class_group('5Б', 'control')")
+            cp = await b.new_page(); await login(cp, base, 'ученик40', 'компас1111'); await cp.wait_for_timeout(1500)
+            rep('контрольная группа видит только ожидание теста', 'только тест' in await cp.inner_text('#app') and await cp.evaluate("typeof render") == 'undefined')
+            # CSV
+            async with tp.expect_download() as dl: await tp.click('#csv')
+            path = await (await dl.value).path(); txt = open(path, encoding='utf-8-sig').read()
+            rep('кабинет: CSV скачивается с кириллицей', txt.startswith('"Логин"') and 'ученик2' in txt)
+            await b.close()
+        rep('админ: обезличенная выгрузка без логинов', psql("select count(*) from vk_export_events where pid like 'p%'") != '0'
+            and psql("select count(*) from vk_export_events where data::text like '%ученик%'") == '0')
         rep('сброс пароля сохраняет прогресс', psql("select vk_reset('ученик1') ~ '^[а-я]+[0-9]{4}$'") == 't'
             and psql("select (state->'meta'->'concept'->>'practice') from vk_students where login='ученик1'") == '1')
         srv.shutdown(); fn.terminate()

@@ -18,6 +18,9 @@
     if (want.kind === 'sign') return got.v === want.v ? { ok: true } : { ok: false, mistake: task.misc && task.misc(got) };
     if (got.kind === 'sign' || Math.abs(got.v - want.v) > 1e-9) return { ok: false, mistake: task.misc && task.misc(got) };
     const reducible = got.kind === 'frac' && gcd(got.n, got.d) > 1;
+    // Д-08: в задачах на дроби десятичная запись (0.75 вместо 3/4) не засчитывается
+    if (got.kind === 'num' && !Number.isInteger(got.v) && want.kind !== 'num')
+      return { ok: false, almost: true, msg: 'Значение верное, но запиши ответ обыкновенной дробью: числитель сверху, знаменатель снизу.' };
     switch (task.accept) {
       case 'simplest':
         if (reducible) return { ok: false, almost: true, mistake: 'not-fully-reduced', msg: 'Значение верное, но дробь можно сократить ещё.' };

@@ -662,3 +662,23 @@ body.logged-out .sidebar,body.logged-out .skin-switch,body.logged-out footer,bod
 .sync-status[data-state=offline]{color:#B3261E;font-weight:700}
 @media (max-width:760px){.sync-status{display:none}}
 .login .role-switch{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid var(--line,#e5e5e5);color:var(--muted,#666)}
+.mood{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:14px 0 4px;color:var(--muted,#666)}
+.mood span{margin-right:6px;font-weight:600}
+.mood button{font-size:28px;line-height:1;background:none;border:2px solid transparent;border-radius:12px;padding:4px 6px;cursor:pointer}
+.mood button:hover,.mood button:focus-visible{border-color:var(--green,#1E7358)}
+
+/* Тест до и после (Ф-27–Ф-29) */
+body.test-mode .sidebar,body.test-mode .skin-switch,body.test-mode footer{display:none}
+body.test-mode main{margin-left:0}
+.test{max-width:760px;margin:24px auto;padding:24px}
+.test-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.test-head h1{margin:0}
+.test-timer{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+.test-list{padding-left:24px;display:grid;gap:18px}
+.test-list li p{margin:0 0 8px;font-size:18px}
+.test-in{font:inherit;font-size:22px;width:180px;padding:8px 12px;border:2px solid var(--line,#ccc);border-radius:10px}
+.test-signs{display:flex;gap:8px}.test-signs .btn{font-size:22px;min-width:56px}
+.test-signs .btn[aria-pressed=true]{background:var(--green,#1E7358);color:#fff;border-color:var(--green,#1E7358)}
+.test-saved{display:inline-block;margin-left:10px;color:var(--muted,#666);font-size:13px}
+.test-count{font-weight:700}
+.test-banner{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:center;gap:14px;padding:12px;background:#FFF4D6;border-bottom:2px solid #E8B931;font-size:17px}

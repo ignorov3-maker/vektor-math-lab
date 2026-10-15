@@ -20,6 +20,9 @@
     logout: (b, t) => ['vektor_logout', { p_token: t }],
     state: (b, t) => ['vektor_state', { p_token: t }],
     sync: (b, t) => ['vektor_sync', { p_token: t, p_state: b.state ?? null, p_events: b.events || [] }],
+    test_get: (b, t) => ['vektor_test_get', { p_token: t }],
+    test_answer: (b, t) => ['vektor_test_answer', { p_token: t, p_n: b.n, p_answer: b.answer, p_sec: b.sec ?? null }],
+    test_finish: (b, t) => ['vektor_test_finish', { p_token: t }],
   };
   const STATUS = { bad_login: 401, no_session: 401, locked: 429, layout: 400, forbidden: 403, too_large: 413 };
 
@@ -173,6 +176,11 @@
     document.getElementById('logout-btn').onclick = () => logout(sync);
     const reset = document.getElementById('reset'); if (reset) reset.closest('span').hidden = true; // стереть прогресс может только учитель
     const badge = document.querySelector('header .badge'); if (badge) badge.hidden = true;
+    // Ф-13: через 25 минут занятия — мягкое напоминание о перерыве (СанПиН), один раз
+    setTimeout(() => {
+      document.body.insertAdjacentHTML('afterbegin', `<div class="test-banner break-banner" role="status">Ты занимаешься уже 25 минут — сделай перерыв: встань, разомнись, посмотри в окно 🙂
+        <button class="btn btn-ghost btn-sm" onclick="this.parentNode.remove()">Хорошо</button></div>`);
+    }, (window.VEKTOR_BREAK_MIN || 25) * 60000);
     // Ф-07: автовыход после 20 минут бездействия на общем компьютере
     let idle; const poke = () => { clearTimeout(idle); idle = setTimeout(() => logout(sync), IDLE_MIN * 60000); };
     ['pointerdown', 'keydown', 'scroll', 'touchstart'].forEach(e => addEventListener(e, poke, { passive: true })); poke();
@@ -191,11 +199,108 @@
       if (err.status === 401) { ls.del(SESS); ls.del(KEY); loginScreen('Сессия закончилась, войди заново'); return; }
       // нет связи — работаем с локальной копией, отправим позже
     }
+    // Тест до/после (Ф-27–Ф-29) и контрольная группа: только тест, без занятий
+    if (SB) {
+      let tg = null; try { tg = await call('test_get', {}, sess.token); } catch {}
+      if (tg && tg.test) { testScreen(sess, tg.test); return; }
+      if (tg && tg.group === 'control') { controlScreen(sess); return; }
+    }
     const sync = makeSync(sess);
     window.VEKTOR_SYNC = sync;
     if (ls.get('vektor-dirty:' + sess.login) && ls.get(KEY)) sync.push(ls.get(KEY)); // не успели отправить в прошлый раз
     chrome(sync, sess);
     loadApp();
+    if (SB) watchTests(sess);
+  }
+
+  /* ---------- Тест до и после ---------- */
+  // Пока ученик занимается, раз в 20 секунд проверяем, не открыл ли учитель тест
+  function watchTests(sess) {
+    const tick = async () => {
+      if (document.hidden || document.getElementById('test-banner')) return;
+      let tg = null; try { tg = await call('test_get', {}, sess.token); } catch { return; }
+      if (!tg || !tg.test) return;
+      document.body.insertAdjacentHTML('afterbegin', `<div class="test-banner" id="test-banner" role="alert"><b>Учитель открыл тест.</b>
+        <button class="btn btn-primary" id="test-go">Начать тест</button></div>`);
+      document.getElementById('test-go').onclick = async () => { if (window.VEKTOR_SYNC) await window.VEKTOR_SYNC.flush(); location.reload(); };
+    };
+    setInterval(tick, 20000);
+  }
+
+  function bareChrome(sess) {
+    document.body.classList.add('logged-out', 'test-mode');
+    const head = document.querySelector('main > header');
+    head.insertAdjacentHTML('beforeend', `<button class="btn btn-ghost btn-sm" id="logout-btn" type="button">Выйти · ${esc(sess.name)}</button>`);
+    document.getElementById('logout-btn').onclick = async () => { try { await call('logout', {}, sess.token); } catch {} ls.del(SESS); ls.del(KEY); location.hash = ''; location.reload(); };
+  }
+
+  function controlScreen(sess) {
+    bareChrome(sess);
+    document.getElementById('app').innerHTML = `<section class="login sheet"><h1>Привет, ${esc(sess.name)}!</h1>
+      <p>Сейчас для тебя только тест. Когда учитель его откроет, кнопка появится здесь.</p><p class="muted" id="ctl-msg">Проверяем каждые 15 секунд…</p></section>`;
+    setInterval(async () => { try { const tg = await call('test_get', {}, sess.token); if (tg && tg.test) location.reload(); } catch {} }, 15000);
+  }
+
+  function testScreen(sess, t) {
+    bareChrome(sess);
+    const OUTQ = 'vektor-test-q:' + sess.login;
+    const answers = { ...(t.answers || {}) }, started = Date.now(), endAt = Date.now() + t.seconds_left * 1000;
+    let queue = ls.get(OUTQ) || [];
+    const app = document.getElementById('app');
+    app.innerHTML = `<section class="test sheet" aria-labelledby="test-title">
+      <div class="test-head"><h1 id="test-title">${t.phase === 'pre' ? 'Входной тест' : 'Итоговый тест'}</h1><span class="test-timer" id="test-timer"></span></div>
+      <p class="muted">Реши сам, без подсказок. Ответ дробью пиши через косую черту: <b>3/4</b>, смешанное число — через пробел: <b>2 1/3</b>. Ответы сохраняются сами.</p>
+      <ol class="test-list">${t.items.map(i => `<li data-n="${i.n}"><p>${esc(i.prompt)}</p>${i.kind === 'sign'
+        ? `<div class="test-signs" role="group" aria-label="Знак">${['<', '=', '>'].map(z => `<button type="button" class="btn btn-ghost" data-sign="${esc(z)}" aria-pressed="${answers[i.n] === z}">${esc(z)}</button>`).join('')}</div>`
+        : `<input class="test-in" inputmode="text" autocomplete="off" spellcheck="false" maxlength="20" placeholder="ответ" value="${esc(answers[i.n] || '')}" aria-label="Ответ к заданию ${i.n}">`}
+        <span class="test-saved" aria-live="polite"></span></li>`).join('')}</ol>
+      <p class="test-count" id="test-count"></p>
+      <button class="btn btn-primary btn-big" id="test-finish" type="button">Закончить тест</button>
+    </section>`;
+    const count = () => { const k = Object.values(answers).filter(v => String(v).trim()).length; document.getElementById('test-count').textContent = `Отвечено ${k} из ${t.items.length}`; };
+    const flushQ = async () => {
+      while (queue.length) {
+        const q = queue[0];
+        try { const r = await call('test_answer', q, sess.token); if (r && r.error === 'closed') { queue = []; break; } }
+        catch (e) { if (e.status === 401) break; return false; }
+        queue.shift(); ls.set(OUTQ, queue);
+      }
+      ls.set(OUTQ, queue); return true;
+    };
+    const save = (n, v, li) => {
+      answers[n] = v; count();
+      queue = queue.filter(q => q.n !== n).concat({ n, answer: v, sec: Math.round((Date.now() - started) / 1000) }); ls.set(OUTQ, queue);
+      flushQ().then(ok => { const m = li.querySelector('.test-saved'); m.textContent = ok ? 'сохранено' : 'сохраним, когда будет связь'; });
+    };
+    app.querySelectorAll('.test-in').forEach(inp => {
+      const li = inp.closest('li'), n = +li.dataset.n;
+      inp.onchange = () => save(n, inp.value.trim(), li);
+      inp.onkeydown = e => { if (e.key === 'Enter') { inp.blur(); const nx = li.nextElementSibling && li.nextElementSibling.querySelector('input'); if (nx) nx.focus(); } };
+    });
+    app.querySelectorAll('[data-sign]').forEach(b => b.onclick = () => {
+      const li = b.closest('li'); li.querySelectorAll('[data-sign]').forEach(x => x.setAttribute('aria-pressed', x === b));
+      save(+li.dataset.n, b.dataset.sign, li);
+    });
+    const finish = async () => {
+      document.activeElement && document.activeElement.blur();
+      const ok = await flushQ();
+      if (!ok) { document.getElementById('test-count').textContent = 'Нет связи — ответы сохранены на этом устройстве. Подключись к интернету и нажми ещё раз.'; return; }
+      try { await call('test_finish', {}, sess.token); } catch { document.getElementById('test-count').textContent = 'Нет связи, нажми ещё раз.'; return; }
+      ls.del(OUTQ); clearInterval(tm);
+      app.innerHTML = `<section class="login sheet"><h1>Тест сдан. Спасибо!</h1><p>Можно продолжать занятия.</p><button class="btn btn-primary btn-big" onclick="location.reload()">Продолжить</button></section>`;
+    };
+    let armed = false;
+    document.getElementById('test-finish').onclick = () => {
+      const left = t.items.length - Object.values(answers).filter(v => String(v).trim()).length;
+      if (left > 0 && !armed) { armed = true; document.getElementById('test-finish').textContent = `Не отвечено ${left}. Всё равно закончить?`; return; }
+      finish();
+    };
+    const tm = setInterval(() => {
+      const s = Math.max(0, Math.round((endAt - Date.now()) / 1000));
+      document.getElementById('test-timer').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+      if (s === 0) { clearInterval(tm); finish(); }
+    }, 1000);
+    count(); flushQ();
   }
   window.VEKTOR_ACCOUNT = { boot };
   boot();

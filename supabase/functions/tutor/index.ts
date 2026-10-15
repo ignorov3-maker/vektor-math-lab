@@ -27,6 +27,11 @@ export function scrub(s: string): string {
     .replace(/(меня зовут|моё имя|мое имя|я живу|мой адрес)[^.!?\n]*/gi, '$1 [скрыто]');
 }
 
+// Ф-17: грубость и опасные темы — в модель не отправляем, ребёнку мягкий ответ, учителю сигнал
+const BAD = /(х[уy][йеёяию]|пизд|еба[тнл]|ёба|бля[дт]?|сук[аи](?![а-яё])|муда[кч]|пидор|гандон|шлюх|убить|убью|суицид|покончить с собой|наркот|закладк|порн|секс|оружи[ея]|бомб[уаы])/i;
+export function flagged(s: string): boolean { return BAD.test(s.replace(/ё/g, 'е').replace(/\s+/g, ' ')); }
+const SOFT = 'Давай вернёмся к математике 🙂 Если тебе плохо или страшно — обязательно расскажи учителю или родителям.';
+
 const LIMIT_SAY: Record<string, [number, string]> = {
   no_session: [401, 'Войди заново, чтобы спросить наставника.'],
   disabled: [503, 'Наставник с ИИ сейчас выключен — продолжим по конспекту.'],
@@ -55,6 +60,17 @@ Deno.serve(async (req) => {
   const t = await take.json().catch(() => null);
   if (!take.ok || !t) return json(502, 'db', 'Не получилось проверить вход, попробуй ещё раз');
   if (!t.ok) { const [s, m] = LIMIT_SAY[t.reason] || [403, 'Нет доступа']; return json(s, t.reason, m); }
+  const lastUser = [...body.messages].reverse().find((m: any) => m.role === 'user');
+  if (lastUser && flagged(String(lastUser.content || ''))) {
+    await fetch(`${SB}/rest/v1/vk_events`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SR, Authorization: `Bearer ${SR}`, Prefer: 'return=minimal' },
+      body: JSON.stringify({ event_id: 'flag-' + crypto.randomUUID(), student_id: t.student_id, type: 'ai_flag',
+        data: { text: scrub(String(lastUser.content)).slice(0, 300) } }),
+    }).catch(() => {});
+    const sse = `data: ${JSON.stringify({ choices: [{ delta: { content: SOFT } }] })}\n\ndata: [DONE]\n\n`;
+    return new Response(sse, { headers: { ...cors, 'Content-Type': 'text/event-stream' } });
+  }
+
   if (!KEY) return json(503, 'no_key', 'Наставник с ИИ ещё не подключён — продолжим по конспекту.');
 
   const messages = body.messages.map((m: any) => {
