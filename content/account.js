@@ -52,8 +52,8 @@
 
   // Есть ли сервер? Supabase — если задан в config.js; PHP — если api/ отвечает JSON (на GitHub Pages — нет).
   async function hasServer() {
-    if (SB) return true;
     if (location.protocol === 'file:') return false;
+    if (SB) return true;
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 2500);
     try { const r = await fetch(API + '?r=ping', { cache: 'no-store', signal: ctl.signal }); const j = await r.json(); return !!(j && j.ok); }
     catch { return false; } finally { clearTimeout(t); }

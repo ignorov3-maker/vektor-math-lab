@@ -192,7 +192,7 @@ begin
   update vk_students set pass_hash = crypt(p, gen_salt('bf', 8)), fails = 0, locked_until = null
     where login = vk_norm(p_login) returning id into uid;
   if uid is null then raise exception 'Нет ученика %', p_login; end if;
-  delete from vk_sessions where role = 'student' and user_id = uid;
+  update vk_sessions set expires = now() - interval '1 second' where role = 'student' and user_id = uid;
   return p;
 end $$;
 

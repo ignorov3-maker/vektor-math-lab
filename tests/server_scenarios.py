@@ -44,7 +44,7 @@ async def main():
     rep('пароли не повторяются', php("echo db()->query('SELECT COUNT(DISTINCT pass_hash) FROM students')->fetchColumn();").strip() == '80')
 
     port = free_port(); base = f'http://127.0.0.1:{port}'
-    srv = subprocess.Popen(['php', '-S', f'127.0.0.1:{port}', '-t', str(ROOT)], env=ENV, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    srv = subprocess.Popen(['php', '-S', f'127.0.0.1:{port}', '-t', str(ROOT), str(ROOT / 'tests/php_router.php')], env=ENV, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     for _ in range(50):
         try: urllib.request.urlopen(base + '/api/?r=ping'); break
         except Exception: time.sleep(0.1)
