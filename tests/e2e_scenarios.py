@@ -106,9 +106,20 @@ async def main():
         await pg.click('.hero-next [data-continue]'); await pg.wait_for_timeout(200)
         for k in range(2): await answer(pg, await pg.evaluate("session.task.answer")); await pg.click('#next-task')
         due=await pg.evaluate("state.meta['concept'].reviewDue"); rep('повторение: следующая дата через 3 дня', due==await pg.evaluate("addDays(state.meta['concept'].masteredAt,3)"), due)
-        # 9. Краткие темы (без методички)
-        await pg.goto(B+'#lesson/9'); await pg.wait_for_timeout(100); await answer(pg,'3'); rep('краткая тема решается', 'Верно' in await pg.inner_text('#feedback'))
-        await pg.goto(B+'#lesson/9/check'); rep('краткая тема не ломается на /check', await pg.locator('#answer-form').count()==1)
+        # Д-02: повторная проверка освоенной темы звёзд не даёт
+        st0=await pg.evaluate("state.game.stars"); await pg.goto(B+'#lesson/0/check'); await pg.wait_for_timeout(100)
+        for k in range(4): await answer(pg, await pg.evaluate("session.task.answer")); await pg.click('#next-task')
+        rep('Д-02: повторная проверка не даёт звёзд', await pg.evaluate("state.game.stars")==st0)
+        # Д-01: повторение по адресу для неосвоенной темы не засчитывает тему
+        await pg.goto(B+'#lesson/5/review'); await pg.wait_for_timeout(150)
+        rep('Д-01: повторение неосвоенной темы закрыто', await pg.evaluate("session ? session.mode : 'none'")!='review' and await pg.evaluate("pct(5)")<100)
+        # Ф-10: заглушки других разделов скрыты
+        await pg.goto(B+'#map'); await pg.wait_for_timeout(150)
+        rep('Ф-10: на карте только 9 тем дробей', await pg.evaluate("topics.length")==9 and 'Проценты' not in await pg.inner_text('#app'))
+        # 9. Краткие темы (без методички) — только в демо-режиме ?demo=all
+        D=B+'?demo=all'
+        await pg.goto(D+'#lesson/9'); await pg.wait_for_timeout(150); await answer(pg,'3'); rep('краткая тема решается', 'Верно' in await pg.inner_text('#feedback'))
+        await pg.goto(D+'#lesson/9/check'); rep('краткая тема не ломается на /check', await pg.locator('#answer-form').count()==1)
         # 10. Материалы → конспект открывает урок, а не тренировку
         await pg.goto(B+'#library'); await pg.click('[data-lesson="2"][data-tab="notes"]'); await pg.wait_for_timeout(200)
         rep('«Открыть конспект» ведёт в конспект', await pg.locator('.method').count()==1, await pg.evaluate("location.hash"))
@@ -166,9 +177,24 @@ async def main():
         await pg.click('.back'); rep('«← К пути» возвращает на главную', (await pg.evaluate("location.hash"))=='#home')
         await pg.goto(B+'#map'); rep('«Все темы»: кнопки Урок и Конспект', await pg.locator('.topic-actions .btn').count()>=17)
         rep('меню из 4 пунктов', await pg.locator('nav [data-page]').count()==4)
-        await pg.goto(B+'#lesson/5/practice'); await pg.wait_for_timeout(150)
-        rep('смешанное число: клеточка «целые» открывается', not await pg.evaluate("getComputedStyle(document.querySelector('.fi-whole')).display==='none'") or await pg.locator('[data-whole]').count()==1)
-        await pg.evaluate("setSkin('pixel')"); await pg.goto(B+'#home'); await pg.wait_for_timeout(300)
+        await pg.goto(B+'#lesson/0/practice'); await pg.wait_for_timeout(150)
+        rep('обычная дробь: клеточки «целые» нет', await pg.locator('.fi-whole').count()==0 and await pg.locator('[data-whole]').count()==0)
+        mixed_ok = await pg.evaluate("(() => { const d=document.createElement('form'); d.className='answer'; d.innerHTML=answerInput({answer:'2 1/3',accept:'mixed'},'Проверить'); app.appendChild(d); const w=d.querySelector('.fi-whole'); const ok=!!w && getComputedStyle(w).display!=='none'; d.remove(); return ok; })()")
+        rep('смешанное число: клеточка «целые» видна', mixed_ok)
+        await pg.goto(B+'#home'); await pg.goto(B+'#lesson/3/practice'); await pg.wait_for_timeout(150)
+        seen_ms = False
+        for _ in range(6):
+            await pg.evaluate("fillAnswer(session.task.answer)"); await pg.click('form.answer button[type=submit]'); await pg.wait_for_timeout(150)
+            if await pg.locator('#feedback .milestone').count(): seen_ms = True; break
+            await pg.click('#next-task'); await pg.wait_for_timeout(120)
+        rep('после нормы — «Тренировка пройдена» и путь к проверке', seen_ms and await pg.locator('#feedback [data-stage-now=check]').count()==1)
+        await pg.click('#next-task'); await pg.wait_for_timeout(150)
+        rep('после нормы — кнопка «Проверить себя» в потоке страницы, задачу не закрывает (П-05)', await pg.locator('.ready-strip').count()==1 and await pg.evaluate("getComputedStyle(document.querySelector('.ready-strip')).position")=='static')
+        await pg.click('.ready-strip [data-stage=check]'); await pg.wait_for_timeout(150)
+        rep('кнопка ведёт на проверку', (await pg.evaluate("location.hash")).endswith('/check'))
+        await pg.goto(B+'#settings'); await pg.wait_for_timeout(150)
+        rep('стиль выбирается в профиле, плавающей панели нет (П-07)', await pg.locator('[data-skin-pick]').count()==4 and not await pg.is_visible('.skin-switch'))
+        await pg.click('[data-skin-pick=pixel]'); await pg.goto(B+'#home'); await pg.wait_for_timeout(300)
         rep('стиль «Пиксель» включается', await pg.evaluate("document.documentElement.dataset.skin")=='pixel')
         await pg.evaluate("setSkin('notebook')")
         # 15. Геймификация

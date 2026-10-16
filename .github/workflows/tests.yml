@@ -1,0 +1,41 @@
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Юнит-тесты
+        run: |
+          node tests/generators.test.js
+          node tests/tutor.test.js
+          node tests/game.test.js
+          node tests/worker.test.mjs
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Playwright
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Сервер (PHP + SQLite)
+        run: |
+          sudo apt-get install -y php-cli php-sqlite3 php-mbstring >/dev/null
+          python tests/server_scenarios.py
+
+      - name: Сценарии в браузере
+        run: python tests/e2e_scenarios.py | tee e2e.log && grep -q "ИТОГО: \([0-9]*\) из \1$" e2e.log

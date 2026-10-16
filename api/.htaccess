@@ -1,0 +1,9 @@
+# Наружу открыт только index.php
+Options -Indexes
+<FilesMatch "^(lib|config\.local|config\.example)\.php$">
+  Require all denied
+</FilesMatch>
+# Пробросить заголовок Authorization в PHP (нужно на части хостингов)
+RewriteEngine On
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]

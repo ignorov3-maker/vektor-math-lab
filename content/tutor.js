@@ -22,9 +22,15 @@
 
   /* ---------- Настройки подключения (хранятся только в этом браузере) ---------- */
   const CFG_KEY = 'vektor-ai';
-  function loadCfg() { try { return { ...DEFAULT_CFG, ...JSON.parse(localStorage.getItem(CFG_KEY) || '{}') }; } catch { return { ...DEFAULT_CFG }; } }
+  // Ученик вошёл через сервер «Вектора» — наставник идёт через серверную функцию, ключ там (этап 3)
+  const serverAI = () => !!(window.VEKTOR_SYNC && window.VEKTOR_CONFIG && window.VEKTOR_CONFIG.supabaseUrl);
+  function loadCfg() {
+    let c; try { c = { ...DEFAULT_CFG, ...JSON.parse(localStorage.getItem(CFG_KEY) || '{}') }; } catch { c = { ...DEFAULT_CFG }; }
+    if (serverAI()) c = { ...c, mode: 'vektor' };
+    return c;
+  }
   function saveCfg(c) { try { localStorage.setItem(CFG_KEY, JSON.stringify(c)); } catch {} }
-  const ready = c => (c.mode === 'key' && /^sk-or-/.test(c.key.trim())) || (c.mode === 'proxy' && /^https:\/\//.test(c.proxy.trim()));
+  const ready = c => (c.mode === 'vektor' && serverAI()) || (c.mode === 'key' && /^sk-or-/.test(c.key.trim())) || (c.mode === 'proxy' && /^https:\/\//.test(c.proxy.trim()));
 
   /* ---------- HTML → обычный текст (для промпта) ---------- */
   function plain(html) {
@@ -57,7 +63,7 @@
   }
 
   function systemPrompt({ topic, mode, task, attempts = [], mistake, pace = 'normal', style = 'steps', name }) {
-    const common = `Ты — добрый и терпеливый наставник по математике в учебном приложении «Вектор». Твой ученик — школьник 5–6 класса (10–12 лет)${name ? `, его зовут ${name}` : ''}.
+    const common = `Ты — добрый и терпеливый наставник по математике в учебном приложении «Вектор». Твой ученик — школьник 5–6 класса (10–12 лет).
 
 Как ты пишешь:
 - По-русски, просто и дружелюбно, на «ты». 2–4 коротких предложения в одном сообщении (не больше 70 слов), одна мысль за раз. Всегда заканчивай мысль — не обрывай слова и фразы.
@@ -69,7 +75,14 @@
   • 3 — числитель (верхнее число): сколько частей взяли.
 - Буквы (a/b) можно, но после общего правила всегда дай пример на числах.
 - Деление пиши знаком «:», умножение — «·».
-- Чтобы показать картинку, вставь на отдельной строке один тег: [[подпиши 3/5]] (дробь с подписями «числитель» и «знаменатель»), [[полоска 3/5]], [[круг 3/8]], [[прямая 3/4]], [[сравнить 1/3 1/5]], [[прямоугольник 2/3 3/4]] (для умножения 2/3 · 3/4), [[смешанное 2 1/3]]. Знаменатель не больше 12. Не больше одной картинки в сообщении.
+- Картинку можно вставить тегом на отдельной строке (вместо a/b подставь СВОИ числа — те же, что в тексте сообщения):
+  [[подпиши a/b]] — дробь с подписями «числитель» и «знаменатель»;
+  [[полоска a/b]] или [[круг a/b]] — одна фигура, разделена на b частей, закрашено a;
+  [[прямая a/b]] — точка на числовой прямой;
+  [[сравнить a/b c/d]] — ДВЕ полоски одна под другой (для сравнения и равных дробей);
+  [[прямоугольник a/b c/d]] — для умножения a/b · c/d;
+  [[смешанное n a/b]] — n целых кругов и ещё a/b.
+- Не больше одной картинки в сообщении, знаменатель не больше 12. Описывай ровно то, что на картинке: если нужны две дроби — бери [[сравнить …]] и пиши «верхняя полоска… нижняя полоска…»; не пиши «слева/справа» и не придумывай фигур, которых нет.
 - Не проси и не запоминай личные данные (адрес, школу, телефон, фото).
 - Если вопрос не про учёбу — коротко и по-доброму верни к теме. Если ученик пишет, что ему плохо, страшно или его обижают, мягко посоветуй рассказать об этом взрослому, которому он доверяет, и не продолжай эту тему сам.
 - ${PACE_SAY[pace] || PACE_SAY.normal} ${STYLE_SAY[style] || STYLE_SAY.steps}
@@ -85,7 +98,7 @@ ${methodText(topic)}`;
 2) Покажи наглядную модель с картинкой.
 3) Сформулируй правило своими словами.
 4) Разбери пример по шагам вместе с учеником: задай ему вопрос на каждом шаге.
-5) Дай одну короткую задачу на понимание (свою, не из методички) и дождись ответа.
+5) Задай один вопрос на понимание правила (почему так, а не как посчитать). Не придумывай задачи с числовым ответом и не оценивай ответы «верно/неверно» — задачи и их проверка будут в тренировке, там ответ проверяет приложение.
 6) Предупреди о типичной ошибке.
 7) Похвали и напиши отдельной строкой тег [[готово]] — это кнопка перехода к тренировке.
 Каждое сообщение заканчивай вопросом или просьбой нажать «Дальше». Если ученик ошибся или пишет «не понял» — объясни иначе, проще и с картинкой, не переходи к следующему шагу. Если отвечает верно и быстро — можно объединять шаги. Проверяй ответы ученика внимательно: сначала посчитай сам.`;
@@ -114,10 +127,15 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
   }
 
   async function stream(cfg, messages, onText, { maxTokens = 600, signal, onFinish } = {}) {
-    const proxy = cfg.mode === 'proxy';
-    const url = proxy ? cfg.proxy.trim() : OPENROUTER_URL;
+    const own = cfg.mode === 'vektor', proxy = cfg.mode === 'proxy';
+    const SBC = window.VEKTOR_CONFIG || {};
+    const url = own ? SBC.supabaseUrl.replace(/\/+$/, '') + '/functions/v1/tutor' : proxy ? cfg.proxy.trim() : OPENROUTER_URL;
     const headers = { 'Content-Type': 'application/json' };
-    if (!proxy) {
+    let token = '';
+    if (own) {
+      headers.apikey = SBC.supabaseKey; headers.Authorization = 'Bearer ' + SBC.supabaseKey;
+      try { token = (JSON.parse(localStorage.getItem('vektor-session')) || {}).token || ''; } catch {}
+    } else if (!proxy) {
       headers.Authorization = `Bearer ${cfg.key.trim()}`;
       headers['HTTP-Referer'] = location.origin && location.origin !== 'null' ? location.origin : 'https://github.com/ignorov3-maker/vektor-math-lab';
       headers['X-OpenRouter-Title'] = 'Vektor';
@@ -125,7 +143,7 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
     // Рассуждения модели выключаем: наставнику нужен быстрый короткий ответ.
     // Если модель не умеет выключать рассуждения (400), повторяем запрос без этого параметра.
     const send = async withReasoningOff => {
-      const body = { model: cfg.model || DEFAULT_CFG.model, messages, stream: true, max_tokens: withReasoningOff ? maxTokens : maxTokens + 600, temperature: 0.4 };
+      const body = { model: cfg.model || DEFAULT_CFG.model, messages, stream: true, ...(token ? { token } : {}), max_tokens: withReasoningOff ? maxTokens : maxTokens + 600, temperature: 0.4 };
       if (withReasoningOff) body.reasoning = { enabled: false }; else body.reasoning = { exclude: true };
       try { return await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal }); }
       catch (e) { if (e.name === 'AbortError') throw e; throw new TutorError('Нет связи с сервером ИИ. Мешать может слабый интернет, VPN или блокировщик рекламы.'); }
@@ -135,7 +153,13 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
       let msg = ''; try { msg = (await res.clone().json()).error?.message || ''; } catch {}
       if (/reason|think/i.test(msg)) res = await send(false);
     }
-    if (!res.ok) { let t = ''; try { t = (await res.json()).error?.message || ''; } catch {} throw new TutorError(errorFor(res.status, t)); }
+    if (!res.ok) {
+      let t = ''; try { t = (await res.json()).error?.message || ''; } catch {}
+      const err = new TutorError(own && t && res.status !== 402 ? t : errorFor(res.status, t));
+      // П-03: на сервере «Вектора» ИИ выключен или нет ключа — тихо работаем по конспекту, без сообщений об ошибке
+      if (own && (res.status === 503 || res.status === 401 || res.status === 402)) err.quiet = true;
+      throw err;
+    }
     if (!res.body) throw new TutorError('Браузер не поддерживает потоковые ответы.');
 
     const reader = res.body.getReader(), dec = new TextDecoder();
@@ -189,6 +213,30 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
       .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
       .replace(/(^|[^\d/])(\d{1,3})\s*\/\s*(\d{1,3})(?![\d/])/g, (m, pre, a, b) => `${pre}${f(a, b)}`);
   }
+  // Картинка не должна спорить с текстом: числа в теге сверяем с дробями из сообщения
+  const figFracs = g => ({ labeled: [[g.n, g.d]], line: [[g.n, g.d]], bar: [[g.shaded, g.parts]], circle: [[g.shaded, g.parts]], pair: [g.a, g.b], grid: [[g.r, g.rows], [g.c, g.cols]], mixed: [[g.n, g.d]] }[g.type] || []);
+  function reconcile(fig, said) {
+    if (!said.length) return fig; // в тексте дробей нет — сверять не с чем
+    const has = ([n, d]) => said.some(([a, b]) => a === n && b === d);
+    if (figFracs(fig).every(has)) return fig;
+    const proper = said.filter(([a, b]) => b >= 1 && b <= 12 && a <= b);
+    if (proper.length >= 2) return { type: 'pair', a: proper[0], b: proper[1] };
+    if (proper.length === 1) {
+      const [n, d] = proper[0];
+      if (fig.type === 'circle' || fig.type === 'bar') return { type: fig.type, parts: d, shaded: n };
+      if (fig.type === 'line') return { type: 'line', n, d };
+      return { type: 'labeled', n, d };
+    }
+    return null; // непонятно, что рисовать, — лучше без картинки, чем с неверной
+  }
+  function fracsIn(t) {
+    const out = [];
+    t.replace(/\[\[[^\]]*\]\]/g, ' ').replace(/(^|[^\d/])(\d{1,2})\s*\/\s*(\d{1,2})(?![\d/])/g, (m, pre, a, b) => {
+      if (!out.some(([x, y]) => x === +a && y === +b)) out.push([+a, +b]);
+      return m;
+    });
+    return out;
+  }
   // → { html, done } ; done = наставник поставил [[готово]]
   function render(text, { streaming = false } = {}) {
     let t = String(text)
@@ -196,14 +244,14 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
       .replace(/\$\$?/g, '').replace(/\\[()[\]]/g, '');
     if (streaming) t = t.replace(/\[\[[^\]]*$/, '');
     let done = false;
-    const parts = t.split(/(\[\[[^\]]{1,40}\]\])/g);
-    let html = '';
+    const parts = t.split(/(\[\[[^\]]{1,40}\]\])/g), said = fracsIn(t);
+    let html = '', figs = 0;
     for (const part of parts) {
       const m = part.match(/^\[\[([^\]]+)\]\]$/);
       if (m) {
         if (/^\s*готово\s*$/i.test(m[1])) { done = true; continue; }
-        const fig = figureFromTag(m[1]);
-        if (fig) html += figure(fig);
+        const fig = figs < 1 && figureFromTag(m[1]), fixed = fig && reconcile(fig, said);
+        if (fixed) { html += figure(fixed); figs++; }
         continue;
       }
       const paras = part.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
@@ -240,10 +288,13 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
     }
     if (/правил|как (складыв|вычит|умнож|дел|сокращ|сравн|перевод)/.test(s)) return { html: `<p><b>Правило</b></p><div class="rule-body">${e.rule}</div>` };
     if (/пример/.test(s)) { const x = e.examples[Math.floor(Math.random() * e.examples.length)]; return { html: `<p>${x.q}</p><ol>${x.steps.map(st => `<li>${st}</li>`).join('')}</ol>` }; }
-    if (/картин|покажи|нарис|как выгляд/.test(s)) return { html: `${figure(e.figure)}<p class="figure-caption">${e.figureCaption}</p>` };
+    if (/картин|покажи|нарис|как выгляд/.test(s)) {
+      if (task && task.figure && !task.figureIsHint) return { html: `<p>Вот картинка к этой задаче:</p>${figure(task.figure)}<p>${task.story}</p>` };
+      return { html: `<p>Картинка из конспекта (числа там другие, чем в задаче):</p>${figure(e.figure)}<p class="figure-caption">${e.figureCaption}</p>` };
+    }
     if (/ошиб|почему не|неправильн/.test(s)) return { html: `<ul>${t.mistakes.map(m => `<li><b>${m.title}.</b> ${m.say}</li>`).join('')}</ul>` };
     if (/числител|знаменател|что такое|зачем|почему/.test(s)) return { html: `<p>${e.model}</p>${figure(e.figure)}` };
-    return { html: `<p>Сейчас я работаю без ИИ и отвечаю только по конспекту. Спроси про <b>правило</b>, попроси <b>пример</b>, <b>картинку</b> или <b>подсказку</b>.</p><p class="small muted">Чтобы задавать любые вопросы, подключи ИИ в настройках.</p>` };
+    return { html: `<p>Сейчас я работаю без ИИ и отвечаю только по конспекту. Спроси про <b>правило</b>, попроси <b>пример</b>, <b>картинку</b> или <b>подсказку</b>.</p>${window.VEKTOR_SYNC ? '' : '<p class="small muted">Чтобы задавать любые вопросы, подключи ИИ в настройках.</p>'}` };
   }
 
   window.VEKTOR_TUTOR = { MODELS, DEFAULT_CFG, loadCfg, saveCfg, ready, systemPrompt, stream, testConnection, render, lessonBeats, localAnswer, plain, TutorError };

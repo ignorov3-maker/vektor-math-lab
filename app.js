@@ -25,9 +25,11 @@ const legacy = [
     task: { story: 'Прямоугольник имеет длину 6 см и ширину 4 см.', question: 'Чему равна его площадь в см²?', answer: '24', hints: ['Площадь = длина · ширина.', '6 · 4 = ?'] } },
 ].map(t => ({ ...t, legacy: true, generate: () => ({ ...t.task, accept: 'exact', solution: `Ответ: ${t.task.answer}.` }) }));
 
-const topics = [...window.VEKTOR_FRACTIONS.topics, ...legacy];
+// Ф-10: в пилотной версии видны только 9 тем дробей; заглушки других разделов скрыты (?demo=all вернёт их)
+const SHOW_LEGACY = /[?&]demo=all\b/.test(location.search);
+const topics = [...window.VEKTOR_FRACTIONS.topics, ...(SHOW_LEGACY ? legacy : [])];
 const byId = Object.fromEntries(topics.map((t, i) => [t.id, i]));
-const SECTIONS = ['Дроби', 'Отношения', 'Геометрия'];
+const SECTIONS = SHOW_LEGACY ? ['Дроби', 'Отношения', 'Геометрия'] : ['Дроби'];
 const ROUTE = window.VEKTOR_FRACTIONS.topics.map((t, i) => i); // раздел «Дроби» — настоящая последовательность тем
 const DIAG = ['concept', 'reduce', 'compare', 'add-same', 'mult', 'part-of'].map(id => byId[id]);
 const DONE = 80;
@@ -57,7 +59,19 @@ try { state = Object.assign(fresh(), JSON.parse(localStorage.getItem(KEY))); } c
   if (!Array.isArray(state.diag.results) || !Number.isInteger(state.diag.step)) state.diag = d.diag;
   state.attempts = state.attempts.filter(a => a && typeof a === 'object');
 })();
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} if (window.VEKTOR_SYNC) window.VEKTOR_SYNC.push(state); };
+// Ф-31: «Как тебе занятие?» — 5 смайликов, один раз за занятие, можно пропустить (только с сервером)
+const MOODS = ['😣', '🙁', '😐', '🙂', '😄'];
+const moodAsked = () => { try { return sessionStorage.getItem('vektor-mood') === today(); } catch { return true; } };
+const moodBox = () => !window.VEKTOR_SYNC || moodAsked() ? '' : `<div class="mood" role="group" aria-label="Как тебе занятие?"><span>Как тебе занятие?</span>${MOODS.map((m, k) => `<button type="button" data-mood="${k + 1}" aria-label="${k + 1} из 5">${m}</button>`).join('')}</div>`;
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-mood]'); if (!b) return;
+  logEvent('feedback', { mood: +b.dataset.mood, topic: location.hash.split('/')[1] || null });
+  try { sessionStorage.setItem('vektor-mood', today()); } catch {}
+  b.closest('.mood').innerHTML = '<span>Спасибо!</span>';
+});
+// журнал событий для анализа пилота (раздел 7 ТЗ); без сервера ничего не делает
+const logEvent = (type, data) => { if (window.VEKTOR_SYNC) window.VEKTOR_SYNC.event(type, data); };
 let ai = T.loadCfg();
 const game = () => G.ensure(state);
 
@@ -78,6 +92,7 @@ const knowledge = () => { const c = topics.map((t, i) => pct(i)).filter(Boolean)
 const currentStop = () => ROUTE.find(i => pct(i) < DONE) ?? ROUTE[ROUTE.length - 1];
 const status = i => pct(i) >= DONE ? 'done' : pct(i) > 0 ? 'started' : 'todo';
 const statusText = i => ({ done: 'Освоено', started: `Начато, ${pct(i)}%`, todo: 'Ещё не начато' })[status(i)];
+const reviewOpen = m => !!(m && m.mastered && m.reviewDue && m.reviewDue <= today());
 const dueReviews = () => topics.map((t, i) => i).filter(i => { const m = state.meta[topics[i].id]; return m && m.reviewDue && m.reviewDue <= today(); });
 const mistakeOf = (i, id) => (topics[i].mistakes || []).find(m => m.id === id);
 const pace = () => A.pace(state.attempts);
@@ -114,8 +129,8 @@ function answerInput(task, button) {
   if (numberOnly) return `<div class="answer-row"><label class="num-input"><span class="visually-hidden">Твой ответ</span><input id="ans-num" inputmode="numeric" autocomplete="off" placeholder="?" aria-label="Твой ответ — число"></label><button class="btn btn-primary btn-big" type="submit">${button}</button></div>`;
   const mixed = task.accept === 'mixed';
   return `<div class="answer-row">
-    <div class="frac-input${mixed ? ' with-whole' : ''}" role="group" aria-label="Твой ответ — дробь">
-      <label class="fi-whole"><input id="ans-whole" inputmode="numeric" autocomplete="off" aria-label="Целая часть"><span>целые</span></label>
+    <div class="frac-input${mixed ? ' with-whole' : ''}" role="group" aria-label="Твой ответ — ${mixed ? 'смешанное число' : 'дробь'}">
+      ${mixed ? '<label class="fi-whole"><input id="ans-whole" inputmode="numeric" autocomplete="off" aria-label="Целая часть"><span>целые</span></label>' : ''}
       <div class="fi-frac">
         <input id="ans-num" inputmode="numeric" autocomplete="off" aria-label="Числитель — верхнее число" placeholder="?"><span class="fi-lab" aria-hidden="true">числитель</span>
         <i aria-hidden="true"></i><span></span>
@@ -124,7 +139,7 @@ function answerInput(task, button) {
     </div>
     <button class="btn btn-primary btn-big" type="submit">${button}</button>
   </div>
-  <p class="fi-help small muted">Ответ — целое число? Впиши его в верхнюю клеточку, нижнюю оставь пустой.${mixed ? '' : ' <button type="button" class="link small" data-whole>Есть целая часть</button>'}</p>`;
+  ${mixed ? '<p class="fi-help small muted">Слева — целые, справа — дробная часть.</p>' : ''}`;
 }
 
 function taskCard(task, { formId = 'answer-form', button = 'Проверить', exam = false, hints = false } = {}) {
@@ -160,7 +175,6 @@ function bindAnswerKeys() {
     den.addEventListener('keydown', e => { if ((e.key === 'Backspace' && !den.value) || e.key === 'ArrowUp') { e.preventDefault(); num.focus(); } });
   }
   if (whole && num) whole.addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'ArrowRight') { e.preventDefault(); num.focus(); } });
-  app.querySelectorAll('[data-whole]').forEach(b => b.onclick = () => { app.querySelector('.frac-input')?.classList.add('with-whole'); b.remove(); app.querySelector('#ans-whole')?.focus(); });
 }
 
 /* ================= ИИ-наставник: чат ================= */
@@ -173,7 +187,10 @@ function getChat(i, kind) {
   if (!chats[key]) chats[key] = { msgs: [], beats: null, beat: -1, pending: null, done: false, busy: false, hint: 0, started: false };
   return chats[key];
 }
-const isOnline = () => T.ready(ai);
+// Сервер «Вектора» (вход по логину): ключи ИИ, имя и отчёты для взрослых ученику не показываем (П-04)
+const SERVER = !!window.VEKTOR_SYNC;
+let aiPaused = false; // П-03: ИИ на сервере выключен — до конца занятия идём по конспекту молча
+const isOnline = () => !aiPaused && T.ready(ai);
 
 function msgHtml(m, k) {
   return `<div class="msg ${m.role}${m.error ? ' error' : ''}">${m.role === 'assistant' ? '<span class="msg-who">Наставник</span>' : ''}<div class="msg-body">${m.html}${m.lab ? V.labHtml(`lab-msg-${k}`) : ''}</div></div>`;
@@ -206,7 +223,7 @@ function chatBox(i, kind) {
     <div class="chat-quick">${quickReplies(i, kind).map(([v, l, main]) => `<button type="button" class="btn ${main ? 'btn-primary' : 'btn-ghost'} btn-sm" data-quick="${esc(v)}">${l}</button>`).join('')}</div>
     ${kind === 'lesson' && c.pending ? `<form class="chat-form chat-answer" autocomplete="off">${answerInput(c.pending.task, 'Проверить')}</form>` : `<form class="chat-form" autocomplete="off"><label class="visually-hidden" for="chat-in-${kind}">Сообщение наставнику</label>
       <input id="chat-in-${kind}" placeholder="${ph}" maxlength="400"${c.busy ? ' disabled' : ''}><button class="btn btn-primary" type="submit"${c.busy ? ' disabled' : ''}>Отправить</button></form>`}
-    <p class="chat-mode small muted">${online && !c.forceOffline ? `Наставник: ${esc(modelName())}.` : online ? 'ИИ временно недоступен — урок идёт по конспекту.' : 'Наставник без ИИ — отвечает по конспекту.'} ${online ? '' : '<a href="#settings">Подключить ИИ</a>'}</p>
+    <p class="chat-mode small muted">${online && !c.forceOffline ? `Наставник: ${esc(modelName())}.` : online ? 'ИИ временно недоступен — урок идёт по конспекту.' : 'Наставник без ИИ — отвечает по конспекту.'} ${online || SERVER ? '' : '<a href="#settings">Подключить ИИ</a>'}</p>
   </div>`;
 }
 
@@ -336,7 +353,7 @@ async function aiReply(i, kind, hiddenUser) {
   const sys = T.systemPrompt({
     topic: t, mode: kind === 'lesson' ? 'lesson' : 'task', task,
     attempts: kind === 'task' ? (session?.tries || []) : [], mistake: kind === 'task' && session?.lastMistake ? mistakeOf(i, session.lastMistake) : null,
-    pace: pace(), style: state.settings.style, name: state.settings.name,
+    pace: pace(), style: state.settings.style, // имя ученика в ИИ не передаём (Д-06)
   });
   const history = c.msgs.filter(m => m.raw).slice(-14).map(m => ({ role: m.role, content: m.raw }));
   const msg = { role: 'assistant', html: '<p class="typing">Наставник думает…</p>', raw: null };
@@ -355,9 +372,12 @@ async function aiReply(i, kind, hiddenUser) {
     c.forceOffline = false;
   } catch (e) {
     // ИИ недоступен — урок не стопорится: продолжаем по конспекту
-    c.busy = false; c.forceOffline = true;
+    c.busy = false;
     const idx = c.msgs.indexOf(msg); if (idx >= 0) c.msgs.splice(idx, 1);
-    c.msgs.push({ role: 'assistant', error: true, html: `<p class="small"><b>ИИ сейчас не отвечает</b> — ${esc(e.message || 'нет связи')} Продолжаю по конспекту. <button type="button" class="link" data-retry-ai>Попробовать ИИ снова</button></p>` });
+    if (e.quiet) { aiPaused = true; offlineFallback(i, kind); return; }
+    c.forceOffline = true;
+    if (SERVER) c.msgs.push({ role: 'assistant', error: true, html: `<p class="small">${/вопрос/.test(e.message || '') ? esc(e.message) : 'Наставник сейчас не на связи — продолжаем по конспекту.'} <button type="button" class="link" data-retry-ai>Спросить ещё раз</button></p>` });
+    else c.msgs.push({ role: 'assistant', error: true, html: `<p class="small"><b>ИИ сейчас не отвечает</b> — ${esc(e.message || 'нет связи')} Продолжаю по конспекту. <button type="button" class="link" data-retry-ai>Попробовать ИИ снова</button></p>` });
     offlineFallback(i, kind);
     return;
   } finally {
@@ -535,7 +555,7 @@ function home() {
         <h3>Твой темп: ${A.PACE[p].label.toLowerCase()}</h3>
         <p class="muted small">${A.PACE[p].say}</p>
       </div>
-      <div class="sheet small-note"><h3>Наставник ${isOnline() ? 'на связи' : 'работает по конспекту'}</h3><p class="muted small">${isOnline() ? `Ведёт урок, отвечает на вопросы и рисует дроби (${esc(modelName())}).` : 'Ведёт урок по методичке. Чтобы он отвечал на любые вопросы, подключи ИИ в профиле.'}</p></div>
+      <div class="sheet small-note"><h3>Наставник ${isOnline() ? 'на связи' : 'работает по конспекту'}</h3><p class="muted small">${isOnline() ? `Ведёт урок, отвечает на вопросы и рисует дроби (${esc(modelName())}).` : (SERVER ? 'Ведёт урок по конспекту, показывает примеры и подсказки.' : 'Ведёт урок по методичке. Чтобы он отвечал на любые вопросы, подключи ИИ в профиле.')}</p></div>
     </div>
   </div>`;
 }
@@ -612,6 +632,8 @@ const DO_NOW = {
 function lessonPage(i, stage) {
   const t = topics[i];
   if (t.legacy) stage = 'practice';
+  // Д-01: повторение только для освоенной темы, когда подошёл его день
+  if (stage === 'review' && !reviewOpen(meta(i))) stage = meta(i).practice ? 'practice' : 'learn';
   const st = stepStates(i), need = A.need(pace()), m = meta(i);
   const sub = { learn: st.learn === 'done' ? 'Пройдено' : 'Картинки и правило', practice: st.practice === 'done' ? 'Готово' : `${Math.min(m.practice, need)} из ${need} задач`, check: st.check === 'done' ? 'Тема освоена' : 'Нужно 3 из 4' };
   const steps = t.legacy || stage === 'review' ? '' : `<ol class="stepper" aria-label="Шаги темы">${STAGES.map(([id, name], k) => `
@@ -670,6 +692,7 @@ function practiceStage(i) {
     <section class="sheet task" aria-labelledby="q">
       ${t.legacy ? '' : `<div class="task-progress"><span>Решено ${Math.min(m.practice, need)} из ${need}</span>${bar(Math.round(Math.min(m.practice, need) / need * 100))}<span class="task-meta" title="Сложность задач подстраивается под тебя">Сложность ${dots(m.level || 2)}</span></div>`}
       ${taskCard(task, { hints: true })}
+      ${!t.legacy && ready ? `<div class="ready-strip" role="status"><span>${G.icon('star', 20)} Тренировка пройдена — пора проверить себя!</span><button class="btn btn-primary" data-stage="check">Проверить себя →</button></div>` : ''}
     </section>
     <aside class="stack side">
       ${t.legacy ? '' : `<div class="sheet streak ${ready ? 'ready' : ''}"><h3>${ready ? 'Можно проверять себя!' : 'Тренировка'}</h3>
@@ -707,6 +730,7 @@ function resultView(i) {
       <p>Верно ${s.right} из ${s.total}. ${pass ? 'Повторение придёт завтра, потом через 3 и через 7 дней.' : `Нужно хотя бы ${t.check.passScore}. Вернись к уроку — и попробуй снова.`}</p>
       ${found.length ? `<h3>Что заметили</h3><ul class="mistakes">${found.map(x => `<li><b>${x.title}.</b> ${x.say}</li>`).join('')}</ul>` : ''}
       ${advice}
+      ${moodBox()}
       <div class="row-actions">${pass
         ? `${next != null ? `<button class="btn btn-primary" data-lesson="${next}">Дальше: ${topics[next].title}</button>` : ''}<button class="btn btn-ghost" data-go="home">К маршруту</button>`
         : `${advice ? `<button class="btn btn-primary" data-lesson="${weak[0]}">Повторить «${topics[weak[0]].title}»</button>` : ''}<button class="btn ${advice ? 'btn-ghost' : 'btn-primary'}" data-stage="learn">К уроку</button><button class="btn btn-ghost" id="retry">Ещё раз</button>`}</div>
@@ -715,6 +739,7 @@ function resultView(i) {
   return `<section class="sheet result ${pass ? 'pass' : 'fail'}" style="max-width:760px">
     <h2>${pass ? 'Отлично, тема не забылась' : 'Стоит освежить'}</h2>
     <p>Верно ${s.right} из ${s.total}. ${pass ? (m.reviewDue ? `Следующее повторение — ${new Date(m.reviewDue + 'T12:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}.` : 'Все три повторения пройдены — тема закреплена.') : 'Повторение вернётся завтра. Если хочешь, загляни в урок.'}</p>
+    ${moodBox()}
     <div class="row-actions"><button class="btn btn-primary" data-go="home">К маршруту</button>${pass ? '' : '<button class="btn btn-ghost" data-stage="learn">К уроку</button>'}</div>
   </section>`;
 }
@@ -798,6 +823,7 @@ function teacher() {
 
 function settings() {
   const s = state.settings;
+  if (SERVER) return settingsServer();
   return head('Профиль', 'Имя, цель дня, звуки и ИИ-наставник.') + `
   <div class="layout settings">
     <div class="stack">
@@ -810,6 +836,7 @@ function settings() {
         <button class="btn btn-primary" type="submit">Сохранить</button>
         <div class="feedback" id="feedback" role="status" aria-live="polite"></div>
       </form>
+      ${skinPicker()}
       <div class="sheet"><h2>Помощь</h2><p class="muted small">Короткая экскурсия по главному экрану: где кнопка «Продолжить», путь, звёзды и меню.</p>
         <button class="btn btn-ghost" id="tour-again">Показать подсказки снова</button></div>
       <div class="sheet"><h2>Для взрослых</h2><p class="muted small">Отчёт по темам, темпу и частым ошибкам, а также быстрый тест, чтобы подобрать маршрут.</p>
@@ -845,10 +872,39 @@ function settings() {
   </div>`;
 }
 
+// П-07: стиль оформления выбирается только здесь, а не плавающей панелью поверх урока
+const SKINS = [['notebook', 'Тетрадь'], ['orbit', 'Орбита'], ['pop', 'Стикеры'], ['pixel', 'Пиксель']];
+const skinPicker = () => `<div class="sheet"><h2>Оформление</h2><div class="skin-pick" role="group" aria-label="Стиль оформления">${SKINS.map(([k, t]) => `<button type="button" class="btn btn-ghost" data-skin-pick="${k}" aria-pressed="${document.documentElement.dataset.skin === k}"><i class="skin-dot skin-dot-${k}" aria-hidden="true"></i>${t}</button>`).join('')}</div></div>`;
+
+// Профиль ученика, вошедшего по логину (П-04): имя только для просмотра, без настроек ИИ и отчётов для взрослых
+function settingsServer() {
+  const s = state.settings;
+  return head('Профиль', 'Цель дня, звуки и оформление.') + `
+  <div class="layout settings">
+    <div class="stack">
+      <form class="sheet" id="settings-form">
+        <h2>${esc(s.name)}</h2>
+        <p class="muted small">Так тебя видит учитель. Своё имя вписывать не нужно.</p>
+        <label class="field">Цель дня<select name="goal" id="set-goal">${[3, 5, 10].map(n => `<option value="${n}"${game().goal === n ? ' selected' : ''}>${n} задач в день</option>`).join('')}</select></label>
+        <label class="field">Как объяснять<select name="style" id="set-style"><option value="steps"${s.style === 'steps' ? ' selected' : ''}>Коротко и по шагам</option><option value="visual"${s.style === 'visual' ? ' selected' : ''}>Через наглядные примеры</option></select></label>
+        <label class="switch"><input type="checkbox" name="sound" id="set-sound"${s.sound === false ? '' : ' checked'}> Звуки при ответах</label>
+        <button class="btn btn-primary" type="submit">Сохранить</button>
+        <div class="feedback" id="feedback" role="status" aria-live="polite"></div>
+      </form>
+      ${skinPicker()}
+    </div>
+    <div class="stack side">
+      <div class="sheet"><h2>Закончил занятие?</h2><p class="muted small">Выйди, чтобы следующий ученик не попал в твой аккаунт. Прогресс сохранится.</p>
+        <button class="btn btn-primary" type="button" id="profile-logout">Выйти</button></div>
+      <div class="sheet"><h2>Помощь</h2><p class="muted small">Короткая экскурсия по главному экрану.</p><button class="btn btn-ghost" id="tour-again">Показать подсказки снова</button></div>
+    </div>
+  </div>`;
+}
+
 /* ================= Роутинг ================= */
 
 const filterState = { map: 'Все', library: 'Все' };
-const route = () => { const [page, arg, stage] = (location.hash.slice(1) || 'home').split('/'); return { page: pages[page] ? page : 'home', i: Math.min(Math.max(+arg || 0, 0), topics.length - 1), stage }; };
+const route = () => { const [page, arg, stage] = (location.hash.slice(1) || 'home').split('/'); return { page: pages[page] && !(SERVER && page === 'teacher') ? page : 'home', i: Math.min(Math.max(+arg || 0, 0), topics.length - 1), stage }; };
 
 function render() {
   const { page, i, stage } = route();
@@ -912,6 +968,8 @@ function bind(page, i, stage) {
       if (got.error) { fb.className = 'feedback bad'; fb.innerHTML = got.error; return; }
       const value = got.value;
       const r = check(value, s.task);
+      logEvent('attempt', { topic: topics[i].id, mode: s.mode, level: s.mode === 'practice' ? meta(i).level : null, question: String(s.task.question || '').replace(/<[^>]+>/g, '').slice(0, 200),
+        answer: String(value).slice(0, 40), ok: !!(r.ok && !r.almost), try: (s.tries ? s.tries.length : 0) + 1, hints: s.hints || 0, mistake: r.mistake || null, sec: Math.round((Date.now() - (s.started || Date.now())) / 1000) });
       if (r.empty || r.unreadable) { fb.className = 'feedback bad'; fb.innerHTML = r.empty ? 'Сначала впиши ответ в клеточки.' : r.msg; return; }
       markActivity();
       const m = meta(i), t = topics[i];
@@ -947,13 +1005,18 @@ function bind(page, i, stage) {
         } else setPct(i, 100);
         const need = A.need(pace()), justReady = !t.legacy && m.practice === need;
         fb.className = 'feedback big';
+        const tc = t.check || { count: 4, passScore: 3 }, extra = !t.legacy && m.practice >= need + 3;
         fb.innerHTML = `<p class="fb-title">${G.icon('star', 22)} Верно!</p><p>${feedbackFor(r, s.task, i).replace(/^<b>Верно!<\/b>\s*/, '')}</p>` + eventsHtml(ev, i) +
           (!t.legacy && A.fastTrack(m, pace()) ? `<p class="fast-track">Похоже, ты это уже знаешь — можно сразу к проверке.</p>` : '') +
-          (justReady ? `<p class="fast-track">Ты решил ${need} ${plural(need, 'задачу', 'задачи', 'задач')} — можно проверить себя!</p>` : '') +
-          `<div class="fb-actions"><button class="btn btn-primary btn-big" id="next-task">Следующая задача →</button>${!t.legacy && (justReady || A.fastTrack(m, pace()) || m.practice > need) ? '<button class="btn btn-ghost" data-stage-now="check">К проверке</button>' : ''}</div>`;
+          (justReady ? `<div class="milestone"><p class="ms-title">${G.icon('star', 24)} Тренировка пройдена: ${need} из ${need}!</p><p>Дальше — проверка: ${tc.count} ${plural(tc.count, 'задача', 'задачи', 'задач')} без подсказок, нужно ${tc.passScore} верных. Получится — откроется следующая тема.</p></div>` : '') +
+          (extra ? `<p class="fast-track">Ты решил уже ${m.practice} ${plural(m.practice, 'задачу', 'задачи', 'задач')} — этого точно хватит. Переходи к проверке!</p>` : '') +
+          (!t.legacy && m.practice >= need
+            ? `<div class="fb-actions"><button class="btn btn-primary btn-big" data-stage-now="check">Проверить себя →</button><button class="btn btn-ghost" id="next-task">Ещё задачу</button></div>`
+            : `<div class="fb-actions"><button class="btn btn-primary btn-big" id="next-task">Следующая задача →</button>${!t.legacy && A.fastTrack(m, pace()) ? '<button class="btn btn-ghost" data-stage-now="check">К проверке</button>' : ''}</div>`);
         form.querySelectorAll('input,button').forEach(el => el.disabled = true);
         fb.querySelector('#next-task').onclick = () => { newPracticeTask(i); render(); app.querySelector('#ans-num')?.focus(); };
-        fb.querySelector('#next-task').focus({ preventScroll: true });
+        (fb.querySelector('.fb-actions .btn-primary') || fb.querySelector('#next-task')).focus({ preventScroll: true });
+        fb.querySelector('.fb-actions')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         sfx('ok');
         bindEventButtons(fb, i);
         save(); celebrate(G.solved(game(), today(), { firstTry, hints, wrongBefore: s.tries.length - 1 })); return;
@@ -962,7 +1025,8 @@ function bind(page, i, stage) {
       s.answered = true;
       const ok = r.ok && !r.almost;
       if (ok) s.right++; else if (r.mistake) s.found.push(r.mistake);
-      if (s.mode === 'check') { const ce = G.checkAnswer(game(), today(), ok); s.stars = (s.stars || 0) + ce.reduce((a, e) => a + e.n, 0); celebrate(ce, { quiet: true }); }
+      if (s.mode === 'check' && !meta(i).mastered) { const ce = G.checkAnswer(game(), today(), ok); // Д-02: звёзды за проверку — один раз на тему
+        s.stars = (s.stars || 0) + ce.reduce((a, e) => a + e.n, 0); celebrate(ce, { quiet: true }); }
       fb.className = 'feedback big' + (ok ? '' : ' bad');
       fb.innerHTML = ok ? `<p class="fb-title">${G.icon('star', 22)} Верно</p>` : `<p class="fb-title">Не совсем</p><p>Решение: ${s.task.solution}</p>`;
       fb.insertAdjacentHTML('beforeend', `<div class="fb-actions"><button class="btn btn-primary btn-big" id="next-task">${s.k + 1 < s.total ? 'Следующая задача →' : 'Узнать результат →'}</button></div>`);
@@ -1007,11 +1071,14 @@ function bind(page, i, stage) {
   const sform = app.querySelector('#settings-form');
   if (sform) sform.onsubmit = e => {
     e.preventDefault();
-    state.settings = { name: sform.name.value.trim() || 'Ученик', style: sform.style.value, sound: sform.sound.checked }; game().goal = +sform.goal.value || 5; save();
+    const nm = sform.querySelector('#set-name');
+    state.settings = { ...state.settings, name: nm ? nm.value.trim() || 'Ученик' : state.settings.name, style: sform.style.value, sound: sform.sound.checked }; game().goal = +sform.goal.value || 5; save();
     document.querySelector('#student-name').textContent = state.settings.name;
     document.querySelector('#avatar').textContent = state.settings.name[0].toUpperCase();
     app.querySelector('#feedback').textContent = 'Сохранено.';
   };
+  app.querySelectorAll('[data-skin-pick]').forEach(b => b.onclick = () => { setSkin(b.dataset.skinPick); app.querySelectorAll('[data-skin-pick]').forEach(x => x.setAttribute('aria-pressed', x === b)); });
+  const plo = app.querySelector('#profile-logout'); if (plo) plo.onclick = () => window.VEKTOR_ACCOUNT && window.VEKTOR_ACCOUNT.logout();
   const ta = app.querySelector('#tour-again');
   if (ta) ta.onclick = () => { state.toured = false; save(); location.hash = 'home'; };
   const aform = app.querySelector('#ai-form');
@@ -1064,13 +1131,17 @@ function bindAiForm(form) {
 let gameEvents = null; // показываем после перерисовки экрана результата
 function finishSession(i) {
   const t = topics[i], s = session, m = meta(i);
+  logEvent(s.mode === 'check' ? 'check_result' : 'review_result', { topic: t.id, right: s.right, total: s.total, passed: s.mode === 'check' ? s.right >= t.check.passScore : s.right === s.total });
   if (s.mode === 'check') {
     if (s.right >= t.check.passScore) {
-      setPct(i, 100); m.mastered = true; m.masteredAt = today(); m.reviewStep = 0; m.reviewDue = addDays(today(), t.review.afterDays[0]); m.failedChecks = 0;
-      gameEvents = G.mastered(game(), ROUTE.filter(r => pct(r) >= DONE).length);
+      const already = m.mastered;
+      setPct(i, 100); m.failedChecks = 0;
+      if (!already) { m.mastered = true; m.masteredAt = today(); m.reviewStep = 0; m.reviewDue = addDays(today(), t.review.afterDays[0]); }
+      if (!already) logEvent('mastery', { topic: t.id });
+      if (!already) gameEvents = G.mastered(game(), ROUTE.filter(r => pct(r) >= DONE).length); // Д-02
     } else m.failedChecks++;
     if (s.stars) (gameEvents ||= []).unshift({ type: 'stars', n: s.stars, why: 'за проверку' });
-  } else if (s.mode === 'review') {
+  } else if (s.mode === 'review' && m.mastered) {
     if (s.right === s.total) {
       m.reviewStep++;
       const days = t.review.afterDays;
@@ -1096,18 +1167,10 @@ resetBtn.onclick = () => {
 addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
 
 // ---------- Скины ----------
-const SKIN_FONTS = {
-  orbit: 'family=Unbounded:wght@500;700',
-  pop: 'family=Dela+Gothic+One&family=Rubik:wght@400;500;600;700',
-  pixel: 'family=Press+Start+2P&family=Rubik:wght@400;500;600;700;800',
-};
 function setSkin(name) {
   if (!['notebook', 'orbit', 'pop', 'pixel'].includes(name)) name = 'notebook';
   document.documentElement.dataset.skin = name;
-  if (SKIN_FONTS[name] && !document.getElementById('font-' + name)) {
-    const l = document.createElement('link'); l.id = 'font-' + name; l.rel = 'stylesheet';
-    l.href = `https://fonts.googleapis.com/css2?${SKIN_FONTS[name]}&display=swap`; document.head.appendChild(l);
-  }
+  // Шрифты со сторонних серверов не грузим (Д-07): IP детей не должны уходить в Google.
   document.querySelectorAll('.skin-switch button').forEach(b => b.setAttribute('aria-pressed', b.dataset.skin === name));
   try { localStorage.setItem('vektor-skin', name); } catch {}
   requestAnimationFrame(drawRoute);
