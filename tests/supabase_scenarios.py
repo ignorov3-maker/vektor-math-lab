@@ -3,7 +3,7 @@
 Нужны: Postgres 14+ (psql), playwright. Адрес базы — переменная VEKTOR_PG (по умолчанию локальный сокет).
 Запуск: python tests/supabase_scenarios.py
 """
-import asyncio, http.server, json, os, pathlib, secrets, socket, subprocess, sys, threading, urllib.request
+import re, asyncio, http.server, json, os, pathlib, secrets, socket, subprocess, sys, threading, urllib.request
 from playwright.async_api import async_playwright
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -76,7 +76,7 @@ async def main():
         psql("do $$ begin create role anon nologin; exception when duplicate_object then null; end $$;"
              "do $$ begin create role authenticated nologin; exception when duplicate_object then null; end $$;")
         subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase/schema.sql')], check=True, capture_output=True)
-        for f in ('test.sql', 'admin.sql'):
+        for f in ('test.sql', 'admin.sql', 'teacher.sql'):
             subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase' / f)], check=True, capture_output=True)
         rep('схема накатывается повторно', True)
         rep('vk_seed: 80 профилей с паролями', psql("select count(*) from vk_seed(80, '5А:1-28,5Б:29-56,5В:57-80') where password ~ '^[а-я]+[0-9]{4}$'") == '80')
@@ -139,6 +139,17 @@ async def main():
             await pg.fill('#chat-in-task', 'ещё подсказку'); await pg.click('.chat-task .chat-form button'); await pg.wait_for_timeout(1200)
             await pg.fill('#chat-in-task', 'и ещё'); await pg.click('.chat-task .chat-form button'); await pg.wait_for_timeout(1500)
             rep('лимит в день: понятное сообщение и урок не ломается', '30 вопросов' in await pg.inner_text('.chat-task') or 'конспект' in await pg.inner_text('.chat-task'))
+            psql("update vk_settings set value = '{\"enabled\": false, \"per_student_day\": 30, \"total_day\": 100}' where key = 'ai'")
+            await pg.fill('#chat-in-task', 'а как дальше?'); await pg.click('.chat-task .chat-form button'); await pg.wait_for_timeout(1500)
+            log = await pg.inner_text('.chat-task')
+            rep('ИИ выключен на сервере: урок молча идёт по конспекту (П-03)', 'не отвечает' not in log and 'выключен' not in log and 'без ИИ' in log, log[-120:])
+            # профиль на сервере: без настроек ИИ, имя не редактируется, «Для взрослых» скрыто (П-04)
+            await pg.goto(base + '/#settings'); await pg.wait_for_timeout(300)
+            rep('профиль: нет ключей ИИ и поля имени', await pg.locator('#ai-form').count() == 0 and await pg.locator('#set-name').count() == 0 and 'OpenRouter' not in await pg.inner_text('#app'))
+            rep('«Для взрослых» и «5 класс»', not await pg.is_visible('.adult-links') and '5 класс' in await pg.inner_text('.profile'))
+            st_, _ = rpc(base, 'vektor_sync', p_token=await pg.evaluate("JSON.parse(localStorage.getItem('vektor-session')).token"), p_state={'settings': {'name': 'Маша Иванова'}, 'answers': 1}, p_events=[])
+            rep('имя из состояния на сервер не пишется', psql("select coalesce(state->'settings'->>'name', 'нет') from vk_students where login='ученик1'") == 'нет')
+            psql("update vk_settings set value = '{\"enabled\": true, \"per_student_day\": 30, \"total_day\": 100}' where key = 'ai'")
             st, j = rpc(base, 'vektor_login', p_login='ученик2', p_password='компас1234')
             r = urllib.request.Request(base + '/functions/v1/tutor', data=json.dumps({'token': 'x' * 64, 'messages': [{'role': 'user', 'content': 'hi'}]}).encode(), headers={'Content-Type': 'application/json'})
             try: urllib.request.urlopen(r); code = 200
@@ -162,6 +173,14 @@ async def main():
             await pg.click('#logout-btn'); await pg.wait_for_selector('#login-form', timeout=8000)
             rep('после выхода прогресс стёрт с устройства', await pg.evaluate("localStorage.getItem('vektor-progress-v3')") is None)
             # сессия закрыта и на сервере
+            ph = await b.new_page(viewport={'width': 390, 'height': 844})
+            await ph.goto(base + '/'); await ph.wait_for_selector('#login-form')
+            box = await ph.evaluate("(r => [r.left, r.right])(document.querySelector('.login').getBoundingClientRect())")
+            rep('телефон: карточка входа целиком в экране (П-01)', box[0] >= 0 and box[1] <= 390 and await ph.evaluate('document.documentElement.scrollWidth') <= 390, box)
+            await login(ph, base, 'ученик2', 'компас1234'); await ph.wait_for_selector('#m-logout', state='visible', timeout=8000)
+            rep('телефон: «Выйти» на виду (П-02)', await ph.is_visible('#m-logout'))
+            await ph.click('#m-logout'); await ph.wait_for_selector('#login-form', timeout=8000)
+            rep('телефон: выход за одно нажатие', True)
             rep('после выхода старый токен не работает', rpc(base, 'vektor_state', p_token='x' * 64)[0] == 400)
             await b.close()
 
@@ -177,17 +196,52 @@ async def main():
         rep('учитель видит только 5А (28)', len(logins) == 28 and 'ученик40' not in logins, len(logins))
         # кабинет учителя (teacher.html)
         async with async_playwright() as p:
-            b = await p.chromium.launch(); pg = await b.new_page()
+            b = await p.chromium.launch(); pg = await b.new_page(viewport={'width': 1280, 'height': 720}); errs = []
+            pg.on('pageerror', lambda e: errs.append(str(e)))
             await pg.goto(base + '/teacher.html'); await pg.wait_for_selector('#f')
             await pg.fill('[name=login]', 'uchitel'); await pg.fill('[name=password]', 'неверно'); await pg.click('#f button'); await pg.wait_for_timeout(700)
             rep('кабинет: неверный пароль', 'Неверный' in await pg.inner_text('#m'))
-            await pg.fill('[name=password]', 'учитель-1'); await pg.click('#f button'); await pg.wait_for_selector('table', timeout=8000)
-            rep('кабинет: 28 учеников 5А', await pg.locator('tbody tr').count() == 28)
-            row = await pg.inner_text('tbody tr:first-child')
-            rep('кабинет: у ученик1 видны ответы и тема в работе', 'ученик1' in row and await pg.locator('tbody tr:first-child .c1').count() >= 1, row[:80])
-            rep('кабинет: нет ошибок на странице', True)
-            await pg.select_option('#only', 'active'); await pg.wait_for_timeout(100)
-            rep('кабинет: фильтр «входившие»', 1 <= await pg.locator('tbody tr').count() < 28)
+            await pg.fill('[name=password]', 'учитель-1'); await pg.click('#f button'); await pg.wait_for_selector('#tbody tr', timeout=8000)
+            rep('кабинет: 28 учеников 5А', await pg.locator('#tbody tr').count() == 28)
+            row = await pg.inner_text('#tbody tr:first-child')
+            rep('кабинет: у ученик1 тема в работе', 'ученик1' in row and await pg.locator('#tbody tr:first-child .c1').count() >= 1, row[:80])
+            rep('кабинет: нет ★ и «Ответов», есть «Решено сегодня» (К-11)', '★' not in await pg.inner_text('#thead') and 'Ответов' not in await pg.inner_text('#thead') and 'Решено сегодня' in await pg.inner_text('#thead'))
+            rep('кабинет: строка «Освоили тему» (К-05)', 'Освоили тему' in await pg.inner_text('#thead'))
+            await pg.click('[data-only=never]'); await pg.wait_for_timeout(100)
+            rep('кабинет: фильтр «Не входили» одним нажатием (К-08)', 1 <= await pg.locator('#tbody tr').count() < 28)
+            await pg.click('[data-only=never]'); await pg.click('th[data-sort=seen]'); await pg.wait_for_timeout(100)
+            rep('кабинет: сортировка по входу', 'ученик' in await pg.inner_text('#tbody tr:first-child') and (await pg.inner_text('#tbody tr:first-child')).count('не входил') == 0)
+            # застрявший ученик: 4 ошибки подряд с типичной ошибкой (К-01)
+            for j in range(4):
+                psql(f"insert into vk_events (event_id, student_id, type, data, ts_server) select 'stuck-{j}', id, 'attempt', "
+                     f"jsonb_build_object('topic','concept','mode','practice','question','Какая часть закрашена {j}','answer','5/3','ok',false,'hints',1,'mistake','flipped'), now() - interval '{8-j} minutes' from vk_students where login='ученик5'")
+            await pg.evaluate("document.dispatchEvent(new Event('visibilitychange'))"); await pg.reload(); await pg.wait_for_selector('#tbody tr', state='attached', timeout=8000)
+            help_ = await pg.inner_text('#help')
+            rep('кабинет: «Нужна помощь сейчас» — кто, тема, ошибка, минуты', 'ученик5' in help_ and 'Тема 1' in help_ and 'перепутаны' in help_ and 'мин' in help_, help_[:160])
+            # обновление без перерисовки: строка-элемент та же после повторной загрузки (К-09)
+            await pg.evaluate("window.__row = document.querySelector('#tbody tr')")
+            await pg.click('[data-only=on]'); await pg.click('[data-only=on]'); await pg.wait_for_timeout(100)
+            rep('кабинет: строки не пересоздаются при обновлении', await pg.evaluate("window.__row === document.querySelector('#tbody tr')"))
+            # карточка ученика (К-07) и новый пароль
+            await pg.click('#help .card'); await pg.wait_for_selector('#d-reset', timeout=8000)
+            dr = await pg.inner_text('.drawer')
+            rep('карточка: частые ошибки и последние ответы', 'перепутаны' in dr and 'Какая часть закрашена' in dr, dr[:120])
+            await pg.click('#d-reset'); await pg.click('#d-reset-go'); await pg.wait_for_selector('#d-newpass', timeout=8000)
+            newp = await pg.inner_text('#d-newpass')
+            st_, j_ = rpc(base, 'vektor_login', p_login='ученик5', p_password=newp)
+            rep('карточка: новый пароль работает (К-12)', bool(j_.get('token')), newp)
+            await pg.keyboard.press('Escape')
+            # подписи только в браузере (К-02)
+            await pg.click('#tabs [data-tab=logins]'); await pg.fill('[data-lab="ученик5"]', 'Аня С.'); await pg.press('[data-lab="ученик5"]', 'Tab')
+            await pg.click('#tabs [data-tab=class]'); await pg.wait_for_timeout(100)
+            rep('подпись видна в кабинете', 'Аня С.' in await pg.inner_text('#tbody') and 'Аня С.' in await pg.inner_text('#help'))
+            rep('подпись не уходит на сервер', psql("select count(*) from vk_students where label is not null or state::text like '%Аня%'") == '0')
+            st_, j_ = rpc(base, 'vektor_teacher_student', p_token=await pg.evaluate("JSON.parse(sessionStorage.getItem('vektor-teacher')).token"), p_login='ученик40')
+            rep('учитель не открывает карточку чужого класса', j_.get('error') == 'forbidden' or st_ != 200)
+            await pg.set_viewport_size({'width': 390, 'height': 844}); await pg.wait_for_timeout(200)
+            rep('кабинет на телефоне: карточки, без прокрутки вбок (К-10)', await pg.is_visible('#mlist') and not await pg.is_visible('#wrap') and await pg.evaluate('document.documentElement.scrollWidth') <= 390)
+            await pg.set_viewport_size({'width': 1280, 'height': 720})
+            rep('кабинет: нет ошибок на странице', not errs, errs)
             await pg.click('#logout'); await pg.wait_for_selector('#f')
             rep('кабинет: выход', True)
             await b.close()
@@ -195,10 +249,13 @@ async def main():
         async with async_playwright() as p:
             b = await p.chromium.launch()
             tp = await b.new_page(); await tp.goto(base + '/teacher.html'); await tp.wait_for_selector('#f')
-            await tp.fill('[name=login]', 'uchitel'); await tp.fill('[name=password]', 'учитель-1'); await tp.click('#f button'); await tp.wait_for_selector('table', timeout=8000)
-            rep('кабинет: панель тестов', await tp.locator('[data-test="5А|pre|1"]').count() == 1)
+            await tp.fill('[name=login]', 'uchitel'); await tp.fill('[name=password]', 'учитель-1'); await tp.click('#f button'); await tp.wait_for_selector('#tbody tr', state='attached', timeout=8000)
+            await tp.click('#tabs [data-tab=tests]')
+            rep('кабинет: тест не открывается одним нажатием (К-03)', await tp.locator('[data-test="5А|pre|1"]').count() == 0 and await tp.locator('[data-arm="open|5А|pre"]').count() == 1)
+            await tp.click('[data-arm="open|5А|pre"]')
+            rep('кабинет: подтверждение открытия', 'Ученики сразу увидят тест' in await tp.inner_text('#tests'))
             await tp.click('[data-test="5А|pre|1"]'); await tp.wait_for_timeout(1200)
-            rep('кабинет: тест открыт', 'идёт' in await tp.inner_text('.tests'))
+            rep('кабинет: тест идёт, счётчик «сдали / пишут / не начали»', 'Идёт' in await tp.inner_text('#tests') and 'не начали' in await tp.inner_text('#tests'))
             form = psql("select form from vk_tests where phase='pre'")
             sp = await b.new_page(); await login(sp, base, 'ученик2', 'компас1234'); await sp.wait_for_selector('.test', timeout=8000)
             rep('ученик видит тест без подсказок и меню', await sp.locator('.test-list li').count() == 18 and not await sp.locator('#hint-btn').count())
@@ -209,14 +266,23 @@ async def main():
                 if int(n) > 15: continue  # три последних оставим пустыми
                 a_ = ans[n]
                 if a_ in '<=>': await li.locator(f'[data-sign="{a_}"]').click()
-                else: await li.locator('input').fill(a_ if int(n) != 2 else '4/6'); await li.locator('input').dispatch_event('change')
+                else:
+                    v = a_ if int(n) != 2 else '4/6'; m_ = re.match(r'^(?:(\d+) )?(\d+)/(\d+)$', v)
+                    w, nn, dd = (m_.group(1) or '', m_.group(2), m_.group(3)) if m_ else (v, '', '')
+                    if w: await li.locator('[data-part=w]').fill(w)
+                    if nn: await li.locator('[data-part=n]').fill(nn); await li.locator('[data-part=d]').fill(dd)
+                    await li.locator('[data-part=d]' if nn else '[data-part=w]').dispatch_event('change')
             await sp.wait_for_timeout(1500)
+            rep('тест: дроби в условии «этажом», ответ клеточками (П-06)', await sp.locator('.test-list .frac').count() > 10 and await sp.locator('.test-box').count() == 15)
+            st_, tt = rpc(base, 'vektor_teacher_tests', p_token=await tp.evaluate("JSON.parse(sessionStorage.getItem('vektor-teacher')).token"))
+            c5 = [c for c in tt['classes'] if c['name'] == '5А'][0]
+            rep('кабинет: ученик в списке «пишут»', 'ученик2' in c5['tests']['pre']['writing'] and c5['total'] == 28)
             await sp.click('#test-finish'); rep('предупреждение о пустых ответах', 'Не отвечено 3' in await sp.inner_text('#test-finish'))
             await sp.click('#test-finish'); await sp.wait_for_selector('text=Тест сдан', timeout=8000)
             rep('сервер посчитал балл (14 из 18: несокращённая дробь не засчитана)', psql("select score || '/' || total from vk_test_done where phase='pre'") == '14/18',
                 psql("select score || '/' || total from vk_test_done"))
-            await tp.reload(); await tp.wait_for_selector('table', timeout=8000)
-            rep('кабинет: балл ученика виден', '14/18' in await tp.inner_text('table'))
+            await tp.reload(); await tp.wait_for_selector('#tbody tr', state='attached', timeout=8000)
+            rep('кабинет: балл ученика виден', '14/18' in await tp.inner_text('#wrap'))
             # контрольная группа: только тест
             psql("select vk_class_group('5Б', 'control')")
             cp = await b.new_page(); await login(cp, base, 'ученик40', 'компас1111'); await cp.wait_for_timeout(1500)
@@ -225,6 +291,11 @@ async def main():
             async with tp.expect_download() as dl: await tp.click('#csv')
             path = await (await dl.value).path(); txt = open(path, encoding='utf-8-sig').read()
             rep('кабинет: CSV скачивается с кириллицей', txt.startswith('"Логин"') and 'ученик2' in txt)
+            # новые бумажки для класса (К-12)
+            await tp.click('#tabs [data-tab=logins]'); await tp.click('[data-arm=slips]'); await tp.click('#slips-go'); await tp.wait_for_selector('#print', timeout=8000)
+            rep('бумажки для класса: 28 штук с новыми паролями', await tp.locator('.slip').count() == 28)
+            slip = await tp.inner_text('.slip >> nth=0'); pw = re.search(r'Пароль:\s*(\S+)', slip).group(1)
+            rep('пароль с бумажки работает', bool(rpc(base, 'vektor_login', p_login='ученик1', p_password=pw)[1].get('token')), slip)
             await b.close()
         rep('админ: обезличенная выгрузка без логинов', psql("select count(*) from vk_export_events where pid like 'p%'") != '0'
             and psql("select count(*) from vk_export_events where data::text like '%ученик%'") == '0')

@@ -163,7 +163,13 @@ begin
   return jsonb_build_object(
     'classes', coalesce((select jsonb_agg(jsonb_build_object('name', c.name, 'group', c.grp,
         'tests', coalesce((select jsonb_object_agg(t.phase, jsonb_build_object('form', t.form,
-          'open', t.opened_at is not null and t.closes_at > now(), 'opened_at', t.opened_at, 'closes_at', t.closes_at)) from vk_tests t where t.class_id = c.id), '{}'))
+          'open', t.opened_at is not null and t.closes_at > now(), 'opened_at', t.opened_at, 'closes_at', t.closes_at,
+          'done', (select count(*) from vk_test_done d join vk_students s on s.id = d.student_id where s.class_id = c.id and d.phase = t.phase),
+          'writing', (select coalesce(jsonb_agg(s.login order by s.id), '[]') from vk_students s where s.class_id = c.id
+            and exists (select 1 from vk_test_answers a where a.student_id = s.id and a.phase = t.phase)
+            and not exists (select 1 from vk_test_done d where d.student_id = s.id and d.phase = t.phase))))
+          from vk_tests t where t.class_id = c.id), '{}'),
+        'total', (select count(*) from vk_students s where s.class_id = c.id))
         order by c.name) from vk_classes c where tr.is_admin or c.id = any(tr.class_ids)), '[]'),
     'scores', coalesce((select jsonb_object_agg(s.login, (select jsonb_object_agg(d.phase, d.score || '/' || d.total) from vk_test_done d where d.student_id = s.id))
         from vk_students s where (tr.is_admin or s.class_id = any(tr.class_ids)) and exists (select 1 from vk_test_done d where d.student_id = s.id)), '{}'));

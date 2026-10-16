@@ -153,7 +153,13 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
       let msg = ''; try { msg = (await res.clone().json()).error?.message || ''; } catch {}
       if (/reason|think/i.test(msg)) res = await send(false);
     }
-    if (!res.ok) { let t = ''; try { t = (await res.json()).error?.message || ''; } catch {} throw new TutorError(own && t && res.status !== 402 ? t : errorFor(res.status, t)); }
+    if (!res.ok) {
+      let t = ''; try { t = (await res.json()).error?.message || ''; } catch {}
+      const err = new TutorError(own && t && res.status !== 402 ? t : errorFor(res.status, t));
+      // П-03: на сервере «Вектора» ИИ выключен или нет ключа — тихо работаем по конспекту, без сообщений об ошибке
+      if (own && (res.status === 503 || res.status === 401 || res.status === 402)) err.quiet = true;
+      throw err;
+    }
     if (!res.body) throw new TutorError('Браузер не поддерживает потоковые ответы.');
 
     const reader = res.body.getReader(), dec = new TextDecoder();
@@ -288,7 +294,7 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
     }
     if (/ошиб|почему не|неправильн/.test(s)) return { html: `<ul>${t.mistakes.map(m => `<li><b>${m.title}.</b> ${m.say}</li>`).join('')}</ul>` };
     if (/числител|знаменател|что такое|зачем|почему/.test(s)) return { html: `<p>${e.model}</p>${figure(e.figure)}` };
-    return { html: `<p>Сейчас я работаю без ИИ и отвечаю только по конспекту. Спроси про <b>правило</b>, попроси <b>пример</b>, <b>картинку</b> или <b>подсказку</b>.</p><p class="small muted">Чтобы задавать любые вопросы, подключи ИИ в настройках.</p>` };
+    return { html: `<p>Сейчас я работаю без ИИ и отвечаю только по конспекту. Спроси про <b>правило</b>, попроси <b>пример</b>, <b>картинку</b> или <b>подсказку</b>.</p>${window.VEKTOR_SYNC ? '' : '<p class="small muted">Чтобы задавать любые вопросы, подключи ИИ в настройках.</p>'}` };
   }
 
   window.VEKTOR_TUTOR = { MODELS, DEFAULT_CFG, loadCfg, saveCfg, ready, systemPrompt, stream, testConnection, render, lessonBeats, localAnswer, plain, TutorError };

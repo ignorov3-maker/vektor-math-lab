@@ -107,6 +107,7 @@ declare uid int := vk_auth(p_token, 'student'); r int; e jsonb; acc text[] := '{
 begin
   if p_state is not null then
     if length(p_state::text) > 400000 then return jsonb_build_object('error', 'too_large', 'message', 'Прогресс слишком большой'); end if;
+    p_state := p_state #- '{settings,name}'; -- имя, которое ребёнок мог вписать, на сервер не попадает
     update vk_students set state = p_state, state_rev = state_rev + 1, last_seen = now() where id = uid returning state_rev into r;
   end if;
   for e in select * from jsonb_array_elements(coalesce(p_events, '[]')) limit 200 loop
@@ -120,6 +121,32 @@ begin
 end $$;
 
 -- ---------- учитель ----------
+
+-- Начало сегодняшнего дня по школьному времени (Москва)
+create or replace function vk_today_start() returns timestamptz language sql stable as
+  $$ select (date_trunc('day', now() at time zone 'Europe/Moscow')) at time zone 'Europe/Moscow' $$;
+
+-- Над чем ученик работает сейчас (последние 3 часа): тема, с какого времени, ошибки подряд, подсказки, частые ошибки
+create or replace function vk_cur(p_sid int) returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare last vk_events; tp text; since timestamptz; w int; h int; mis jsonb;
+begin
+  select * into last from vk_events where student_id = p_sid and type = 'attempt' and ts_server > now() - interval '3 hours'
+    order by ts_server desc limit 1;
+  if last.event_id is null then return null; end if;
+  tp := last.data->>'topic';
+  select coalesce(max(ts_server), now() - interval '3 hours') into since from vk_events
+    where student_id = p_sid and type = 'attempt' and ts_server > now() - interval '3 hours' and data->>'topic' is distinct from tp;
+  select count(*) filter (where not coalesce((data->>'ok')::boolean, false)) into w from
+    (select data from vk_events where student_id = p_sid and type = 'attempt' and ts_server > since and data->>'topic' = tp order by ts_server desc limit 5) z;
+  select coalesce(sum(mh), 0) into h from (select max(coalesce((data->>'hints')::int, 0)) mh from vk_events
+    where student_id = p_sid and type = 'attempt' and ts_server > since and data->>'topic' = tp group by data->>'question') z;
+  select coalesce(jsonb_agg(jsonb_build_object('id', k, 'n', n) order by n desc), '[]') into mis from
+    (select data->>'mistake' k, count(*) n from vk_events where student_id = p_sid and type = 'attempt' and ts_server > since
+      and data->>'topic' = tp and data->>'mistake' is not null group by 1 order by 2 desc limit 2) z;
+  return jsonb_build_object('topic', tp, 'mode', last.data->>'mode',
+    'since', extract(epoch from (select min(ts_server) from vk_events where student_id = p_sid and type = 'attempt' and ts_server > since and data->>'topic' = tp))::bigint,
+    'at', extract(epoch from last.ts_server)::bigint, 'wrong5', w, 'hints', h, 'mistakes', mis);
+end $$;
 
 create or replace function vektor_teacher_login(p_login text, p_password text) returns jsonb
 language plpgsql security definer set search_path = public, extensions as $$
@@ -140,21 +167,21 @@ end $$;
 -- Сводка по ученикам своих классов (Ф-21, Ф-24)
 create or replace function vektor_teacher_class(p_token text) returns jsonb
 language plpgsql security definer set search_path = public, extensions as $$
-declare uid int := vk_auth(p_token, 'teacher'); t vk_teachers;
+declare uid int := vk_auth(p_token, 'teacher'); t vk_teachers; d0 timestamptz := vk_today_start();
 begin
   select * into t from vk_teachers where id = uid;
-  return jsonb_build_object('students', coalesce((select jsonb_agg(jsonb_build_object(
-      'login', s.login, 'label', s.label, 'class', c.name, 'last_seen', extract(epoch from s.last_seen)::bigint,
-      'progress', coalesce(s.state->'progress', '{}'),
+  return jsonb_build_object('server_time', extract(epoch from now())::bigint, 'students', coalesce((select jsonb_agg(jsonb_build_object(
+      'login', s.login, 'label', s.label, 'class', c.name, 'group', c.grp, 'last_seen', extract(epoch from s.last_seen)::bigint,
       'mastered', (select count(*) from jsonb_each(coalesce(s.state->'meta', '{}')) m where (m.value->>'mastered')::boolean),
-      'failed_checks', (select coalesce(sum((m.value->>'failedChecks')::int), 0) from jsonb_each(coalesce(s.state->'meta', '{}')) m),
       'answers', coalesce((s.state->>'answers')::int, 0),
-      'stars', coalesce((s.state->'game'->>'stars')::int, 0),
       'topics', (select coalesce(jsonb_object_agg(m.key, jsonb_build_object('p', coalesce((m.value->>'practice')::int, 0),
           'm', coalesce((m.value->>'mastered')::boolean, false), 'f', coalesce((m.value->>'failedChecks')::int, 0))), '{}')
         from jsonb_each(coalesce(s.state->'meta', '{}')) m),
-      'flags', (select coalesce(jsonb_agg(e.data->>'text' order by e.ts_server desc), '[]') from vk_events e
-        where e.student_id = s.id and e.type = 'ai_flag')) order by s.id)
+      'today', (select count(*) from vk_events e where e.student_id = s.id and e.type = 'attempt' and e.ts_server >= d0 and (e.data->>'ok')::boolean),
+      'mastered_today', (select count(distinct e.data->>'topic') from vk_events e where e.student_id = s.id and e.type = 'mastery' and e.ts_server >= d0),
+      'cur', vk_cur(s.id),
+      'flags', (select coalesce(jsonb_agg(jsonb_build_object('t', x.data->>'text', 'at', extract(epoch from x.ts_server)::bigint) order by x.ts_server desc), '[]')
+        from (select * from vk_events e where e.student_id = s.id and e.type = 'ai_flag' order by e.ts_server desc limit 5) x)) order by s.id)
     from vk_students s left join vk_classes c on c.id = s.class_id
     where t.is_admin or s.class_id = any(t.class_ids)), '[]'));
 end $$;
