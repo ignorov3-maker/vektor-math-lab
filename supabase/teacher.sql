@@ -45,15 +45,15 @@ end $$;
 -- Новые бумажки для всего класса: всем ученикам класса — новые пароли (старые бумажки перестают работать)
 create or replace function vektor_teacher_slips(p_token text, p_class text) returns jsonb
 language plpgsql security definer set search_path = public, extensions as $$
-declare uid int := vk_auth(p_token, 'teacher'); tr vk_teachers; cid int; out jsonb := '[]'; r record;
+declare uid int := vk_auth(p_token, 'teacher'); tr vk_teachers; cid int; res jsonb := '[]'; r record;
 begin
   select * into tr from vk_teachers where id = uid;
   select id into cid from vk_classes where name = p_class;
   if cid is null or not (tr.is_admin or cid = any(tr.class_ids)) then return jsonb_build_object('error', 'forbidden', 'message', 'Нет доступа к классу'); end if;
   for r in select login from vk_students where class_id = cid order by id loop
-    out := out || jsonb_build_object('login', r.login, 'password', vk_reset(r.login));
+    res := res || jsonb_build_object('login', r.login, 'password', vk_reset(r.login));
   end loop;
-  return jsonb_build_object('class', p_class, 'slips', out);
+  return jsonb_build_object('class', p_class, 'slips', res);
 end $$;
 
 revoke execute on function vk_teacher_student_id(int, text), vk_cur(int), vk_today_start() from public, anon, authenticated;
