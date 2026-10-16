@@ -1,0 +1,5 @@
+tests/
+server/
+api/
+*.md
+.github/

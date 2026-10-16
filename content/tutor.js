@@ -22,9 +22,15 @@
 
   /* ---------- Настройки подключения (хранятся только в этом браузере) ---------- */
   const CFG_KEY = 'vektor-ai';
-  function loadCfg() { try { return { ...DEFAULT_CFG, ...JSON.parse(localStorage.getItem(CFG_KEY) || '{}') }; } catch { return { ...DEFAULT_CFG }; } }
+  // Ученик вошёл через сервер «Вектора» — наставник идёт через серверную функцию, ключ там (этап 3)
+  const serverAI = () => !!(window.VEKTOR_SYNC && window.VEKTOR_CONFIG && window.VEKTOR_CONFIG.supabaseUrl);
+  function loadCfg() {
+    let c; try { c = { ...DEFAULT_CFG, ...JSON.parse(localStorage.getItem(CFG_KEY) || '{}') }; } catch { c = { ...DEFAULT_CFG }; }
+    if (serverAI()) c = { ...c, mode: 'vektor' };
+    return c;
+  }
   function saveCfg(c) { try { localStorage.setItem(CFG_KEY, JSON.stringify(c)); } catch {} }
-  const ready = c => (c.mode === 'key' && /^sk-or-/.test(c.key.trim())) || (c.mode === 'proxy' && /^https:\/\//.test(c.proxy.trim()));
+  const ready = c => (c.mode === 'vektor' && serverAI()) || (c.mode === 'key' && /^sk-or-/.test(c.key.trim())) || (c.mode === 'proxy' && /^https:\/\//.test(c.proxy.trim()));
 
   /* ---------- HTML → обычный текст (для промпта) ---------- */
   function plain(html) {
@@ -57,7 +63,7 @@
   }
 
   function systemPrompt({ topic, mode, task, attempts = [], mistake, pace = 'normal', style = 'steps', name }) {
-    const common = `Ты — добрый и терпеливый наставник по математике в учебном приложении «Вектор». Твой ученик — школьник 5–6 класса (10–12 лет)${name ? `, его зовут ${name}` : ''}.
+    const common = `Ты — добрый и терпеливый наставник по математике в учебном приложении «Вектор». Твой ученик — школьник 5–6 класса (10–12 лет).
 
 Как ты пишешь:
 - По-русски, просто и дружелюбно, на «ты». 2–4 коротких предложения в одном сообщении (не больше 70 слов), одна мысль за раз. Всегда заканчивай мысль — не обрывай слова и фразы.
@@ -92,7 +98,7 @@ ${methodText(topic)}`;
 2) Покажи наглядную модель с картинкой.
 3) Сформулируй правило своими словами.
 4) Разбери пример по шагам вместе с учеником: задай ему вопрос на каждом шаге.
-5) Дай одну короткую задачу на понимание (свою, не из методички) и дождись ответа.
+5) Задай один вопрос на понимание правила (почему так, а не как посчитать). Не придумывай задачи с числовым ответом и не оценивай ответы «верно/неверно» — задачи и их проверка будут в тренировке, там ответ проверяет приложение.
 6) Предупреди о типичной ошибке.
 7) Похвали и напиши отдельной строкой тег [[готово]] — это кнопка перехода к тренировке.
 Каждое сообщение заканчивай вопросом или просьбой нажать «Дальше». Если ученик ошибся или пишет «не понял» — объясни иначе, проще и с картинкой, не переходи к следующему шагу. Если отвечает верно и быстро — можно объединять шаги. Проверяй ответы ученика внимательно: сначала посчитай сам.`;
@@ -121,10 +127,15 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
   }
 
   async function stream(cfg, messages, onText, { maxTokens = 600, signal, onFinish } = {}) {
-    const proxy = cfg.mode === 'proxy';
-    const url = proxy ? cfg.proxy.trim() : OPENROUTER_URL;
+    const own = cfg.mode === 'vektor', proxy = cfg.mode === 'proxy';
+    const SBC = window.VEKTOR_CONFIG || {};
+    const url = own ? SBC.supabaseUrl.replace(/\/+$/, '') + '/functions/v1/tutor' : proxy ? cfg.proxy.trim() : OPENROUTER_URL;
     const headers = { 'Content-Type': 'application/json' };
-    if (!proxy) {
+    let token = '';
+    if (own) {
+      headers.apikey = SBC.supabaseKey; headers.Authorization = 'Bearer ' + SBC.supabaseKey;
+      try { token = (JSON.parse(localStorage.getItem('vektor-session')) || {}).token || ''; } catch {}
+    } else if (!proxy) {
       headers.Authorization = `Bearer ${cfg.key.trim()}`;
       headers['HTTP-Referer'] = location.origin && location.origin !== 'null' ? location.origin : 'https://github.com/ignorov3-maker/vektor-math-lab';
       headers['X-OpenRouter-Title'] = 'Vektor';
@@ -132,7 +143,7 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
     // Рассуждения модели выключаем: наставнику нужен быстрый короткий ответ.
     // Если модель не умеет выключать рассуждения (400), повторяем запрос без этого параметра.
     const send = async withReasoningOff => {
-      const body = { model: cfg.model || DEFAULT_CFG.model, messages, stream: true, max_tokens: withReasoningOff ? maxTokens : maxTokens + 600, temperature: 0.4 };
+      const body = { model: cfg.model || DEFAULT_CFG.model, messages, stream: true, ...(token ? { token } : {}), max_tokens: withReasoningOff ? maxTokens : maxTokens + 600, temperature: 0.4 };
       if (withReasoningOff) body.reasoning = { enabled: false }; else body.reasoning = { exclude: true };
       try { return await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal }); }
       catch (e) { if (e.name === 'AbortError') throw e; throw new TutorError('Нет связи с сервером ИИ. Мешать может слабый интернет, VPN или блокировщик рекламы.'); }
@@ -142,7 +153,13 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
       let msg = ''; try { msg = (await res.clone().json()).error?.message || ''; } catch {}
       if (/reason|think/i.test(msg)) res = await send(false);
     }
-    if (!res.ok) { let t = ''; try { t = (await res.json()).error?.message || ''; } catch {} throw new TutorError(errorFor(res.status, t)); }
+    if (!res.ok) {
+      let t = ''; try { t = (await res.json()).error?.message || ''; } catch {}
+      const err = new TutorError(own && t && res.status !== 402 ? t : errorFor(res.status, t));
+      // П-03: на сервере «Вектора» ИИ выключен или нет ключа — тихо работаем по конспекту, без сообщений об ошибке
+      if (own && (res.status === 503 || res.status === 401 || res.status === 402)) err.quiet = true;
+      throw err;
+    }
     if (!res.body) throw new TutorError('Браузер не поддерживает потоковые ответы.');
 
     const reader = res.body.getReader(), dec = new TextDecoder();
@@ -277,7 +294,7 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
     }
     if (/ошиб|почему не|неправильн/.test(s)) return { html: `<ul>${t.mistakes.map(m => `<li><b>${m.title}.</b> ${m.say}</li>`).join('')}</ul>` };
     if (/числител|знаменател|что такое|зачем|почему/.test(s)) return { html: `<p>${e.model}</p>${figure(e.figure)}` };
-    return { html: `<p>Сейчас я работаю без ИИ и отвечаю только по конспекту. Спроси про <b>правило</b>, попроси <b>пример</b>, <b>картинку</b> или <b>подсказку</b>.</p><p class="small muted">Чтобы задавать любые вопросы, подключи ИИ в настройках.</p>` };
+    return { html: `<p>Сейчас я работаю без ИИ и отвечаю только по конспекту. Спроси про <b>правило</b>, попроси <b>пример</b>, <b>картинку</b> или <b>подсказку</b>.</p>${window.VEKTOR_SYNC ? '' : '<p class="small muted">Чтобы задавать любые вопросы, подключи ИИ в настройках.</p>'}` };
   }
 
   window.VEKTOR_TUTOR = { MODELS, DEFAULT_CFG, loadCfg, saveCfg, ready, systemPrompt, stream, testConnection, render, lessonBeats, localAnswer, plain, TutorError };

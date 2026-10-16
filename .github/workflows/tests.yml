@@ -32,5 +32,10 @@ jobs:
           pip install playwright
           python -m playwright install --with-deps chromium
 
+      - name: Сервер (PHP + SQLite)
+        run: |
+          sudo apt-get install -y php-cli php-sqlite3 php-mbstring >/dev/null
+          python tests/server_scenarios.py
+
       - name: Сценарии в браузере
         run: python tests/e2e_scenarios.py | tee e2e.log && grep -q "ИТОГО: \([0-9]*\) из \1$" e2e.log

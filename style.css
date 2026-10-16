@@ -638,7 +638,7 @@ code{font-size:.9em;background:var(--tint);padding:1px 5px;border-radius:4px}
 .msg-body .rule-list{font-size:16px}
 
 /* Норма тренировки выполнена — заметный переход к проверке */
-.ready-strip{position:sticky;bottom:16px;z-index:5;box-shadow:0 10px 30px -12px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:18px 0 0;padding:12px 14px;border-radius:12px;background:var(--green-soft);border:2px solid var(--green);font-weight:700}
+.ready-strip{position:static;box-shadow:0 10px 30px -12px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:18px 0 0;padding:12px 14px;border-radius:12px;background:var(--green-soft);border:2px solid var(--green);font-weight:700}
 .ready-strip span{display:flex;align-items:center;gap:8px}
 .ready-strip svg{fill:var(--gold,#E8B931)}
 
@@ -646,4 +646,71 @@ code{font-size:.9em;background:var(--tint);padding:1px 5px;border-radius:4px}
 .milestone .ms-title{display:flex;align-items:center;gap:8px;margin:0 0 6px;font-size:19px;font-weight:800}
 .milestone .ms-title svg{fill:var(--gold,#E8B931)}
 .milestone p:last-child{margin:0}
-@media (max-width:760px){.ready-strip{bottom:calc(76px + env(safe-area-inset-bottom,0px))}}
+
+/* Вход по логину с бумажки (Ф-03) и статус сохранения */
+.login{max-width:420px;margin:40px auto;padding:28px}
+.login h1{margin:0 0 6px;font-size:28px}
+.login form{display:grid;gap:14px;margin-top:18px}
+.login label{display:grid;gap:6px;font-weight:700}
+.login input[name]{font:inherit;font-size:22px;padding:12px 14px;border-radius:12px;border:2px solid var(--line,#ccc);background:var(--sheet,#fff);color:inherit}
+.login input[name]:focus{outline:3px solid var(--green,#1E7358);outline-offset:1px}
+.login .show-pass{display:flex;align-items:center;gap:8px;font-weight:500}
+.login .feedback:empty{display:none}
+body.logged-out .sidebar,body.logged-out .skin-switch,body.logged-out footer,body.logged-out header .crumbs,body.logged-out header .badge{visibility:hidden}
+.sync-status{font-size:14px;color:var(--muted,#666);margin-left:auto;margin-right:10px}
+.sync-status[data-state=offline]{color:#B3261E;font-weight:700}
+@media (max-width:760px){.sync-status{display:none}}
+.login .role-switch{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid var(--line,#e5e5e5);color:var(--muted,#666)}
+.mood{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:14px 0 4px;color:var(--muted,#666)}
+.mood span{margin-right:6px;font-weight:600}
+.mood button{font-size:28px;line-height:1;background:none;border:2px solid transparent;border-radius:12px;padding:4px 6px;cursor:pointer}
+.mood button:hover,.mood button:focus-visible{border-color:var(--green,#1E7358)}
+
+/* Тест до и после (Ф-27–Ф-29) */
+body.test-mode .sidebar,body.test-mode .skin-switch,body.test-mode footer{display:none}
+body.test-mode main{margin-left:0}
+.test{max-width:760px;margin:24px auto;padding:24px}
+.test-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:6;background:var(--sheet,#fff);margin:-24px -24px 12px;padding:14px 24px;border-bottom:1px solid var(--line,#e5e5e5);border-radius:inherit}
+.test-head .test-count{margin-left:auto;color:var(--muted,#666)}
+.test-timer.low{color:#B3261E}
+.test-box{margin-top:4px}.test-box .fi-whole input{width:64px;height:56px}.test-box .fi-frac input{width:72px;height:48px;font-size:24px}.test-box .fi-frac i{width:72px}
+.test-box .fi-frac{grid-template-columns:auto;justify-items:center;row-gap:6px}.test-box .fi-frac i{grid-column:auto}
+.test-box .fi-whole{align-self:center}
+body.test-mode main>header{position:static}
+.test-list li p .frac{font-size:1.05em;margin:0 .2em}
+.test-left{font-weight:700;min-height:1em}
+.test-head h1{margin:0}
+.test-timer{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+.test-list{padding-left:24px;display:grid;gap:18px}
+.test-list li p{margin:0 0 8px;font-size:18px}
+.test-in{font:inherit;font-size:22px;width:180px;padding:8px 12px;border:2px solid var(--line,#ccc);border-radius:10px}
+.test-signs{display:flex;gap:8px}.test-signs .btn{font-size:22px;min-width:56px}
+.test-signs .btn[aria-pressed=true]{background:var(--green,#1E7358);color:#fff;border-color:var(--green,#1E7358)}
+.test-saved{display:inline-block;margin-left:10px;color:var(--muted,#666);font-size:13px}
+.test-count{font-weight:700}
+.test-banner{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:center;gap:14px;padding:12px;background:#FFF4D6;border-bottom:2px solid #E8B931;font-size:17px}
+
+/* П-01, П-02, П-07: телефон — вход целиком в экране, «Выйти» всегда под рукой, без плавающих панелей */
+.login label,.login input[name]{min-width:0;width:100%}
+.skin-switch{display:none!important}
+.m-logout{display:none!important}
+.skin-pick{display:flex;flex-wrap:wrap;gap:8px}
+.skin-pick .btn[aria-pressed=true]{border-color:var(--green);background:var(--green-soft);color:var(--green)}
+.skin-dot{display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:6px;vertical-align:-2px;border:1px solid rgba(0,0,0,.15)}
+.skin-dot-notebook{background:#FAFAF6}.skin-dot-orbit{background:#1B1F3B}.skin-dot-pop{background:#FFD23F}.skin-dot-pixel{background:#3B7D3A}
+@media (max-width:760px){
+  .login{margin:16px auto;padding:20px 18px}
+  .login h1{font-size:24px}
+  .login input[name]{font-size:20px}
+  body.logged-out .sidebar{display:none}
+  body.test-mode main>header{display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--line)}
+  body.test-mode main>header .crumbs{display:none}
+  #logout-btn{margin-left:auto}
+  .m-logout{display:inline-flex!important;margin-left:auto;white-space:nowrap}
+  .sidebar .hud{margin-left:0}
+  .test-head .tc-word{display:none}
+  .test{margin:0;padding:18px 16px;border-radius:0}
+  .test-head{margin:-18px -16px 12px;padding:10px 16px}
+  .test-head h1{font-size:20px}
+  .test-list{padding-left:20px}
+}
