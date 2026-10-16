@@ -187,7 +187,10 @@ function getChat(i, kind) {
   if (!chats[key]) chats[key] = { msgs: [], beats: null, beat: -1, pending: null, done: false, busy: false, hint: 0, started: false };
   return chats[key];
 }
-const isOnline = () => T.ready(ai);
+// Сервер «Вектора» (вход по логину): ключи ИИ, имя и отчёты для взрослых ученику не показываем (П-04)
+const SERVER = !!window.VEKTOR_SYNC;
+let aiPaused = false; // П-03: ИИ на сервере выключен — до конца занятия идём по конспекту молча
+const isOnline = () => !aiPaused && T.ready(ai);
 
 function msgHtml(m, k) {
   return `<div class="msg ${m.role}${m.error ? ' error' : ''}">${m.role === 'assistant' ? '<span class="msg-who">Наставник</span>' : ''}<div class="msg-body">${m.html}${m.lab ? V.labHtml(`lab-msg-${k}`) : ''}</div></div>`;
@@ -220,7 +223,7 @@ function chatBox(i, kind) {
     <div class="chat-quick">${quickReplies(i, kind).map(([v, l, main]) => `<button type="button" class="btn ${main ? 'btn-primary' : 'btn-ghost'} btn-sm" data-quick="${esc(v)}">${l}</button>`).join('')}</div>
     ${kind === 'lesson' && c.pending ? `<form class="chat-form chat-answer" autocomplete="off">${answerInput(c.pending.task, 'Проверить')}</form>` : `<form class="chat-form" autocomplete="off"><label class="visually-hidden" for="chat-in-${kind}">Сообщение наставнику</label>
       <input id="chat-in-${kind}" placeholder="${ph}" maxlength="400"${c.busy ? ' disabled' : ''}><button class="btn btn-primary" type="submit"${c.busy ? ' disabled' : ''}>Отправить</button></form>`}
-    <p class="chat-mode small muted">${online && !c.forceOffline ? `Наставник: ${esc(modelName())}.` : online ? 'ИИ временно недоступен — урок идёт по конспекту.' : 'Наставник без ИИ — отвечает по конспекту.'} ${online ? '' : '<a href="#settings">Подключить ИИ</a>'}</p>
+    <p class="chat-mode small muted">${online && !c.forceOffline ? `Наставник: ${esc(modelName())}.` : online ? 'ИИ временно недоступен — урок идёт по конспекту.' : 'Наставник без ИИ — отвечает по конспекту.'} ${online || SERVER ? '' : '<a href="#settings">Подключить ИИ</a>'}</p>
   </div>`;
 }
 
@@ -369,9 +372,12 @@ async function aiReply(i, kind, hiddenUser) {
     c.forceOffline = false;
   } catch (e) {
     // ИИ недоступен — урок не стопорится: продолжаем по конспекту
-    c.busy = false; c.forceOffline = true;
+    c.busy = false;
     const idx = c.msgs.indexOf(msg); if (idx >= 0) c.msgs.splice(idx, 1);
-    c.msgs.push({ role: 'assistant', error: true, html: `<p class="small"><b>ИИ сейчас не отвечает</b> — ${esc(e.message || 'нет связи')} Продолжаю по конспекту. <button type="button" class="link" data-retry-ai>Попробовать ИИ снова</button></p>` });
+    if (e.quiet) { aiPaused = true; offlineFallback(i, kind); return; }
+    c.forceOffline = true;
+    if (SERVER) c.msgs.push({ role: 'assistant', error: true, html: `<p class="small">${/вопрос/.test(e.message || '') ? esc(e.message) : 'Наставник сейчас не на связи — продолжаем по конспекту.'} <button type="button" class="link" data-retry-ai>Спросить ещё раз</button></p>` });
+    else c.msgs.push({ role: 'assistant', error: true, html: `<p class="small"><b>ИИ сейчас не отвечает</b> — ${esc(e.message || 'нет связи')} Продолжаю по конспекту. <button type="button" class="link" data-retry-ai>Попробовать ИИ снова</button></p>` });
     offlineFallback(i, kind);
     return;
   } finally {
@@ -549,7 +555,7 @@ function home() {
         <h3>Твой темп: ${A.PACE[p].label.toLowerCase()}</h3>
         <p class="muted small">${A.PACE[p].say}</p>
       </div>
-      <div class="sheet small-note"><h3>Наставник ${isOnline() ? 'на связи' : 'работает по конспекту'}</h3><p class="muted small">${isOnline() ? `Ведёт урок, отвечает на вопросы и рисует дроби (${esc(modelName())}).` : 'Ведёт урок по методичке. Чтобы он отвечал на любые вопросы, подключи ИИ в профиле.'}</p></div>
+      <div class="sheet small-note"><h3>Наставник ${isOnline() ? 'на связи' : 'работает по конспекту'}</h3><p class="muted small">${isOnline() ? `Ведёт урок, отвечает на вопросы и рисует дроби (${esc(modelName())}).` : (SERVER ? 'Ведёт урок по конспекту, показывает примеры и подсказки.' : 'Ведёт урок по методичке. Чтобы он отвечал на любые вопросы, подключи ИИ в профиле.')}</p></div>
     </div>
   </div>`;
 }
@@ -817,6 +823,7 @@ function teacher() {
 
 function settings() {
   const s = state.settings;
+  if (SERVER) return settingsServer();
   return head('Профиль', 'Имя, цель дня, звуки и ИИ-наставник.') + `
   <div class="layout settings">
     <div class="stack">
@@ -829,6 +836,7 @@ function settings() {
         <button class="btn btn-primary" type="submit">Сохранить</button>
         <div class="feedback" id="feedback" role="status" aria-live="polite"></div>
       </form>
+      ${skinPicker()}
       <div class="sheet"><h2>Помощь</h2><p class="muted small">Короткая экскурсия по главному экрану: где кнопка «Продолжить», путь, звёзды и меню.</p>
         <button class="btn btn-ghost" id="tour-again">Показать подсказки снова</button></div>
       <div class="sheet"><h2>Для взрослых</h2><p class="muted small">Отчёт по темам, темпу и частым ошибкам, а также быстрый тест, чтобы подобрать маршрут.</p>
@@ -864,10 +872,39 @@ function settings() {
   </div>`;
 }
 
+// П-07: стиль оформления выбирается только здесь, а не плавающей панелью поверх урока
+const SKINS = [['notebook', 'Тетрадь'], ['orbit', 'Орбита'], ['pop', 'Стикеры'], ['pixel', 'Пиксель']];
+const skinPicker = () => `<div class="sheet"><h2>Оформление</h2><div class="skin-pick" role="group" aria-label="Стиль оформления">${SKINS.map(([k, t]) => `<button type="button" class="btn btn-ghost" data-skin-pick="${k}" aria-pressed="${document.documentElement.dataset.skin === k}"><i class="skin-dot skin-dot-${k}" aria-hidden="true"></i>${t}</button>`).join('')}</div></div>`;
+
+// Профиль ученика, вошедшего по логину (П-04): имя только для просмотра, без настроек ИИ и отчётов для взрослых
+function settingsServer() {
+  const s = state.settings;
+  return head('Профиль', 'Цель дня, звуки и оформление.') + `
+  <div class="layout settings">
+    <div class="stack">
+      <form class="sheet" id="settings-form">
+        <h2>${esc(s.name)}</h2>
+        <p class="muted small">Так тебя видит учитель. Своё имя вписывать не нужно.</p>
+        <label class="field">Цель дня<select name="goal" id="set-goal">${[3, 5, 10].map(n => `<option value="${n}"${game().goal === n ? ' selected' : ''}>${n} задач в день</option>`).join('')}</select></label>
+        <label class="field">Как объяснять<select name="style" id="set-style"><option value="steps"${s.style === 'steps' ? ' selected' : ''}>Коротко и по шагам</option><option value="visual"${s.style === 'visual' ? ' selected' : ''}>Через наглядные примеры</option></select></label>
+        <label class="switch"><input type="checkbox" name="sound" id="set-sound"${s.sound === false ? '' : ' checked'}> Звуки при ответах</label>
+        <button class="btn btn-primary" type="submit">Сохранить</button>
+        <div class="feedback" id="feedback" role="status" aria-live="polite"></div>
+      </form>
+      ${skinPicker()}
+    </div>
+    <div class="stack side">
+      <div class="sheet"><h2>Закончил занятие?</h2><p class="muted small">Выйди, чтобы следующий ученик не попал в твой аккаунт. Прогресс сохранится.</p>
+        <button class="btn btn-primary" type="button" id="profile-logout">Выйти</button></div>
+      <div class="sheet"><h2>Помощь</h2><p class="muted small">Короткая экскурсия по главному экрану.</p><button class="btn btn-ghost" id="tour-again">Показать подсказки снова</button></div>
+    </div>
+  </div>`;
+}
+
 /* ================= Роутинг ================= */
 
 const filterState = { map: 'Все', library: 'Все' };
-const route = () => { const [page, arg, stage] = (location.hash.slice(1) || 'home').split('/'); return { page: pages[page] ? page : 'home', i: Math.min(Math.max(+arg || 0, 0), topics.length - 1), stage }; };
+const route = () => { const [page, arg, stage] = (location.hash.slice(1) || 'home').split('/'); return { page: pages[page] && !(SERVER && page === 'teacher') ? page : 'home', i: Math.min(Math.max(+arg || 0, 0), topics.length - 1), stage }; };
 
 function render() {
   const { page, i, stage } = route();
@@ -1034,11 +1071,14 @@ function bind(page, i, stage) {
   const sform = app.querySelector('#settings-form');
   if (sform) sform.onsubmit = e => {
     e.preventDefault();
-    state.settings = { name: sform.name.value.trim() || 'Ученик', style: sform.style.value, sound: sform.sound.checked }; game().goal = +sform.goal.value || 5; save();
+    const nm = sform.querySelector('#set-name');
+    state.settings = { ...state.settings, name: nm ? nm.value.trim() || 'Ученик' : state.settings.name, style: sform.style.value, sound: sform.sound.checked }; game().goal = +sform.goal.value || 5; save();
     document.querySelector('#student-name').textContent = state.settings.name;
     document.querySelector('#avatar').textContent = state.settings.name[0].toUpperCase();
     app.querySelector('#feedback').textContent = 'Сохранено.';
   };
+  app.querySelectorAll('[data-skin-pick]').forEach(b => b.onclick = () => { setSkin(b.dataset.skinPick); app.querySelectorAll('[data-skin-pick]').forEach(x => x.setAttribute('aria-pressed', x === b)); });
+  const plo = app.querySelector('#profile-logout'); if (plo) plo.onclick = () => window.VEKTOR_ACCOUNT && window.VEKTOR_ACCOUNT.logout();
   const ta = app.querySelector('#tour-again');
   if (ta) ta.onclick = () => { state.toured = false; save(); location.hash = 'home'; };
   const aform = app.querySelector('#ai-form');

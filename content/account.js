@@ -174,8 +174,14 @@
     head.insertAdjacentHTML('beforeend', `<span class="sync-status" id="sync-status" data-state="ok" aria-live="polite">Сохранено</span>
       <button class="btn btn-ghost btn-sm" id="logout-btn" type="button">Выйти · ${esc(sess.name)}</button>`);
     document.getElementById('logout-btn').onclick = () => logout(sync);
-    const reset = document.getElementById('reset'); if (reset) reset.closest('span').hidden = true; // стереть прогресс может только учитель
+    // П-02: на телефоне шапки нет — «Выйти» в верхней полоске рядом со звёздами
+    const side = document.querySelector('.sidebar .hud');
+    if (side) { side.insertAdjacentHTML('afterend', `<button class="btn btn-ghost btn-sm m-logout" id="m-logout" type="button">Выйти</button>`); document.getElementById('m-logout').onclick = () => logout(sync); }
+    const reset = document.getElementById('reset'); if (reset) reset.hidden = true; // стереть прогресс может только учитель
     const badge = document.querySelector('header .badge'); if (badge) badge.hidden = true;
+    const adult = document.querySelector('.adult-links'); if (adult) adult.hidden = true; // отчёты для взрослых — в кабинете учителя (П-04)
+    const note = document.querySelector('footer span:last-child'); if (note) note.firstChild.textContent = 'Прогресс сохраняется на сервере школы. ';
+    exitHook = () => logout(sync);
     // Ф-13: через 25 минут занятия — мягкое напоминание о перерыве (СанПиН), один раз
     setTimeout(() => {
       document.body.insertAdjacentHTML('afterbegin', `<div class="test-banner break-banner" role="status">Ты занимаешься уже 25 минут — сделай перерыв: встань, разомнись, посмотри в окно 🙂
@@ -237,9 +243,17 @@
   function controlScreen(sess) {
     bareChrome(sess);
     document.getElementById('app').innerHTML = `<section class="login sheet"><h1>Привет, ${esc(sess.name)}!</h1>
-      <p>Сейчас для тебя только тест. Когда учитель его откроет, кнопка появится здесь.</p><p class="muted" id="ctl-msg">Проверяем каждые 15 секунд…</p></section>`;
+      <p>Сейчас для тебя только тест. Подожди, пока учитель его откроет, — тест появится на этой странице сам.</p><p class="muted" id="ctl-msg">Если тест не начинается, скажи учителю.</p>
+      <button class="btn btn-ghost" type="button" id="ctl-exit">Выйти</button></section>`;
+    document.getElementById('ctl-exit').onclick = () => document.getElementById('logout-btn').click();
     setInterval(async () => { try { const tg = await call('test_get', {}, sess.token); if (tg && tg.test) location.reload(); } catch {} }, 15000);
   }
+
+  // Дроби в условии — «этажом», как в уроках (П-06)
+  const fracify = txt => esc(txt)
+    .replace(/(\d+) (\d+)\/(\d+)/g, '$1<span class="frac"><span>$2</span><span>$3</span></span>')
+    .replace(/(\d+)\/(\d+)/g, '<span class="frac"><span>$1</span><span>$2</span></span>');
+  const splitAns = v => { const m = /^(?:(\d+) )?(\d+)\/(\d+)$/.exec(String(v || '').trim()); if (m) return { w: m[1] || '', n: m[2], d: m[3] }; return { w: /^\d+$/.test(String(v || '').trim()) ? String(v).trim() : '', n: '', d: '' }; };
 
   function testScreen(sess, t) {
     bareChrome(sess);
@@ -247,35 +261,53 @@
     const answers = { ...(t.answers || {}) }, started = Date.now(), endAt = Date.now() + t.seconds_left * 1000;
     let queue = ls.get(OUTQ) || [];
     const app = document.getElementById('app');
+    const box = (n, v) => { const a = splitAns(v); const inp = (part, val, lab) => `<input data-part="${part}" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="4" value="${esc(val)}" aria-label="${lab} — задание ${n}">`;
+      return `<div class="frac-input with-whole test-box" role="group" aria-label="Ответ к заданию ${n}"><label class="fi-whole">${inp('w', a.w, 'Целые')}<span>целые</span></label>
+        <div class="fi-frac">${inp('n', a.n, 'Числитель')}<i aria-hidden="true"></i>${inp('d', a.d, 'Знаменатель')}</div></div>`; };
     app.innerHTML = `<section class="test sheet" aria-labelledby="test-title">
-      <div class="test-head"><h1 id="test-title">${t.phase === 'pre' ? 'Входной тест' : 'Итоговый тест'}</h1><span class="test-timer" id="test-timer"></span></div>
-      <p class="muted">Реши сам, без подсказок. Ответ дробью пиши через косую черту: <b>3/4</b>, смешанное число — через пробел: <b>2 1/3</b>. Ответы сохраняются сами.</p>
-      <ol class="test-list">${t.items.map(i => `<li data-n="${i.n}"><p>${esc(i.prompt)}</p>${i.kind === 'sign'
+      <div class="test-head"><h1 id="test-title">${t.phase === 'pre' ? 'Входной тест' : 'Итоговый тест'}</h1><span class="test-count" id="test-count"></span><span class="test-timer" id="test-timer" aria-label="Осталось времени"></span></div>
+      <p class="muted">Реши сам, без подсказок. Дробь вписывай клеточками: числитель сверху, знаменатель снизу. Если в ответе целое число — впиши его в клетку «целые». Ответы сохраняются сами.</p>
+      <ol class="test-list">${t.items.map(i => `<li data-n="${i.n}"><p>${fracify(i.prompt)}</p>${i.kind === 'sign'
         ? `<div class="test-signs" role="group" aria-label="Знак">${['<', '=', '>'].map(z => `<button type="button" class="btn btn-ghost" data-sign="${esc(z)}" aria-pressed="${answers[i.n] === z}">${esc(z)}</button>`).join('')}</div>`
-        : `<input class="test-in" inputmode="text" autocomplete="off" spellcheck="false" maxlength="20" placeholder="ответ" value="${esc(answers[i.n] || '')}" aria-label="Ответ к заданию ${i.n}">`}
+        : box(i.n, answers[i.n])}
         <span class="test-saved" aria-live="polite"></span></li>`).join('')}</ol>
-      <p class="test-count" id="test-count"></p>
+      <p class="test-left" id="test-left"></p>
       <button class="btn btn-primary btn-big" id="test-finish" type="button">Закончить тест</button>
     </section>`;
-    const count = () => { const k = Object.values(answers).filter(v => String(v).trim()).length; document.getElementById('test-count').textContent = `Отвечено ${k} из ${t.items.length}`; };
-    const flushQ = async () => {
+    const answered = () => Object.values(answers).filter(v => String(v).trim()).length;
+    const count = () => { const k = answered(); document.getElementById('test-count').innerHTML = `<span class="tc-word">Отвечено </span>${k} из ${t.items.length}`; };
+    // отправка по одной и строго по очереди: два одновременных вызова не должны терять ответы
+    let flushing = null;
+    const flushQ = () => (flushing = (flushing || Promise.resolve()).then(sendQ, sendQ));
+    const sendQ = async () => {
       while (queue.length) {
         const q = queue[0];
         try { const r = await call('test_answer', q, sess.token); if (r && r.error === 'closed') { queue = []; break; } }
         catch (e) { if (e.status === 401) break; return false; }
-        queue.shift(); ls.set(OUTQ, queue);
+        queue = queue.filter(x => x !== q); ls.set(OUTQ, queue);
       }
       ls.set(OUTQ, queue); return true;
     };
     const save = (n, v, li) => {
+      if ((answers[n] || '') === v) return;
       answers[n] = v; count();
       queue = queue.filter(q => q.n !== n).concat({ n, answer: v, sec: Math.round((Date.now() - started) / 1000) }); ls.set(OUTQ, queue);
-      flushQ().then(ok => { const m = li.querySelector('.test-saved'); m.textContent = ok ? 'сохранено' : 'сохраним, когда будет связь'; });
+      flushQ().then(ok => { const m = li.querySelector('.test-saved'); m.textContent = ok ? (v ? 'сохранено' : '') : 'сохраним, когда будет связь'; });
     };
-    app.querySelectorAll('.test-in').forEach(inp => {
-      const li = inp.closest('li'), n = +li.dataset.n;
-      inp.onchange = () => save(n, inp.value.trim(), li);
-      inp.onkeydown = e => { if (e.key === 'Enter') { inp.blur(); const nx = li.nextElementSibling && li.nextElementSibling.querySelector('input'); if (nx) nx.focus(); } };
+    // клеточки → строка ответа: «36», «3/4» или «2 1/3»
+    const readBox = li => { const g = k => li.querySelector(`[data-part="${k}"]`).value.replace(/\D/g, ''); const w = g('w'), n = g('n'), d = g('d');
+      if (n && d) return (w ? w + ' ' : '') + n + '/' + d; if (!n && !d) return w; return null; };
+    app.querySelectorAll('.test-box').forEach(bx => {
+      const li = bx.closest('li'), n = +li.dataset.n, inputs = [...bx.querySelectorAll('input')];
+      const commit = () => { const v = readBox(li); const m = li.querySelector('.test-saved');
+        if (v === null) { m.textContent = 'допиши дробь: нужны и числитель, и знаменатель'; return; } save(n, v, li); };
+      inputs.forEach(inp => {
+        inp.oninput = () => { inp.value = inp.value.replace(/\D/g, ''); };
+        inp.onchange = commit;
+        inp.onkeydown = e => { if (e.key !== 'Enter') return; e.preventDefault(); commit();
+          const all = [...app.querySelectorAll('.test-box input')]; const nx = inp.dataset.part === 'n' ? bx.querySelector('[data-part=d]') : inp.dataset.part === 'w' ? bx.querySelector('[data-part=n]') : all[all.indexOf(inp) + 1];
+          if (nx) nx.focus(); };
+      });
     });
     app.querySelectorAll('[data-sign]').forEach(b => b.onclick = () => {
       const li = b.closest('li'); li.querySelectorAll('[data-sign]').forEach(x => x.setAttribute('aria-pressed', x === b));
@@ -284,24 +316,29 @@
     const finish = async () => {
       document.activeElement && document.activeElement.blur();
       const ok = await flushQ();
-      if (!ok) { document.getElementById('test-count').textContent = 'Нет связи — ответы сохранены на этом устройстве. Подключись к интернету и нажми ещё раз.'; return; }
-      try { await call('test_finish', {}, sess.token); } catch { document.getElementById('test-count').textContent = 'Нет связи, нажми ещё раз.'; return; }
+      if (!ok) { document.getElementById('test-left').textContent = 'Нет связи — ответы сохранены на этом устройстве. Подключись к интернету и нажми ещё раз.'; return; }
+      try { await call('test_finish', {}, sess.token); } catch { document.getElementById('test-left').textContent = 'Нет связи, нажми ещё раз.'; return; }
       ls.del(OUTQ); clearInterval(tm);
       app.innerHTML = `<section class="login sheet"><h1>Тест сдан. Спасибо!</h1><p>Можно продолжать занятия.</p><button class="btn btn-primary btn-big" onclick="location.reload()">Продолжить</button></section>`;
     };
     let armed = false;
     document.getElementById('test-finish').onclick = () => {
-      const left = t.items.length - Object.values(answers).filter(v => String(v).trim()).length;
+      app.querySelectorAll('.test-box').forEach(bx => { const li = bx.closest('li'), v = readBox(li); if (v !== null) save(+li.dataset.n, v, li); });
+      const left = t.items.length - answered();
       if (left > 0 && !armed) { armed = true; document.getElementById('test-finish').textContent = `Не отвечено ${left}. Всё равно закончить?`; return; }
       finish();
     };
-    const tm = setInterval(() => {
+    const tick = () => {
       const s = Math.max(0, Math.round((endAt - Date.now()) / 1000));
-      document.getElementById('test-timer').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+      const el = document.getElementById('test-timer'); if (!el) return;
+      el.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; el.classList.toggle('low', s < 300);
       if (s === 0) { clearInterval(tm); finish(); }
-    }, 1000);
+    };
+    const tm = setInterval(tick, 1000); tick();
     count(); flushQ();
+    scrollTo(0, 0);
   }
-  window.VEKTOR_ACCOUNT = { boot };
+  let exitHook = null;
+  window.VEKTOR_ACCOUNT = { boot, logout: () => exitHook && exitHook() };
   boot();
 })();
