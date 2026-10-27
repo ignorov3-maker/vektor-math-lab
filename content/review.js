@@ -136,5 +136,26 @@
     return { step: () => step };
   }
 
-  root.VEKTOR_REVIEW = { ensure, caught, healing, beaten, addDays, open, isRight };
+  /* Задача от учителя (Пульс): контрпример + задача-двойник поверх экрана.
+     pushCard({ id, bug, payload: { conflict, problem } }, onDone(ok)) */
+  function pushCard(push, onDone) {
+    const bug = K.byKey[push.bug], pl = push.payload || {}, p = pl.problem;
+    if (!bug || !p || document.getElementById('push-card')) return false;
+    const c = bug.conflicts[(pl.conflict || 0) % bug.conflicts.length];
+    const V = root.VEKTOR_VISUALS, m = String(c.figure || '').match(/^\[\[(.+)\]\]$/), g = m && V && V.figureFromTag(m[1]);
+    const el = document.createElement('div'); el.id = 'push-card'; el.className = 'push-card card'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Задача от учителя');
+    el.innerHTML = `<p class="pc-kicker">Задача от учителя</p><p>${fr(c.text.replace(/\[\[[^\]]*\]\]/g, ''))}</p>${g ? `<div class="rv-fig">${V.figure(g)}</div>` : ''}
+      <p class="rv-task" data-expr="${esc(p.expr || '')}">${fr(p.text)}</p><div class="rv-ans-host"></div><p class="rv-note" aria-live="polite"></p>`;
+    document.body.appendChild(el);
+    let sent = false;
+    answerer(el.querySelector('.rv-ans-host'), p, (raw, a) => {
+      const ok = isRight(p, raw) && (!a || a.stepsOk);
+      if (!sent) { sent = true; onDone && onDone(ok); }
+      el.querySelector('.rv-note').innerHTML = (ok ? 'Верно!' : `Ответ: ${fr(p.answer)}.`) + ' <button type="button" class="btn btn-primary btn-sm" data-pc="close">Закрыть</button>';
+      el.querySelector('[data-pc="close"]').onclick = () => el.remove();
+    });
+    return true;
+  }
+
+  root.VEKTOR_REVIEW = { ensure, caught, healing, beaten, addDays, open, isRight, pushCard };
 })(typeof window !== 'undefined' ? window : globalThis);

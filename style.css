@@ -767,3 +767,7 @@ body.test-mode main>header{position:static}
 .wu-bad { color: #C44E43; font-weight: 700; }
 .wu-win { display: flex; align-items: center; gap: 10px; color: var(--green, #1E7358); font-weight: 700; }
 .hero-warmup { margin-bottom: 12px; }
+
+/* ---------- Задача от учителя ---------- */
+.push-card { position: fixed; left: 50%; top: 12px; transform: translateX(-50%); width: min(520px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto; z-index: 60; padding: 16px; box-shadow: 0 12px 40px rgba(0,0,0,.18); background: var(--paper, #fff); border-radius: 16px; }
+.pc-kicker { font-weight: 700; color: var(--green, #1E7358); margin: 0 0 6px; }

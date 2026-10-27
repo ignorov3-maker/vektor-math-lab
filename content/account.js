@@ -23,6 +23,7 @@
     test_get: (b, t) => ['vektor_test_get', { p_token: t }],
     test_answer: (b, t) => ['vektor_test_answer', { p_token: t, p_n: b.n, p_answer: b.answer, p_sec: b.sec ?? null }],
     test_finish: (b, t) => ['vektor_test_finish', { p_token: t }],
+    push_get: (b, t) => ['vektor_push_get', { p_token: t }],
   };
   const STATUS = { bad_login: 401, no_session: 401, locked: 429, layout: 400, forbidden: 403, too_large: 413 };
 
@@ -230,7 +231,14 @@
         <button class="btn btn-primary" id="test-go">Начать тест</button></div>`);
       document.getElementById('test-go').onclick = async () => { if (window.VEKTOR_SYNC) await window.VEKTOR_SYNC.flush(); location.reload(); };
     };
-    setInterval(tick, 20000);
+    // Пульс: задача от учителя для группы — тот же опрос раз в 20 секунд
+    const pushTick = async () => {
+      if (document.hidden || document.getElementById('push-card') || !window.VEKTOR_REVIEW) return;
+      let r = null; try { r = await call('push_get', {}, sess.token); } catch { return; }
+      if (!r || !r.push) return;
+      window.VEKTOR_REVIEW.pushCard(r.push, ok => { if (window.VEKTOR_SYNC) { window.VEKTOR_SYNC.event('push_done', { push: r.push.id, ok }); window.VEKTOR_SYNC.flush(); } });
+    };
+    setInterval(() => { tick(); pushTick(); }, 20000); setTimeout(pushTick, 3000);
   }
 
   function bareChrome(sess) {

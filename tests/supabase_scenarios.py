@@ -76,7 +76,7 @@ async def main():
         psql("do $$ begin create role anon nologin; exception when duplicate_object then null; end $$;"
              "do $$ begin create role authenticated nologin; exception when duplicate_object then null; end $$;")
         subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase/schema.sql')], check=True, capture_output=True)
-        for f in ('test.sql', 'admin.sql', 'teacher.sql'):
+        for f in ('test.sql', 'admin.sql', 'teacher.sql', 'pulse.sql'):
             subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase' / f)], check=True, capture_output=True)
         rep('схема накатывается повторно', True)
         rep('vk_seed: 80 профилей с паролями', psql("select count(*) from vk_seed(80, '5А:1-28,5Б:29-56,5В:57-80') where password ~ '^[а-я]+[0-9]{4}$'") == '80')
@@ -296,6 +296,58 @@ async def main():
             rep('бумажки для класса: 28 штук с новыми паролями', await tp.locator('.slip').count() == 28)
             slip = await tp.inner_text('.slip >> nth=0'); pw = re.search(r'Пароль:\s*(\S+)', slip).group(1)
             rep('пароль с бумажки работает', bool(rpc(base, 'vektor_login', p_login='ученик1', p_password=pw)[1].get('token')), slip)
+            await b.close()
+
+        # ---------- Пульс класса (CL-6) ----------
+        psql("update vk_tests set closes_at = now() - interval '1 minute' where closes_at > now()")
+        psql("update vk_students set pass_hash = extensions.crypt('пульс1234', extensions.gen_salt('bf', 8)) where login in ('ученик3','ученик4','ученик5','ученик6','ученик7','ученик8')")
+        for k in range(3, 9):
+            psql(f"insert into vk_events (event_id, student_id, type, data) select 'pulse{k}aaaaaa', id, 'bug_found', '{{\"bug\":\"add-diff:add-denominators\",\"topic\":\"add-diff\",\"level\":2}}' from vk_students where login='ученик{k}'")
+        psql("insert into vk_events (event_id, student_id, type, data) select 'pulse40aaaaaa', id, 'bug_found', '{\"bug\":\"add-diff:add-denominators\"}' from vk_students where login='ученик40'")
+        psql("update vk_students set state = jsonb_set(coalesce(state,'{}'), '{bugs}', '{\"add-diff:add-denominators\":{\"status\":\"healing\"}}') where login='ученик3'")
+        tt = rpc(base, 'vektor_teacher_login', p_login='uchitel', p_password='учитель-1')[1]['token']
+        pl = rpc(base, 'vektor_teacher_pulse', p_token=tt, p_class='5А')[1]
+        top = (pl.get('bugs') or [{}])[0]
+        rep('пульс: 6 учеников со «складывает знаменатели», чужой класс не виден', top.get('bug') == 'add-diff:add-denominators' and top.get('n') == 6 and 'ученик40' not in top.get('logins', []), str(top)[:120])
+        rep('пульс: «у 1 уже лечится»', top.get('healing') == 1)
+        try: psql("set role anon; select vk_teacher_sids(1, null)"); rep('пульс: служебная функция закрыта', False)
+        except RuntimeError: rep('пульс: служебная функция закрыта', True)
+        code, r = rpc(base, 'vektor_teacher_push', p_token=tt, p_logins=['ученик40'], p_bug='add-diff:add-denominators', p_payload={})
+        rep('задача группе: чужим ученикам не отправить', r.get('error') == 'forbidden', str(r))
+        code, r = rpc(base, 'vektor_teacher_pulse', p_token='bad', p_class=None)
+        rep('пульс: без сессии нельзя', code != 200)
+        async with async_playwright() as p:
+            b = await p.chromium.launch()
+            tp = await (await b.new_context(viewport={'width': 1280, 'height': 800})).new_page(); terrs = []; tp.on('pageerror', lambda e: terrs.append(str(e)))
+            await tp.goto(base + '/teacher.html'); await tp.wait_for_selector('#f')
+            await tp.fill('[name=login]', 'uchitel'); await tp.fill('[name=password]', 'учитель-1'); await tp.click('#f button'); await tp.wait_for_selector('.pulse-row', timeout=8000)
+            row = await tp.inner_text('.pulse-row')
+            rep('кабинет: блок «Пульс» над «Нужна помощь»', 'Складывает числители и знаменатели' in row and '6 учеников' in row and 'лечится' in row, row[:140])
+            async with tp.expect_popup() as pop: await tp.click('[data-board="add-diff:add-denominators"]')
+            bp = await pop.value; await bp.wait_for_load_state(); await bp.wait_for_timeout(200)
+            rep('мини-урок: доска открылась, 3 слайда, «Дробик думает»', 'Дробик думает' in await bp.inner_text('body') and await bp.evaluate("JSON.parse(localStorage.getItem('vektor-board')).slides.length") == 3)
+            await bp.click('body'); await bp.wait_for_timeout(100)
+            rep('мини-урок: на слайде-контрпримере картинка', await bp.locator('svg').count() >= 1)
+            await bp.close()
+            sp = await (await b.new_context(viewport={'width': 390, 'height': 844})).new_page(); serrs = []; sp.on('pageerror', lambda e: serrs.append(str(e)))
+            await login(sp, base, 'ученик4', 'пульс1234')
+            await sp.wait_for_selector('#logout-btn', state='attached', timeout=8000)
+            import time; t0 = time.time()
+            await tp.click('[data-push="add-diff:add-denominators"]'); await tp.wait_for_timeout(600)
+            await sp.wait_for_selector('#push-card', timeout=25000); dt = time.time() - t0
+            rep('задача от учителя у ученика быстрее 25 с', dt < 25, f'{dt:.1f} c')
+            rep('карточка: контрпример и задача-двойник', 'Задача от учителя' in await sp.inner_text('#push-card') and await sp.locator('#push-card .xr-in, #push-card input').count() >= 1)
+            ans = await sp.evaluate("() => { const R=VEKTOR_RATIONAL; return R.str(R.evalLine(document.querySelector('#push-card .rv-task').dataset.expr).value); }")
+            await sp.locator('#push-card .xr-in').first.fill(ans); await sp.click('#push-card [data-xr="done"]'); await sp.wait_for_timeout(2500)
+            rep('ученик решил — событие push_done на сервере', psql("select count(*) from vk_events e join vk_students s on s.id=e.student_id where s.login='ученик4' and e.type='push_done' and (e.data->>'ok')::boolean") == '1')
+            await sp.click('[data-pc="close"]'); await sp.wait_for_timeout(3500)
+            rep('решённая задача больше не всплывает', await sp.locator('#push-card').count() == 0)
+            await tp.reload(); await tp.wait_for_selector('.pulse-row', timeout=8000)
+            rep('учитель видит «решили 1 из 6» и ✓ у имени', 'решили 1 из 6' in await tp.inner_text('.pulse-row') and 'ученик4' in await tp.inner_text('.pr-push'))
+            await tp.click('[data-summary]'); await tp.wait_for_timeout(100)
+            sm = await tp.inner_text('.summary')
+            rep('сводка урока: числа и рекомендация', 'ошибок найдено' in sm and 'На следующий урок' in sm and 'складывает' in sm.lower(), sm[:160].replace('\n', ' '))
+            rep('пульс: без ошибок JavaScript', not terrs and not serrs, '; '.join(terrs + serrs)[:200])
             await b.close()
         rep('админ: обезличенная выгрузка без логинов', psql("select count(*) from vk_export_events where pid like 'p%'") != '0'
             and psql("select count(*) from vk_export_events where data::text like '%ученик%'") == '0')
