@@ -26,6 +26,7 @@ jobs:
           node tests/stubs.test.js
           node tests/bugs.test.js
           node tests/review.test.js
+          node tests/warmup.test.js
 
       - uses: actions/setup-python@v5
         with:

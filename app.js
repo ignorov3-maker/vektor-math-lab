@@ -34,7 +34,7 @@ const ROUTE = window.VEKTOR_FRACTIONS.topics.map((t, i) => i); // раздел �
 const DIAG = ['concept', 'reduce', 'compare', 'add-same', 'mult', 'part-of'].map(id => byId[id]);
 const DONE = 80;
 
-const pages = { home: 'Мой путь', map: 'Все темы', diagnostic: 'Диагностика', library: 'Все темы', awards: 'Награды', teacher: 'Отчёт для учителя', settings: 'Профиль', lesson: 'Занятие' };
+const pages = { home: 'Мой путь', map: 'Все темы', diagnostic: 'Диагностика', library: 'Все темы', awards: 'Награды', teacher: 'Отчёт для учителя', settings: 'Профиль', lesson: 'Занятие', warmup: 'Разминка' };
 const STAGES = [['learn', 'Узнать'], ['practice', 'Потренироваться'], ['check', 'Проверить себя']];
 
 /* ================= Состояние ================= */
@@ -81,12 +81,29 @@ function ownProblem(task, topic) {
   else { const r = window.VEKTOR_RATIONAL.evalLine(String(task.answer)); if (r.ok) p.value = r.value; }
   return p;
 }
-function openReview(host, key, s, i) {
+function warmupPlan() {
+  const W = window.VEKTOR_WARMUP, RV = window.VEKTOR_REVIEW; if (!W || !RV) return [];
+  const done = topics.map((t, k) => k).filter(k => !topics[k].legacy && meta(k).mastered);
+  return W.plan(RV.ensure(state), today(), { reviewTopic: done.length ? done[Math.floor(Math.random() * done.length)] : null });
+}
+function warmupPage() { return '<div class="page-head"><h1>Разминка</h1></div><div id="wu"></div>'; }
+function runWarmup() {
+  const el = app.querySelector('#wu'); if (!el) return;
+  const items = warmupPlan();
+  if (!items.length) { location.hash = 'home'; return; }
+  window.VEKTOR_WARMUP.run(el, { items, bugs: window.VEKTOR_REVIEW.ensure(state), today: today(), lv: 2,
+    reviewTask: k => topics[k].generate(2), check,
+    onEvent: (type, data) => { logEvent(type, data); save(); },
+    onStars: n => { game().stars += n; save(); hud(); },
+    onReview: (key, p, back) => openReview(el, key, null, null, { own: p, onClose: back }),
+    onDone: () => { state.warmupDay = today(); save(); location.hash = 'home'; } });
+}
+function openReview(host, key, s, i, extra = {}) {
   const RV = window.VEKTOR_REVIEW; if (!RV) return;
-  RV.open(host, { bugKey: key, own: ownProblem(s.task, topics[i].id), today: today(), bugs: RV.ensure(state), lv: meta(i).level || 2,
+  RV.open(host, { bugKey: key, own: extra.own || ownProblem(s.task, topics[i].id), today: today(), bugs: RV.ensure(state), lv: i == null ? 2 : meta(i).level || 2,
     onEvent: (type, data) => { logEvent(type, data); save(); },
     onStars: n => { game().stars += n; save(); const h = document.querySelector('#hud-stars'); if (h) h.textContent = game().stars; },
-    onClose: () => { save(); host.innerHTML = ''; app.querySelector('#ans-num')?.focus(); } });
+    onClose: () => { save(); host.innerHTML = ''; if (extra.onClose) extra.onClose(); else app.querySelector('#ans-num')?.focus(); } });
   save(); host.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 let ai = T.loadCfg();
@@ -549,6 +566,9 @@ function home() {
     </li>`;
   }).join('');
   return `<div class="page-head home-head"><h1>${hello}, ${esc(state.settings.name)}!</h1></div>
+  ${state.warmupDay !== today() && warmupPlan().length ? `<section class="hero-next hero-warmup" aria-label="Разминка">
+    <div class="hero-text"><p class="hero-kicker">Разминка</p><h2>Две минуты перед занятием</h2><p class="muted">Пара задач, чтобы размять голову.</p></div>
+    <button class="btn btn-primary btn-big btn-go" data-warmup>${G.icon('rocket', 22)} Начать</button></section>` : ''}
   <section class="hero-next" aria-label="Следующий шаг">
     <div class="hero-text">
       <p class="hero-kicker">${ct.stage === 'review' ? 'Повторение' : ct.reason ? 'Сначала повторим' : 'Продолжай отсюда'}</p>
@@ -931,8 +951,10 @@ function render() {
   document.querySelectorAll('.sidebar [data-page]').forEach(b => (b.dataset.page === page || (page === 'library' && b.dataset.page === 'map')) ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
   document.querySelector('#student-name').textContent = state.settings.name;
   document.querySelector('#avatar').textContent = (state.settings.name[0] || 'А').toUpperCase();
-  app.innerHTML = ({ home, map: () => mapPage(filterState.map), diagnostic, library: () => library(filterState.library), awards, teacher, settings, lesson: () => lessonPage(i, lessonStage) })[page]();
+  app.innerHTML = ({ home, map: () => mapPage(filterState.map), diagnostic, library: () => library(filterState.library), awards, teacher, settings, lesson: () => lessonPage(i, lessonStage), warmup: warmupPage })[page]();
   bind(page, i, lessonStage);
+  if (page === 'warmup') runWarmup();
+  app.querySelectorAll('[data-warmup]').forEach(b => b.onclick = () => { location.hash = 'warmup'; });
   hud();
   if (page === 'home' && !state.toured && !navigator.webdriver) setTimeout(() => route().page === 'home' && startTour(0), 600);
   requestAnimationFrame(drawRoute);

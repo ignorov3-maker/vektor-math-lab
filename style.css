@@ -758,3 +758,12 @@ body.test-mode main>header{position:static}
 .rv-ans .xr-in { flex: 1; }
 .review .xray { margin-top: 4px; padding: 0; box-shadow: none; border: 0; background: none; }
 .review .rv-next { margin-top: 12px; width: 100%; }
+
+/* ---------- Разминка ---------- */
+.warmup { padding: 16px; }
+.wu-kicker { color: var(--muted, #888); font-size: 14px; margin: 0 0 8px; }
+.wu-fb .btn { margin-top: 10px; margin-right: 8px; }
+.wu-ok { color: var(--green, #1E7358); font-weight: 700; }
+.wu-bad { color: #C44E43; font-weight: 700; }
+.wu-win { display: flex; align-items: center; gap: 10px; color: var(--green, #1E7358); font-weight: 700; }
+.hero-warmup { margin-bottom: 12px; }
