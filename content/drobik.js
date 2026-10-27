@@ -70,20 +70,34 @@
     var hats = {
       'hat-cap': path('M38 30H48V22H76V26H92V34H108V38H38Z', accent) + rect(48, 26, 28, 6, cream),
       'hat-beanie': path('M40 34V24H46V18H84V24H92V34Z', '#B39BE3') + rect(36, 30, 60, 8, ink) + rect(60, 10, 12, 8, accent),
-      'hat-bucket': path('M44 20H86L90 32H98V38H34V32H40Z', '#83B9DC') + rect(46, 26, 38, 4, cream),
+      'hat-bucket': path('M44 16H84V20H88V28H92V32H100V40H32V32H36V28H40V20H44Z', ink) +
+        path('M44 20H84V28H88V32H92V36H40V32H44Z', '#83B9DC') + rect(44, 28, 40, 4, cream),
       'hat-crown': path('M40 22H48V28H56V18H64V28H72V18H80V28H88V22H96V38H40Z', '#F2CC63') + rect(60, 30, 8, 4, accent),
       'hat-bow': path('M42 24H54V28H66V24H80V40H66V36H54V40H42Z', accent) + rect(56, 28, 8, 8, ink),
       'hat-headphones': path('M24 58V32H32V24H100V32H112V60H104V36H98V32H38V36H32V58Z', ink) + rect(20, 50, 12, 22, accent) + rect(104, 50, 12, 22, accent),
       'hat-beret': path('M34 30H42V22H54V18H88V22H98V32H90V38H42V34H34Z', '#D26C73') + rect(64, 12, 8, 8, ink),
-      'hat-leaf': path('M62 34V22H70V14H94V22H86V30H74V38Z', '#7EA56F') + rect(62, 30, 8, 8, ink),
-      'hat-graduate': path('M28 24L66 12L104 24L66 36Z', ink) + rect(48, 30, 36, 8, ink) + rect(98, 24, 4, 22, '#EDBF50') + rect(94, 44, 12, 6, '#EDBF50'),
-      'hat-captain': path('M34 24H42V18H90V24H98V32H90V38H40V32H34Z', cream) + rect(38, 30, 56, 8, ink) + rect(62, 22, 8, 8, '#E7BC4C')
+      'hat-leaf': path('M60 40V24H68V16H76V12H96V24H88V28H80V32H72V40Z', ink) +
+        path('M64 32V24H72V20H80V16H92V20H84V24H76V28H68V32Z', '#8DBB79'),
+      'hat-graduate': rect(48, 30, 40, 10, ink) +
+        path('M64 8H72V12H84V16H96V20H108V28H96V32H84V36H72V40H64V36H52V32H40V28H28V20H40V16H52V12H64Z', ink) +
+        path('M64 12H72V16H84V20H96V24H84V28H72V32H64V28H52V24H40V20H52V16H64Z', '#567B7D') +
+        rect(92, 28, 4, 16, '#EDBF50') + rect(88, 44, 8, 8, '#EDBF50'),
+      'hat-captain': path('M40 12H92V16H100V28H96V36H88V40H40V36H32V20H36V16H40Z', ink) +
+        path('M40 20H44V16H88V20H96V26H40Z', cream) + rect(40, 28, 52, 8, ink) +
+        path('M60 20H72V24H68V28H64V24H60Z', '#E7BC4C')
     };
     return hats[id] || '';
   }
   function svg(p, map, uid) {
     var netIndex = COSMETICS.filter(function (c) { return c.slot === 'net'; }).findIndex(function (c) { return c.id === map.net; });
     var netColor = NETS[netIndex] || NETS[0];
+    var squareNet = map.net === 'net-square';
+    var netRim = squareNet
+      ? 'M100 36H132V68H100ZM104 40H128V64H104Z'
+      : 'M110 32H122V36H126V40H130V60H126V64H122V68H110V64H106V60H102V40H106V36H110ZM110 36H122V40H126V60H122V64H110V60H106V40H110Z';
+    var netMesh = squareNet
+      ? 'M112 40H113V64H112ZM119 40H120V64H119ZM108 46H124V47H108ZM108 57H124V58H108Z'
+      : 'M112 38H113V62H112ZM119 38H120V62H119ZM108 44H124V45H108ZM108 55H124V56H108Z';
     var satellite = map.antenna || (map.screen === 'screen-black' ? '' : 'pixel-sun');
     var limb = map.screen === 'screen-black' ? p[3] : p[4];
     var satColor = PIXELS[satellite] || p[4];
@@ -99,7 +113,6 @@
       '<g class="bipych-actor">' +
       '<g class="bipych-foot bipych-foot-left">' + rect(40, 102, 16, 14, p[0]) + rect(44, 104, 8, 8, limb) + '</g>' +
       '<g class="bipych-foot bipych-foot-right">' + rect(80, 102, 16, 14, p[0]) + rect(84, 104, 8, 8, limb) + '</g>' +
-      '<g class="bipych-hand bipych-hand-left">' + rect(16, 78, 12, 16, p[0]) + rect(20, 80, 8, 10, limb) + rect(20, 80, 4, 4, p[2]) + '</g>' +
       path(OUTLINE, p[0], 'bipych-outline') + path(INSIDE, p[1]) +
       path('M32 68V52H36V46H44V42H88V46H44V50H40V56H36V68Z', p[2]) +
       path('M32 88V94H40V98H96V94H102V78H108V90H104V98H98V102H38V98H32V92H28V82H32Z', p[3]) +
@@ -109,16 +122,22 @@
       '<g class="bipych-eyes bipych-eyes-sleep">' + sleeping + '</g>' +
       '<g class="bipych-blush">' + rect(36, 80, 10, 4, p[4]) + rect(88, 80, 10, 4, p[4]) + '</g>' +
       rect(98, 66, 6, 6, p[4]) + rect(98, 78, 6, 6, p[4]) +
+      '<g class="bipych-hand bipych-hand-left">' + rect(16, 78, 12, 16, p[0]) + rect(20, 80, 8, 10, limb) + rect(20, 80, 4, 4, p[2]) + '</g>' +
+      '<g class="bipych-hat">' + hat(map.hat, p) + '</g>' +
       '<g class="bipych-hand bipych-hand-right">' +
       '<g class="bipych-net"' + (map.net ? ' data-equipped="true"' : '') + '>' +
-      rect(114, 62, 4, 30, netColor, 'bipych-net-handle') +
-      path('M108 36H124V40H128V44H132V60H128V64H124V68H108V64H104V60H100V44H104V40H108Z', netColor, 'bipych-net-rim') +
-      path('M108 40H124V44H128V60H124V64H108V60H104V44H108Z', p[2]) +
-      path('M110 42H112V62H110ZM120 42H122V62H120ZM106 46H126V48H106ZM106 56H126V58H106Z', netColor, 'bipych-net-mesh') + '</g>' +
+      rect(114, 64, 4, 28, '#806247', 'bipych-net-handle') +
+      '<path d="' + netRim + '" fill="' + netColor + '" fill-rule="evenodd" stroke="' + p[0] + '" stroke-width="1" class="bipych-net-rim"/>' +
+      '<path d="' + netMesh + '" fill="#6A9284" opacity=".65" class="bipych-net-mesh"/></g>' +
       rect(108, 82, 16, 16, p[0], 'bipych-grip') + rect(111, 84, 10, 10, limb) + rect(112, 84, 4, 4, p[2]) + '</g>' +
-      '<g class="bipych-hat">' + hat(map.hat, p) + '</g>' +
       '<g class="bipych-question">' + path('M12 32H28V36H32V44H24V52H18V42H26V38H12ZM18 58H24V64H18Z', p[4]) + '</g>' +
       '<g class="bipych-zzz">' + path('M100 16H116V20H112V24H108V28H116V32H100V28H104V24H108V20H100Z', p[4]) + '</g>' +
+      '<g class="bipych-thought">' + rect(16, 28, 4, 4, p[0], 'bipych-thought-dot bipych-thought-dot-0') +
+      rect(20, 20, 6, 6, p[4], 'bipych-thought-dot bipych-thought-dot-1') +
+      rect(26, 10, 8, 8, p[0], 'bipych-thought-dot bipych-thought-dot-2') + '</g>' +
+      '<g class="bipych-pride">' +
+      path('M10 38H14V42H18V46H14V50H10V46H6V42H10Z', '#E6B74F', 'bipych-pride-star bipych-pride-star-0') +
+      path('M26 16H30V20H34V24H30V28H26V24H22V20H26Z', '#E6B74F', 'bipych-pride-star bipych-pride-star-1') + '</g>' +
       '</g>' +
       '<g class="bipych-satellite"' + (!satellite ? ' hidden="hidden"' : '') + '>' +
       (satellite === 'pixel-star'

@@ -73,6 +73,51 @@ async def main():
         check("invalid state falls back to idle", await page.evaluate("""() => {
             contractPet.setState('<script>'); return document.querySelector('#contract-host .bipych').dataset.state === 'idle';
         }"""))
+        check("thinking moves body, gaze and paw even without satellite", await page.evaluate("""() => {
+            contractPet.setCosmetics({screen:'screen-black'}); contractPet.setState('thinking');
+            const root=document.querySelector('#contract-host .bipych');
+            const parts=['.bipych-actor','.bipych-eyes-normal','.bipych-hand-left'];
+            const animations=root.getAnimations({subtree:true});
+            animations.forEach(a=>{a.pause();a.currentTime=0;});
+            const before=parts.map(s=>getComputedStyle(root.querySelector(s)).transform);
+            animations.forEach(a=>a.currentTime=1600);
+            const after=parts.map(s=>getComputedStyle(root.querySelector(s)).transform);
+            return before.every((v,i)=>v!==after[i])
+                && getComputedStyle(root.querySelector('.bipych-thought')).display!=='none'
+                && root.querySelectorAll('.bipych-thought-dot').length===3;
+        }"""))
+        check("thinking paw remains visibly in front of the cheek", await page.evaluate("""() => {
+            const root=document.querySelector('#contract-host .bipych');
+            root.scrollIntoView({block:'center'});
+            const hand=root.querySelector('.bipych-hand-left'),rect=hand.querySelector('rect');
+            const point=new DOMPoint(+rect.getAttribute('x')+6,+rect.getAttribute('y')+8).matrixTransform(rect.getScreenCTM());
+            return hand.contains(document.elementFromPoint(point.x,point.y));
+        }"""))
+        check("proud has fist gesture and pixel glints distinct from confetti", await page.evaluate("""() => {
+            contractPet.setState('proud');
+            const root=document.querySelector('#contract-host .bipych');
+            const animations=root.getAnimations({subtree:true});
+            const parts=['.bipych-actor','.bipych-hand-left'];
+            animations.forEach(a=>{a.pause();a.currentTime=0;});
+            const before=parts.map(s=>getComputedStyle(root.querySelector(s)).transform);
+            const dim=getComputedStyle(root.querySelector('.bipych-pride-star')).opacity;
+            animations.forEach(a=>a.currentTime=1000);
+            return parts.every((s,i)=>before[i]!==getComputedStyle(root.querySelector(s)).transform)
+                && dim!==getComputedStyle(root.querySelector('.bipych-pride-star')).opacity
+                && getComputedStyle(root.querySelector('.bipych-confetti')).display==='none';
+        }"""))
+        check("reworked headwear uses only orthogonal pixel edges", await page.evaluate("""() => {
+            for(const hat of ['hat-bucket','hat-graduate','hat-captain','hat-leaf']){
+                contractPet.setCosmetics({hat});contractPet.setState('idle');
+                const paths=[...document.querySelectorAll('#contract-host .bipych-hat path')];
+                if(!paths.length || paths.some(p=>/[LCQAST]/i.test(p.getAttribute('d'))))return false;
+            }
+            contractPet.setCosmetics({hat:'hat-captain'});
+            const paths=document.querySelectorAll('#contract-host .bipych-hat path');
+            const outer=paths[0].getBBox(),inner=paths[1].getBBox();
+            return outer.x<inner.x && outer.y<inner.y && outer.width>inner.width
+                && paths[0].getAttribute('fill')!==paths[1].getAttribute('fill');
+        }"""))
         check("charge goals 3–10 and exact filled cells", await page.evaluate("""() => {
             for (let goal = 3; goal <= 10; goal++) {
                 for (let done = 0; done <= goal; done++) {
@@ -134,6 +179,21 @@ async def main():
             window.cosmeticCombinationCount = total;
             return total === 26136;
         }"""))
+        check("all shop net previews match the equipped net geometry", await page.evaluate("""() => {
+            if(!window.VEKTOR_COLLECTION)return true;
+            const host=document.createElement('div');document.body.append(host);
+            VEKTOR_COLLECTION.renderWorkshop(host,{
+                stars:100,owned:VEKTOR_DROBIK.COSMETICS.map(c=>c.id),equipped:{screen:'screen-black'}
+            });
+            host.querySelector('[data-slot=net]').click();
+            let ok=true;
+            for(const c of VEKTOR_DROBIK.COSMETICS.filter(c=>c.slot==='net')){
+                contractPet.setCosmetics({screen:'screen-black',net:c.id});
+                const card=[...host.querySelectorAll('[data-item]')].find(el=>el.dataset.item===c.id);
+                if(!card || card.querySelector('.bipych-net').innerHTML!==document.querySelector('#contract-host .bipych-net').innerHTML){ok=false;break;}
+            }
+            VEKTOR_COLLECTION.renderBugs(host,{bugs:[]});host.remove();return ok;
+        }"""))
         # Destroy cancels the celebration timer and is safe to call twice.
         check("destroy preserves sibling DOM and methods become inert", await page.evaluate("""() => {
             contractPet.setCharge(0,5); contractPet.setCharge(5,5);
@@ -155,9 +215,12 @@ async def main():
             const rim=box('.bipych-net-rim'),mesh=box('.bipych-net-mesh');
             const handle=box('.bipych-net-handle'),grip=box('.bipych-grip');
             const centers=[rim,mesh,handle,grip].map(b=>b.x+b.width/2);
-            return centers.every(x=>x===116) && rim.width===rim.height
+            return centers.every(x=>x===116) && rim.height>=rim.width
                 && mesh.y+mesh.height/2===rim.y+rim.height/2
-                && root.querySelector('.bipych-net').parentElement.classList.contains('bipych-hand-right');
+                && root.querySelector('.bipych-net-rim').getAttribute('fill-rule')==='evenodd'
+                && !root.querySelector('.bipych-net rect:not(.bipych-net-handle)')
+                && root.querySelector('.bipych-net').parentElement.classList.contains('bipych-hand-right')
+                && !!(root.querySelector('.bipych-hat').compareDocumentPosition(root.querySelector('.bipych-net')) & Node.DOCUMENT_POSITION_FOLLOWING);
         }"""))
         await page.check("#senior")
         check("senior age mode", await page.locator("#main-bipych .bipych").get_attribute("data-age") == "senior")

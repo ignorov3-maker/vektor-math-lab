@@ -5,9 +5,9 @@
   var descriptions = [
     'Осматривается и моргает. Всё спокойно.',
     'Подпрыгивает: получилось!',
-    'Ищет идею. Пиксель-спутник тоже задумался.',
+    'Смотрит по сторонам, чешет щёку и собирает мысли по пикселям.',
     'Кажется, что-то не сходится. Посмотрим ещё раз?',
-    'Руки в боки. Хорошо поработали!',
+    'Выпрямился, поднял кулачок: вот это мы разобрались!',
     'Бип… Я тоже иногда путаюсь.',
     'Заметил жучка и приготовил сачок.',
     'Вот это находка! Можно немного потанцевать.',
@@ -68,6 +68,8 @@
     var holder = document.createElement('div'); byId('scales').appendChild(holder);
     make(holder, { size: size, cosmetics: { screen: 'screen-turquoise' } });
   });
+  var requestedState = new URLSearchParams(location.search).get('state');
+  if (lib.STATES.indexOf(requestedState) >= 0) setState(requestedState);
   document.querySelectorAll('[data-palette]').forEach(function (button) {
     button.addEventListener('click', function () {
       palette = button.dataset.palette;
@@ -131,7 +133,7 @@
   byId('cycle').addEventListener('click', function () {
     if (cycle) return stopCycle();
     byId('cycle').setAttribute('aria-pressed', 'true'); byId('cycle').textContent = 'Остановить';
-    cycle = setInterval(function () { setState(lib.STATES[(index + 1) % lib.STATES.length]); }, 2200);
+    cycle = setInterval(function () { setState(lib.STATES[(index + 1) % lib.STATES.length]); }, 4500);
   });
   var reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
   function updateMotion() {
