@@ -56,7 +56,7 @@
   function open(el, o) {
     const bug = K.byKey[o.bugKey]; if (!bug) return null;
     const rec = caught(o.bugs, o.bugKey, o.today);
-    const art = root.VEKTOR_ART, V = root.VEKTOR_VISUALS;
+    const T = root.VEKTOR_TONE, V = root.VEKTOR_VISUALS;
     const fig = tag => { const m = String(tag || '').match(/^\[\[(.+)\]\]$/); const g = m && V && V.figureFromTag(m[1]); return g ? `<div class="rv-fig">${V.figure(g)}</div>` : ''; };
     const ev = (type, data) => o.onEvent && o.onEvent(type, Object.assign({ bug: bug.key }, data));
     let step = 0, conflictIdx = rec.conflict || 0;
@@ -71,8 +71,8 @@
     // 1. Найти
     function find() {
       step = 0; dots();
-      body.innerHTML = `<div class="rv-find">${art ? art.bug(bug.key, { size: 72, status: 'caught' }) : ''}
-        <div><p class="rv-h">Поймали! Это ${esc(bug.kidName)}</p><p>Похоже, ${esc(bug.kidRule)}.</p></div></div>${next()}`;
+      body.innerHTML = `<div class="rv-find">${T.art(bug, { size: T.senior() ? 40 : 72, status: 'caught' })}
+        <div><p class="rv-h">${T.t('findHead', bug)}</p><p>Похоже, ${esc(bug.kidRule)}.</p></div></div>${next()}`;
       bindNext(clash);
     }
     // 2. Столкнуть
@@ -85,7 +85,7 @@
         const right = c.choices[k] === c.right;
         ev('bug_step', { step: 'conflict', ok: right });
         if (right) {
-          body.querySelector('.rv-note').innerHTML = 'Вот! Правило жучка даёт ерунду. Значит, оно неверное.';
+          body.querySelector('.rv-note').innerHTML = T.t('conflictOk');
           body.querySelectorAll('.rv-choice').forEach(x => (x.disabled = true));
           body.insertAdjacentHTML('beforeend', next()); bindNext(fix);
         } else {
@@ -104,8 +104,8 @@
         const ok = isRight(p, raw) && (!a || a.stepsOk);
         ev('bug_step', { step: 'fix', ok });
         const note = body.querySelector('.rv-note');
-        if (ok) { note.innerHTML = 'Верно! Жучок больше не мешает.'; if (!body.querySelector('.rv-next')) { body.insertAdjacentHTML('beforeend', next('К проверке')); bindNext(twin); } }
-        else note.innerHTML = a && a.errorAt > 0 ? `Посмотри на строку ${a.errorAt} — там жучок снова пролез.` : 'Пока не так. Вспомни верную идею выше.';
+        if (ok) { note.innerHTML = T.t('fixOk'); if (!body.querySelector('.rv-next')) { body.insertAdjacentHTML('beforeend', next('К проверке')); bindNext(twin); } }
+        else note.innerHTML = a && a.errorAt > 0 ? T.t('fixAgain', a.errorAt) : 'Пока не так. Вспомни верную идею выше.';
       });
     }
     // 4. Проверить: задача-двойник
@@ -119,15 +119,15 @@
         if (ok) {
           healing(o.bugs, bug.key, o.today);
           o.onStars && o.onStars(3);
-          body.innerHTML = `<div class="rv-find">${art ? art.bug(bug.key, { size: 72, status: 'healing' }) : ''}
-            <div><p class="rv-h">Жучок пойман!</p><p>Проверим его завтра. Если не попадёшься — ${esc(bug.kidName)} побеждён.</p></div></div>
+          body.innerHTML = `<div class="rv-find">${T.art(bug, { size: T.senior() ? 40 : 72, status: 'healing' })}
+            <div><p class="rv-h">${T.t('twinHead')}</p><p>${T.t('twinText', bug)}</p></div></div>
             <p class="rv-stars">+3 ★</p>${next('Продолжить')}`;
           step = 4; dots();
           bindNext(() => { el.innerHTML = ''; o.onClose && o.onClose(true); });
         } else {
           // попался снова — новый круг с другим контрпримером
           conflictIdx++; o.bugs[bug.key].conflict = conflictIdx % bug.conflicts.length; o.bugs[bug.key].cycles++;
-          body.querySelector('.rv-note').innerHTML = `Ой, ${esc(bug.kidName)} снова тут. Посмотрим на него с другой стороны.`;
+          body.querySelector('.rv-note').innerHTML = T.t('twinFail', bug);
           body.insertAdjacentHTML('beforeend', next('Ещё раз')); bindNext(clash);
         }
       });

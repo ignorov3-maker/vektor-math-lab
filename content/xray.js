@@ -39,9 +39,9 @@
     <span class="xr-prev" aria-hidden="true"></span><span class="xr-mark"></span></div>`;
 
   /* openDraft(el, { topic, expr, mistakeId, onResult(res, lines), onSkip() }) */
-  function openDraft(el, { topic, expr, mistakeId, prefill = '', title = 'Давай поймаем жучка! Запиши, как считал', skip = true, onResult, onSkip } = {}) {
+  function openDraft(el, { topic, expr, mistakeId, prefill = '', title, skip = true, onResult, onSkip } = {}) {
     el.innerHTML = `<div class="xray card">
-      <p class="xr-title">${esc(title)}</p>
+      <p class="xr-title">${esc(title || root.VEKTOR_TONE.t('draftTitle'))}</p>
       <div class="xr-lines">
         <div class="xr-row xr-cond"><span class="xr-eq"></span><span class="xr-prev">${pretty(expr)}</span></div>
         ${ROW(1, prefill)}
@@ -88,14 +88,14 @@
         const mark = r.querySelector('.xr-mark');
         const bad = i + 1 === a.errorAt, before = a.errorAt < 0 || i + 1 < a.errorAt;
         r.classList.toggle('bad', bad); r.classList.toggle('ok', before);
-        mark.innerHTML = bad ? (root.VEKTOR_ART ? root.VEKTOR_ART.bug(a.bug ? a.bug.key : '?', { size: 28 }) : '🐞') : before ? '✓' : '';
+        mark.innerHTML = bad ? root.VEKTOR_TONE.art(a.bug, { size: 28 }) : before ? '✓' : '';
       });
       if (a.reason && a.reason !== 'value-changed' && a.errorAt > 0)
         res.innerHTML = '<p class="xr-note">Эту строку не получилось прочитать. Пиши числа и знаки: 1/2 + 1/3.</p>';
       else if (a.stepsOk)
         res.innerHTML = '<p class="xr-note">В черновике всё верно! Впиши последний результат в ответ.</p>';
       else if (a.bug)
-        res.innerHTML = `<p class="xr-found">Поймали жучка! Это ${esc(a.bug.kidName)}.</p>`;
+        res.innerHTML = `<p class="xr-found">${root.VEKTOR_TONE.t('found', a.bug)}</p>`;
       else
         res.innerHTML = `<p class="xr-note">Ошибка спряталась в строке ${a.errorAt}. Сравни её с предыдущей.</p>`;
       onResult && onResult(a, all);

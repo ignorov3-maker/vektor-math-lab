@@ -1,6 +1,6 @@
 // Запуск: node tests/warmup.test.js — расписание ловушек (CL-5)
 globalThis.window = globalThis;
-['rational', 'check', 'bugs', 'review', 'warmup'].forEach(f => require(`../content/${f}.js`));
+['rational', 'tone', 'check', 'bugs', 'review', 'warmup'].forEach(f => require(`../content/${f}.js`));
 const W = window.VEKTOR_WARMUP, RV = window.VEKTOR_REVIEW, K = window.VEKTOR_BUGS;
 let fails = 0; const ok = (c, m) => { if (!c) { fails++; console.log('FAIL', m); } };
 const key = 'add-diff:add-denominators', D = RV.addDays;

@@ -13,6 +13,7 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fr = s => esc(s).replace(/(\d+)\/(\d+)/g, '<span class="frac"><span>$1</span><span>$2</span></span>');
   const MAX_TRAPS = 2;
+  const T = root.VEKTOR_TONE;
 
   // → [{ type:'trap', key, stage }] + 1 повторение, если есть ловушки. Пусто — разминки нет.
   function plan(bugs, today, { reviewTopic = null } = {}) {
@@ -56,10 +57,10 @@
           if (res.beaten) { o.onEvent && o.onEvent('bug_beaten', { bug: it.key }); o.onStars && o.onStars(10); }
           if (ok) right++;
           const fb = el.querySelector('.wu-fb');
-          if (res.beaten) fb.innerHTML = `<p class="wu-win">${root.VEKTOR_ART ? root.VEKTOR_ART.bug(it.key, { size: 48, status: 'beaten' }) : ''} ${esc(bug.kidName)} побеждён! +10 ★</p>`;
+          if (res.beaten) fb.innerHTML = `<p class="wu-win">${T.art(bug, { size: 40, status: 'beaten' })} ${T.t('trapBeaten', bug)}</p>`;
           else if (res.control) fb.innerHTML = `<p class="wu-ok">${ok ? 'Верно!' : `Ответ: ${fr(p.answer)}.`}</p>`;
-          else if (ok) fb.innerHTML = `<p class="wu-ok">Ты не попался жучку ${esc(bug.kidName)}! Ещё одна проверка — и он побеждён.</p>`;
-          else if (res.returned) fb.innerHTML = `<p class="wu-bad">Ой, ${esc(bug.kidName)} вернулся. Ничего — поймаем ещё раз.</p><button type="button" class="btn btn-primary" data-wu="review">Разобраться</button>`;
+          else if (ok) fb.innerHTML = `<p class="wu-ok">${T.t('trapOk', bug)}</p>`;
+          else if (res.returned) fb.innerHTML = `<p class="wu-bad">${T.t('trapBack', bug)}</p><button type="button" class="btn btn-primary" data-wu="review">Разобраться</button>`;
           else fb.innerHTML = `<p class="wu-bad">Пока не так. Правильный ответ: ${fr(p.answer)}.</p>`;
           fb.insertAdjacentHTML('beforeend', `<button type="button" class="btn ${res.returned ? 'btn-ghost' : 'btn-primary'}" data-wu="next">Дальше</button>`);
           const rb = fb.querySelector('[data-wu="review"]'); if (rb) rb.onclick = () => o.onReview && o.onReview(it.key, p, () => { k++; next(); });

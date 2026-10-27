@@ -1,6 +1,6 @@
 // Запуск: node tests/review.test.js — статусы жучков (CL-4)
 globalThis.window = globalThis;
-['rational', 'bugs', 'review'].forEach(f => require(`../content/${f}.js`));
+['rational', 'tone', 'bugs', 'review'].forEach(f => require(`../content/${f}.js`));
 const RV = window.VEKTOR_REVIEW; let fails = 0; const ok = (c, m) => { if (!c) { fails++; console.log('FAIL', m); } };
 const st = {}; const bugs = RV.ensure(st); const k = 'add-diff:add-denominators';
 ok(RV.ensure({ bugs: [] }) && !Array.isArray(RV.ensure({ bugs: [] })), 'испорченный state.bugs чинится');

@@ -104,6 +104,20 @@ async def main():
         rep('попался → «вернулся» и снова пойман', 'вернулся' in await pg.inner_text('.warmup') and await pg.evaluate(f"state.bugs['{K}'].status")=='caught')
         await pg.click('[data-wu="review"]'); await pg.wait_for_timeout(100)
         rep('из разминки сразу в разбор', await pg.locator('.review').count()==1)
+
+        # 8 класс: взрослый тон, без жучков
+        await pg.evaluate("() => { state.settings.grade = 8; state.bugs = {}; localStorage.setItem('vektor-progress-v3', JSON.stringify(state)); }")
+        await pg.goto(B+'#lesson/4/practice'); await pg.reload(); await pg.wait_for_timeout(300)
+        await pg.evaluate("""() => { const f=(a,b)=>`<span class="frac"><span>${a}</span><span>${b}</span></span>`;
+          Object.assign(session.task, { question: `${f(1,2)} + ${f(1,3)} = ?`, answer: '5/6', accept: 'equivalent', misc: g => (g && g.n===2 && g.d===5 ? 'add-denominators' : null) }); }""")
+        await pg.evaluate("v => fillAnswer(v)", '2/5'); await pg.click('form.answer button[type=submit]'); await pg.wait_for_timeout(100)
+        rep('8 класс: кнопка «Найти ошибку»', (await pg.inner_text('#xray-open'))=='Найти ошибку')
+        await pg.click('#xray-open'); await pg.click('[data-xr="done"]'); await pg.wait_for_timeout(100)
+        await pg.click('#review-open'); await pg.wait_for_timeout(100)
+        txt = await pg.inner_text('#xray-host')
+        rep('8 класс: без «жучков», методическое название', 'жуч' not in txt.lower() and 'Складыватель' not in txt and 'складывает' in txt.lower(), txt[:80])
+        rep('8 класс: без мультяшного рисунка', await pg.locator('#xray-host svg[data-bug]').count()==0)
+        await pg.goto(B+'#settings'); rep('класс есть в профиле', await pg.locator('#set-grade').count()==1)
         rep('нет ошибок JavaScript', not errs, '; '.join(errs)[:200])
         await b.close()
     print(f'\nИТОГО: {sum(R)} из {len(R)}')

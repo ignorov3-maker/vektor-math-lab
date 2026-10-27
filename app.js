@@ -56,6 +56,7 @@ try { state = Object.assign(fresh(), JSON.parse(localStorage.getItem(KEY))); } c
   if (typeof state.settings.name !== 'string' || !state.settings.name.trim()) state.settings.name = d.settings.name;
   if (!['steps', 'visual'].includes(state.settings.style)) state.settings.style = 'steps';
   if (typeof state.settings.sound !== 'boolean') state.settings.sound = true;
+  if (![5, 6, 7, 8, 9].includes(state.settings.grade)) state.settings.grade = 5;
   if (!Array.isArray(state.diag.results) || !Number.isInteger(state.diag.step)) state.diag = d.diag;
   state.attempts = state.attempts.filter(a => a && typeof a === 'object');
 })();
@@ -567,7 +568,7 @@ function home() {
   }).join('');
   return `<div class="page-head home-head"><h1>${hello}, ${esc(state.settings.name)}!</h1></div>
   ${state.warmupDay !== today() && warmupPlan().length ? `<section class="hero-next hero-warmup" aria-label="Разминка">
-    <div class="hero-text"><p class="hero-kicker">Разминка</p><h2>Две минуты перед занятием</h2><p class="muted">Пара задач, чтобы размять голову.</p></div>
+    <div class="hero-text"><p class="hero-kicker">Разминка</p><h2>Две минуты перед занятием</h2><p class="muted">${window.VEKTOR_TONE.t('warmupSub')}</p></div>
     <button class="btn btn-primary btn-big btn-go" data-warmup>${G.icon('rocket', 22)} Начать</button></section>` : ''}
   <section class="hero-next" aria-label="Следующий шаг">
     <div class="hero-text">
@@ -867,6 +868,7 @@ function settings() {
       <form class="sheet" id="settings-form">
         <h2>Ученик</h2>
         <label class="field">Имя ученика<input name="name" id="set-name" value="${esc(s.name)}" maxlength="30" required></label>
+        <label class="field">Класс<select name="grade" id="set-grade">${[5, 6, 7, 8, 9].map(n => `<option value="${n}"${s.grade === n ? ' selected' : ''}>${n} класс</option>`).join('')}</select></label>
         <label class="field">Цель дня<select name="goal" id="set-goal">${[3, 5, 10].map(n => `<option value="${n}"${game().goal === n ? ' selected' : ''}>${n} задач в день</option>`).join('')}</select></label>
         <label class="field">Как объяснять<select name="style" id="set-style"><option value="steps"${s.style === 'steps' ? ' selected' : ''}>Коротко и по шагам</option><option value="visual"${s.style === 'visual' ? ' selected' : ''}>Через наглядные примеры</option></select></label>
         <label class="switch"><input type="checkbox" name="sound" id="set-sound"${state.settings.sound === false ? '' : ' checked'}> Звуки при ответах</label>
@@ -922,6 +924,7 @@ function settingsServer() {
       <form class="sheet" id="settings-form">
         <h2>${esc(s.name)}</h2>
         <p class="muted small">Так тебя видит учитель. Своё имя вписывать не нужно.</p>
+        <label class="field">Класс<select name="grade" id="set-grade">${[5, 6, 7, 8, 9].map(n => `<option value="${n}"${s.grade === n ? ' selected' : ''}>${n} класс</option>`).join('')}</select></label>
         <label class="field">Цель дня<select name="goal" id="set-goal">${[3, 5, 10].map(n => `<option value="${n}"${game().goal === n ? ' selected' : ''}>${n} задач в день</option>`).join('')}</select></label>
         <label class="field">Как объяснять<select name="style" id="set-style"><option value="steps"${s.style === 'steps' ? ' selected' : ''}>Коротко и по шагам</option><option value="visual"${s.style === 'visual' ? ' selected' : ''}>Через наглядные примеры</option></select></label>
         <label class="switch"><input type="checkbox" name="sound" id="set-sound"${s.sound === false ? '' : ' checked'}> Звуки при ответах</label>
@@ -944,6 +947,7 @@ const filterState = { map: 'Все', library: 'Все' };
 const route = () => { const [page, arg, stage] = (location.hash.slice(1) || 'home').split('/'); return { page: pages[page] && !(SERVER && page === 'teacher') ? page : 'home', i: Math.min(Math.max(+arg || 0, 0), topics.length - 1), stage }; };
 
 function render() {
+  if (window.VEKTOR_TONE) { window.VEKTOR_TONE.setGrade(state.settings.grade); document.body.classList.toggle('age-senior', window.VEKTOR_TONE.senior()); }
   const { page, i, stage } = route();
   const lessonStage = stage || (topics[i].legacy || meta(i).practice ? 'practice' : 'learn');
   document.querySelector('#crumb').textContent = page === 'lesson' ? topics[i].title : pages[page];
@@ -1024,7 +1028,7 @@ function bind(page, i, stage) {
           const X = window.VEKTOR_XRAY, xrayExpr = X && !t.legacy ? X.exprOf(s.task) : null;
           fb.className = 'feedback bad big';
           fb.innerHTML = `<p class="fb-title">${G.icon('repeat', 22)} Пока не так — попробуй ещё раз</p><p>${feedbackFor(r, s.task, i)}</p>` + eventsHtml(ev, i) +
-            `<div class="fb-actions">${xrayExpr ? '<button class="btn btn-primary" id="xray-open">Поймать жучка</button>' : ''}<button class="btn ${xrayExpr ? 'btn-ghost' : 'btn-primary'}" id="try-again">Исправить ответ</button>${s.hints < s.task.hints.length ? '<button class="btn btn-ghost" id="fb-hint">Подсказка</button>' : ''}${t.legacy ? '' : '<button class="btn btn-ghost" id="ask-tutor">Разобрать с наставником</button>'}</div>`;
+            `<div class="fb-actions">${xrayExpr ? `<button class="btn btn-primary" id="xray-open">${window.VEKTOR_TONE.t('catchBtn')}</button>` : ''}<button class="btn ${xrayExpr ? 'btn-ghost' : 'btn-primary'}" id="try-again">Исправить ответ</button>${s.hints < s.task.hints.length ? '<button class="btn btn-ghost" id="fb-hint">Подсказка</button>' : ''}${t.legacy ? '' : '<button class="btn btn-ghost" id="ask-tutor">Разобрать с наставником</button>'}</div>`;
           fb.querySelector('#try-again').onclick = () => { const inp = app.querySelector('#ans-num'); if (inp) { inp.focus(); inp.select(); } };
           const fh = fb.querySelector('#fb-hint'); if (fh) fh.onclick = () => app.querySelector('#hint-btn')?.click();
           sfx('wrong');
@@ -1033,7 +1037,7 @@ function bind(page, i, stage) {
           bindEventButtons(fb, i);
           const rk = !xrayExpr && r.mistake && window.VEKTOR_BUGS && window.VEKTOR_BUGS.byKey[`${t.id}:${r.mistake}`];
           if (rk && !t.legacy) {
-            fb.querySelector('.fb-actions').insertAdjacentHTML('afterbegin', '<button class="btn btn-primary" id="review-open">Поймать жучка</button>');
+            fb.querySelector('.fb-actions').insertAdjacentHTML('afterbegin', `<button class="btn btn-primary" id="review-open">${window.VEKTOR_TONE.t('catchBtn')}</button>`);
             fb.querySelector('#try-again').className = 'btn btn-ghost';
             fb.querySelector('#review-open').onclick = () => {
               let host = app.querySelector('#xray-host'); if (!host) { host = document.createElement('div'); host.id = 'xray-host'; fb.after(host); }
@@ -1055,7 +1059,7 @@ function bind(page, i, stage) {
                 }
                 if (a.bug) {
                   const res = host.querySelector('.xr-result');
-                  res.insertAdjacentHTML('beforeend', '<button type="button" class="btn btn-primary" id="review-open">Разобраться с жучком</button>');
+                  res.insertAdjacentHTML('beforeend', `<button type="button" class="btn btn-primary" id="review-open">${window.VEKTOR_TONE.t('reviewBtn')}</button>`);
                   res.querySelector('#review-open').onclick = () => openReview(host, a.bug.key, s, i);
                 }
               },
@@ -1143,7 +1147,7 @@ function bind(page, i, stage) {
   if (sform) sform.onsubmit = e => {
     e.preventDefault();
     const nm = sform.querySelector('#set-name');
-    state.settings = { ...state.settings, name: nm ? nm.value.trim() || 'Ученик' : state.settings.name, style: sform.style.value, sound: sform.sound.checked }; game().goal = +sform.goal.value || 5; save();
+    state.settings = { ...state.settings, name: nm ? nm.value.trim() || 'Ученик' : state.settings.name, style: sform.style.value, sound: sform.sound.checked, grade: +sform.grade.value || 5 }; game().goal = +sform.goal.value || 5; save();
     document.querySelector('#student-name').textContent = state.settings.name;
     document.querySelector('#avatar').textContent = state.settings.name[0].toUpperCase();
     app.querySelector('#feedback').textContent = 'Сохранено.';
