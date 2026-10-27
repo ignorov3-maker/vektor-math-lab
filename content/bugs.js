@@ -4,7 +4,7 @@
      • ловушки trap(lv)          — задачи, где правило даёт правдоподобный неверный ответ;
      • детектор по ответу         — detectAnswer(problem, raw);
      • детектор по шагу (ур. 2)   — detectStep(lineBefore, lineAfter);
-     • неверное решение Дробика   — тот же wrong.
+     • неверное решение маскота   — тот же wrong.
    Числа в контрпримерах фиксированы, их проверяет движок (verify).
    Тексты для детей — черновик, вычитать с учителем математики.
    window.VEKTOR_BUGS = { list, byKey, ofTopic, problem, solve, detectAnswer, detectStep, toTask }
@@ -371,7 +371,7 @@
     return null;
   }
 
-  /* ---------- Верное решение и неверное решение Дробика ---------- */
+  /* ---------- Верное решение и неверное решение маскота ---------- */
   function solve(p) { return p.answer; }
 
   /* ---------- Совместимость с тренировкой ---------- */
@@ -392,7 +392,7 @@
     b.key = `${b.topic}:${b.id}`;
     b.explainRight = 0; // explainOptions[0] — верное; интерфейс перемешивает
     b.lesson = [
-      { kind: 'wrong', html: `<p>Дробик думает, что так можно:</p><p>${ex(b.conflicts[0].text).split('.')[0]}.</p>`, question: 'Согласны с Дробиком?' },
+      { kind: 'wrong', html: `<p>Бипыч думает, что так можно:</p><p>${ex(b.conflicts[0].text).split('.')[0]}.</p>`, question: 'Согласны с Бипычем?' },
       { kind: 'conflict', html: `<p>${ex(b.conflicts[0].text)}</p>${b.conflicts[0].figure}`, question: b.conflicts[0].ask },
       { kind: 'fix', html: `<p><b>${b.fixIdea}</b></p>`, question: 'Решим вместе: ' + (() => { const p = trapOf(b, 2); return p ? p.text : ''; })(), answerHtml: (() => { const p = b._lastTrap; return p ? p.answer : ''; })() },
     ];

@@ -787,3 +787,8 @@ body.test-mode main>header{position:static}
 .int-chip input:focus-visible + span { outline: 3px solid var(--green, #1E7358); outline-offset: 2px; }
 .interests-ask { margin-bottom: 12px; }
 .story-ic { display: inline-block; vertical-align: middle; margin-right: 6px; }
+
+/* ---------- Бипыч в приложении ---------- */
+.hero-pet { flex: none; display: flex; align-items: center; justify-content: center; }
+.task-pet { float: right; margin: -8px 0 4px 8px; }
+@media (max-width: 600px) { .task-pet { margin-top: 0; } .hero-pet { align-self: center; } }

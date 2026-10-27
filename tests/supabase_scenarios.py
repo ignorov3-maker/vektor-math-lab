@@ -381,7 +381,7 @@ async def main():
             rep('кабинет: блок «Пульс» над «Нужна помощь»', 'Складывает числители и знаменатели' in row and '6 учеников' in row and 'лечится' in row, row[:140])
             async with tp.expect_popup() as pop: await tp.click('[data-board="add-diff:add-denominators"]')
             bp = await pop.value; await bp.wait_for_load_state(); await bp.wait_for_timeout(200)
-            rep('мини-урок: доска открылась, 3 слайда, «Дробик думает»', 'Дробик думает' in await bp.inner_text('body') and await bp.evaluate("JSON.parse(localStorage.getItem('vektor-board')).slides.length") == 3)
+            rep('мини-урок: доска открылась, 3 слайда, «Бипыч думает»', 'Бипыч думает' in await bp.inner_text('body') and await bp.evaluate("JSON.parse(localStorage.getItem('vektor-board')).slides.length") == 3)
             await bp.click('body'); await bp.wait_for_timeout(100)
             rep('мини-урок: на слайде-контрпримере картинка', await bp.locator('svg').count() >= 1)
             await bp.close()

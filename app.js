@@ -303,6 +303,64 @@ function listen(inp, btn) {
 }
 
 /* Интересы ребёнка (CL-9): 12 иконок, до трёх; сюжеты задач — из заранее написанного банка, числа — от движка */
+/* ================= Маскот Бипыч, коллекция жучков, мастерская (CL-11, модули Codex) =================
+   Модули ничего не хранят сами: данные и обработчики передаём отсюда. */
+let pets = [], taskPet = null;
+const petAge = () => (window.VEKTOR_TONE && window.VEKTOR_TONE.senior() ? 'senior' : 'junior');
+const beatenCount = () => Object.values(window.VEKTOR_REVIEW ? window.VEKTOR_REVIEW.ensure(state) : {}).filter(b => b && b.status === 'beaten').length;
+const bugRank = n => (n >= 12 ? 'master' : n >= 5 ? 'catcher' : n >= 1 ? 'tracker' : 'novice');
+// особые вещи мастерской открываются достижениями учебного ядра
+const unlocked = () => { const n = beatenCount(); return new Set([n >= 10 && 'ten-bugs', bugRank(n) === 'master' && 'bug-master', mastered() >= 3 && 'topic-master'].filter(Boolean)); };
+function wardrobe() {
+  const D = window.VEKTOR_DROBIK, w = state.workshop && typeof state.workshop === 'object' ? state.workshop : (state.workshop = {});
+  if (!Array.isArray(w.owned)) w.owned = [];
+  if (!w.equipped || typeof w.equipped !== 'object') w.equipped = {};
+  if (D) {
+    const got = unlocked();
+    D.COSMETICS.forEach(c => { if (((!c.unlock && !c.price) || (c.unlock && got.has(c.unlock))) && !w.owned.includes(c.id)) w.owned.push(c.id); });
+    if (!w.equipped.screen && w.owned.includes('screen-turquoise')) w.equipped.screen = 'screen-turquoise';
+  }
+  return w;
+}
+function petMount(el, opts = {}) {
+  const D = window.VEKTOR_DROBIK; if (!D || !el) return null;
+  try { const p = D.mount(el, { age: petAge(), cosmetics: wardrobe().equipped, ...opts }); pets.push(p); return p; } catch { return null; }
+}
+function petsClear() { pets.forEach(p => { try { p.destroy(); } catch {} }); pets = []; taskPet = null; }
+const petState = s => { if (taskPet) try { taskPet.setState(s); } catch {} };
+function collectionBugs() {
+  const K = window.VEKTOR_BUGS, T = window.VEKTOR_TONE;
+  return Object.entries(window.VEKTOR_REVIEW.ensure(state)).filter(([k]) => K.byKey[k]).map(([key, b]) => {
+    const bug = K.byKey[key];
+    return { key, kidName: T.name(bug), title: bug.title, status: b.status, found: b.found, beaten: b.beatenAt || null, howBeaten: bug.fixIdea };
+  });
+}
+const dayCharge = () => { const g = game(), goal = Math.min(10, Math.max(3, g.goal)); return { done: Math.min(g.day === today() ? g.dayTasks : 0, goal), goal }; };
+function mountPetsAndCollection(page, stage) {
+  const g = game(), C = window.VEKTOR_COLLECTION;
+  const home = app.querySelector('#pet-home');
+  if (home) { const ch = dayCharge(); petMount(home, { size: 104, state: ch.done >= ch.goal ? 'celebrate' : 'idle', charge: ch }); }
+  if (page === 'lesson' && stage === 'practice') {
+    const fb = app.querySelector('#feedback');
+    if (fb && !app.querySelector('.task-pet')) { const d = document.createElement('div'); d.className = 'task-pet'; d.setAttribute('aria-hidden', 'true'); fb.before(d); taskPet = petMount(d, { size: 64, state: 'idle', charge: dayCharge() }); }
+  }
+  const cb = app.querySelector('#col-bugs'), cs = app.querySelector('#col-shop');
+  if (C && cb) C.renderBugs(cb, { bugs: collectionBugs(), rank: bugRank(beatenCount()) });
+  if (C && cs) {
+    const shop = () => C.renderWorkshop(cs, { stars: g.stars, owned: wardrobe().owned.slice(), equipped: { ...wardrobe().equipped },
+      onBuy: async id => {
+        const it = window.VEKTOR_DROBIK.COSMETICS.find(c => c.id === id), w = wardrobe();
+        if (!it || w.owned.includes(id)) return;
+        if (it.unlock) throw new Error('Эта вещь открывается достижением.');
+        if (it.price > g.stars) throw new Error('Не хватает звёзд.');
+        g.stars -= it.price; w.owned.push(id); save(); hud(); shop();
+      },
+      onEquip: async (slot, id) => { const w = wardrobe(); if (!w.owned.includes(id)) throw new Error('Сначала получи эту вещь.'); w.equipped[slot] = id; save(); shop(); },
+    });
+    shop();
+  }
+}
+
 function interestPicker(sel) {
   const S = window.VEKTOR_STORIES, A = window.VEKTOR_ART;
   return `<div class="interests" role="group" aria-label="Интересы">${S.INTERESTS.map(x => `<label class="int-chip"><input type="checkbox" name="interest" value="${x.id}"${sel.includes(x.id) ? ' checked' : ''}><span>${A ? A.interest(x.id, { size: 28 }) : ''}${x.name}</span></label>`).join('')}</div>`;
@@ -613,6 +671,7 @@ function home() {
       <p class="muted">${ct.reason || ct.say}</p>
       ${ct.stage !== 'review' && !topics[ct.i].legacy ? miniSteps(ct.i) : ''}
     </div>
+    <div class="hero-pet" id="pet-home" aria-hidden="true"></div>
     <button class="btn btn-primary btn-big btn-go" data-continue>${G.icon('rocket', 22)} Продолжить</button>
   </section>
   <div class="layout home-layout">
@@ -857,6 +916,8 @@ function awards() {
         <div class="fact"><strong>${st}</strong><span>${plural(st, 'день', 'дня', 'дней')} подряд</span></div>
         <div class="fact"><strong>${g.earned.length}<small> из ${G.BADGES.length}</small></strong><span>достижений</span></div>
       </div>
+      ${window.VEKTOR_COLLECTION ? `<section class="sheet" aria-label="Мои жучки"><div id="col-bugs"></div></section>
+      <section class="sheet" aria-label="Мастерская"><div id="col-shop"></div></section>` : ''}
       <section class="sheet"><h2>Достижения</h2>
         <div class="badges">${G.BADGES.map(b => { const on = g.earned.includes(b.id); return `<div class="badge-card${on ? ' on' : ''}">${G.icon(b.icon, 30)}<div><b>${b.title}</b><span>${b.desc}</span></div>${on ? '' : '<span class="visually-hidden">Ещё не получено</span>'}</div>`; }).join('')}</div>
       </section>
@@ -984,6 +1045,7 @@ const filterState = { map: 'Все', library: 'Все' };
 const route = () => { const [page, arg, stage] = (location.hash.slice(1) || 'home').split('/'); return { page: pages[page] && !(SERVER && page === 'teacher') ? page : 'home', i: Math.min(Math.max(+arg || 0, 0), topics.length - 1), stage }; };
 
 function render() {
+  petsClear();
   if (window.VEKTOR_TONE) { window.VEKTOR_TONE.setGrade(state.settings.grade); document.body.classList.toggle('age-senior', window.VEKTOR_TONE.senior()); }
   const { page, i, stage } = route();
   const lessonStage = stage || (topics[i].legacy || meta(i).practice ? 'practice' : 'learn');
@@ -995,6 +1057,7 @@ function render() {
   app.innerHTML = ({ home, map: () => mapPage(filterState.map), diagnostic, library: () => library(filterState.library), awards, teacher, settings, lesson: () => lessonPage(i, lessonStage), warmup: warmupPage })[page]();
   bind(page, i, lessonStage);
   bindInterests(app);
+  mountPetsAndCollection(page, lessonStage);
   if (page === 'warmup') runWarmup();
   app.querySelectorAll('[data-warmup]').forEach(b => b.onclick = () => { location.hash = 'warmup'; });
   hud();
@@ -1064,6 +1127,7 @@ function bind(page, i, stage) {
           m.errorsTotal++; G.wrong(game());
           const ev = t.legacy ? [] : A.afterAttempt(m, { solved: false, firstTry: false, hints: s.hints, sec: 0, mistake: r.mistake }, pace());
           const X = window.VEKTOR_XRAY, xrayExpr = X && !t.legacy ? X.exprOf(s.task) : null;
+          petState('thinking');
           fb.className = 'feedback bad big';
           fb.innerHTML = `<p class="fb-title">${G.icon('repeat', 22)} Пока не так — попробуй ещё раз</p><p>${feedbackFor(r, s.task, i)}</p>` + eventsHtml(ev, i) +
             `<div class="fb-actions">${xrayExpr ? `<button class="btn btn-primary" id="xray-open">${window.VEKTOR_TONE.t('catchBtn')}</button>` : ''}<button class="btn ${xrayExpr ? 'btn-ghost' : 'btn-primary'}" id="try-again">Исправить ответ</button>${s.hints < s.task.hints.length ? '<button class="btn btn-ghost" id="fb-hint">Подсказка</button>' : ''}${t.legacy ? '' : '<button class="btn btn-ghost" id="ask-tutor">Разобрать с наставником</button>'}</div>`;
@@ -1096,6 +1160,7 @@ function bind(page, i, stage) {
                   s.xray = { key: a.bug.key, level: a.level, step: a.errorAt };
                   logEvent('bug_found', { bug: a.bug.key, topic: t.id, level: a.level, step: a.errorAt });
                 }
+                if (a.bug) petState('catching');
                 if (a.bug) {
                   const res = host.querySelector('.xr-result');
                   res.insertAdjacentHTML('beforeend', `<button type="button" class="btn btn-primary" id="review-open">${window.VEKTOR_TONE.t('reviewBtn')}</button>`);
@@ -1107,7 +1172,7 @@ function bind(page, i, stage) {
           };
           save(); return;
         }
-        s.answered = true; m.practice++;
+        s.answered = true; m.practice++; petState('happy'); if (taskPet) try { taskPet.setCharge(Math.min(dayCharge().done + 1, dayCharge().goal), dayCharge().goal); } catch {}
         const sec = Math.round((Date.now() - s.started) / 1000), firstTry = s.tries.length === 1, hints = s.hints;
         let ev = [];
         if (!t.legacy) {
