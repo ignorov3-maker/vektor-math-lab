@@ -1,0 +1,11 @@
+{
+  "selectedAt": "2026-10-27",
+  "selectionSource": "Explicit user selection with three attached reference images",
+  "workingName": "Бипыч",
+  "nameApproved": false,
+  "variants": [
+    { "id": "raspberry", "file": "bipych-raspberry.png", "source": "../bipych-raspberry-cream.png", "satellite": true },
+    { "id": "turquoise", "file": "bipych-turquoise.png", "source": "../round-2/bipych-turquoise-pink.png", "satellite": true },
+    { "id": "black", "file": "bipych-black.png", "source": "../../tech/bit-original.png", "satellite": false }
+  ]
+}
