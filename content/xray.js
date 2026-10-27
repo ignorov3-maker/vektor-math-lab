@@ -39,7 +39,7 @@
     <span class="xr-prev" aria-hidden="true"></span><span class="xr-mark"></span></div>`;
 
   /* openDraft(el, { topic, expr, mistakeId, onResult(res, lines), onSkip() }) */
-  function openDraft(el, { topic, expr, mistakeId, prefill = '', title, skip = true, onResult, onSkip } = {}) {
+  function openDraft(el, { topic, expr, mistakeId, prefill = '', title, skip = true, ai = true, onResult, onSkip } = {}) {
     el.innerHTML = `<div class="xray card">
       <p class="xr-title">${esc(title || root.VEKTOR_TONE.t('draftTitle'))}</p>
       <div class="xr-lines">
@@ -77,7 +77,9 @@
       inp.value = (inp.value.slice(0, a) + ins + inp.value.slice(z)).replace(/\s{2,}/g, ' ');
       inp.dispatchEvent(new Event('input')); inp.focus(); const p = a + ins.length; inp.setSelectionRange(p, p);
     });
-    function done() {
+    let busy = false;
+    async function done() {
+      if (busy) return;
       const vals = rows().map(r => r.querySelector('.xr-in').value.trim()).filter(Boolean);
       const res = box.querySelector('.xr-result');
       if (!vals.length) { res.innerHTML = '<p class="xr-note">Запиши хотя бы одну строку — как ты считал.</p>'; return; }
@@ -96,7 +98,25 @@
         res.innerHTML = '<p class="xr-note">В черновике всё верно! Впиши последний результат в ответ.</p>';
       else if (a.bug)
         res.innerHTML = `<p class="xr-found">${root.VEKTOR_TONE.t('found', a.bug)}</p>`;
-      else
+      else if (ai && a.reason === 'value-changed' && root.VEKTOR_TUTOR && root.VEKTOR_TUTOR.serverReady && root.VEKTOR_TUTOR.serverReady()) {
+        // уровень 3: правила не узнали ошибку — спрашиваем ИИ, но верим только id из каталога темы и уверенности ≥ 0,7 (проверяет сервер)
+        busy = true;
+        res.innerHTML = `<p class="xr-note xr-wait">${root.VEKTOR_TONE.senior() ? 'Анализирую ход решения…' : 'Ищу жучка…'}</p>`;
+        const want = R.evalLine(expr);
+        const r = await root.VEKTOR_TUTOR.classify({ topic, cond: expr, answer: want.ok ? R.str(want.value) : '',
+          lines: all.slice(1).map((t, k) => ({ t, v: a.values[k + 1] ? R.str(a.values[k + 1]) : '?' })),
+          bugs: K.ofTopic(topic).map(b => ({ id: b.id, title: b.title })) });
+        busy = false;
+        const hit = r && r.bug !== 'other' && K.byKey[`${topic}:${r.bug}`];
+        if (hit) {
+          a.bug = hit; a.level = 3; a.ai = r;
+          const badRow = filled[a.errorAt - 1]; if (badRow) badRow.querySelector('.xr-mark').innerHTML = root.VEKTOR_TONE.art(hit, { size: 28 });
+          res.innerHTML = `<p class="xr-found">${root.VEKTOR_TONE.t('found', hit)}</p>`;
+        } else {
+          if (r) a.ai = r; // «другое» с объяснением модели — в журнал, так пополняем каталог
+          res.innerHTML = `<p class="xr-note">Ошибка спряталась в строке ${a.errorAt}. Сравни её с предыдущей.</p>`;
+        }
+      } else
         res.innerHTML = `<p class="xr-note">Ошибка спряталась в строке ${a.errorAt}. Сравни её с предыдущей.</p>`;
       onResult && onResult(a, all);
     }

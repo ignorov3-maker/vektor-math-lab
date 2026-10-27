@@ -257,7 +257,7 @@ function chatBox(i, kind) {
     <div class="chat-log" aria-live="polite">${c.msgs.filter(m => !m.hidden).map(msgHtml).join('') || (kind === 'task' ? '<p class="muted small chat-empty">Застрял? Спроси наставника — он не скажет ответ, но поможет дойти до него самому.</p>' : '')}</div>
     <div class="chat-quick">${quickReplies(i, kind).map(([v, l, main]) => `<button type="button" class="btn ${main ? 'btn-primary' : 'btn-ghost'} btn-sm" data-quick="${esc(v)}">${l}</button>`).join('')}</div>
     ${kind === 'lesson' && c.pending ? `<form class="chat-form chat-answer" autocomplete="off">${answerInput(c.pending.task, 'Проверить')}</form>` : `<form class="chat-form" autocomplete="off"><label class="visually-hidden" for="chat-in-${kind}">Сообщение наставнику</label>
-      <input id="chat-in-${kind}" placeholder="${ph}" maxlength="400"${c.busy ? ' disabled' : ''}><button class="btn btn-primary" type="submit"${c.busy ? ' disabled' : ''}>Отправить</button></form>`}
+      <input id="chat-in-${kind}" placeholder="${ph}" maxlength="400"${c.busy ? ' disabled' : ''}>${SPEECH ? `<button class="btn btn-ghost chat-mic" type="button" aria-label="Сказать голосом" title="Сказать голосом"${c.busy ? ' disabled' : ''}>${MIC_SVG}</button>` : ''}<button class="btn btn-primary" type="submit"${c.busy ? ' disabled' : ''}>Отправить</button></form>`}
     <p class="chat-mode small muted">${online && !c.forceOffline ? `Наставник: ${esc(modelName())}.` : online ? 'ИИ временно недоступен — урок идёт по конспекту.' : 'Наставник без ИИ — отвечает по конспекту.'} ${online || SERVER ? '' : '<a href="#settings">Подключить ИИ</a>'}</p>
   </div>`;
 }
@@ -286,6 +286,21 @@ function updateLastMsg(i, kind, m) {
   const log = box.querySelector('.chat-log'); log.scrollTop = log.scrollHeight;
 }
 
+/* Голосовой ввод в чат: встроенное распознавание речи браузера (ru-RU), без платных моделей.
+   Где браузер не умеет — кнопки микрофона нет, остаётся текст. Речь → текст в поле, ребёнок проверяет и отправляет. */
+const SPEECH = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+const MIC_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-2.1A7 7 0 0 0 19 12z" fill="currentColor"/></svg>';
+let listening = null;
+function listen(inp, btn) {
+  if (listening) { listening.stop(); return; }
+  const r = new SPEECH(); r.lang = 'ru-RU'; r.interimResults = true; r.maxAlternatives = 1;
+  const before = inp.value ? inp.value.trim() + ' ' : '';
+  r.onresult = e => { inp.value = (before + [...e.results].map(x => x[0].transcript).join(' ')).slice(0, 400); };
+  r.onend = r.onerror = () => { listening = null; btn.classList.remove('on'); btn.setAttribute('aria-label', 'Сказать голосом'); inp.focus(); };
+  listening = r; btn.classList.add('on'); btn.setAttribute('aria-label', 'Остановить запись');
+  try { r.start(); } catch { r.onend(); }
+}
+
 function bindChat(i, kind) {
   const box = app.querySelector(`.chat[data-chat="${kind}"]`); if (!box) return;
   const cf = box.querySelector('.chat-form');
@@ -298,11 +313,14 @@ function bindChat(i, kind) {
     };
     bindAnswerKeys();
     setTimeout(() => cf.querySelector('#ans-num')?.focus({ preventScroll: true }), 0);
-  } else cf.onsubmit = e => {
-    e.preventDefault();
-    const inp = cf.querySelector('input'), v = inp.value.trim(); if (!v) return;
-    inp.value = ''; tutorSay(i, kind, v);
-  };
+  } else {
+    cf.onsubmit = e => {
+      e.preventDefault();
+      const inp = cf.querySelector('input'), v = inp.value.trim(); if (!v) return;
+      inp.value = ''; tutorSay(i, kind, v);
+    };
+    const mic = cf.querySelector('.chat-mic'); if (mic) mic.onclick = () => listen(cf.querySelector('input'), mic);
+  }
   box.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => {
     const v = b.dataset.quick;
     if (v === 'go-practice') { session = null; location.hash = `lesson/${i}/practice`; return; }
@@ -1053,6 +1071,7 @@ function bind(page, i, stage) {
             X.openDraft(host, { topic: t.id, expr: xrayExpr, mistakeId: r.mistake, prefill: value,
               onResult: (a, lines) => {
                 logEvent('draft', { topic: t.id, lines: lines.length - 1, ok: a.stepsOk, step: a.errorAt });
+                if (a.ai && a.ai.bug === 'other') logEvent('bug_other', { topic: t.id, note: a.ai.note || '', lines: lines.slice(0, 5).map(x => String(x).slice(0, 60)) });
                 if (a.bug && !(s.xray && s.xray.key === a.bug.key)) {
                   s.xray = { key: a.bug.key, level: a.level, step: a.errorAt };
                   logEvent('bug_found', { bug: a.bug.key, topic: t.id, level: a.level, step: a.errorAt });

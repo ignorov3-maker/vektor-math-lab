@@ -771,3 +771,10 @@ body.test-mode main>header{position:static}
 /* ---------- Задача от учителя ---------- */
 .push-card { position: fixed; left: 50%; top: 12px; transform: translateX(-50%); width: min(520px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto; z-index: 60; padding: 16px; box-shadow: 0 12px 40px rgba(0,0,0,.18); background: var(--paper, #fff); border-radius: 16px; }
 .pc-kicker { font-weight: 700; color: var(--green, #1E7358); margin: 0 0 6px; }
+.rv-more { display: block; margin-top: 12px; background: none; border: 0; color: var(--muted, #888); font: inherit; font-size: 14px; text-decoration: underline; cursor: pointer; padding: 0; }
+.rv-more-out { margin-top: 6px; }
+.rv-more-out p { margin: 4px 0; }
+.chat-mic { padding-left: 10px; padding-right: 10px; }
+.chat-mic.on { color: #fff; background: #E46A5E; border-color: #E46A5E; animation: micPulse 1.2s ease-in-out infinite; }
+@keyframes micPulse { 50% { opacity: .7; } }
+@media (prefers-reduced-motion: reduce) { .chat-mic.on { animation: none; } }

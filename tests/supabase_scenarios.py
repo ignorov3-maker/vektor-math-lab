@@ -44,9 +44,13 @@ class H(http.server.SimpleHTTPRequestHandler):
             e = json.loads(self.rfile.read(int(self.headers['Content-Length'] or 0)))
             psql(f"insert into vk_events (event_id, student_id, type, data) values ({lit(e['event_id'])}, {int(e['student_id'])}, {lit(e['type'])}, {lit(e['data'])})")
             self.send_response(201); self.end_headers(); return
-        if self.path == '/rest/v1/rpc/vk_ai_take' and self.headers.get('apikey') == 'service-test':
+        if self.path.startswith('/rest/v1/rpc/vk_ai_') and self.headers.get('apikey') == 'service-test':
+            fn = self.path.rsplit('/', 1)[1]
+            if not re.fullmatch(r'vk_ai_(take|cache_get|cache_put|spend)', fn): self.send_response(404); self.end_headers(); return
             args = json.loads(self.rfile.read(int(self.headers['Content-Length'] or 0)) or b'{}')
-            out = psql(f"select vk_ai_take({lit(args.get('p_token'))})::text")
+            casts = {'p_in': 'int', 'p_out': 'int', 'p_student': 'int', 'p_usd': 'numeric'}
+            call = f"{fn}(" + ', '.join(f"{k} => {lit(v)}" + (f'::{casts[k]}' if k in casts else '') for k, v in args.items()) + ")"
+            out = 'null' if fn in ('vk_ai_cache_put', 'vk_ai_spend') and psql(f"select {call}") is not None else psql(f"select {call}::text")
             self.send_response(200); self.send_header('Content-Type', 'application/json'); self.end_headers(); self.wfile.write(out.encode()); return
         if not self.path.startswith('/rest/v1/rpc/') or self.headers.get('apikey') != 'anon-test':
             self.send_response(401); self.end_headers(); return
@@ -78,7 +82,7 @@ async def main():
         psql("do $$ begin create role anon nologin; exception when duplicate_object then null; end $$;"
              "do $$ begin create role authenticated nologin; exception when duplicate_object then null; end $$;")
         subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase/schema.sql')], check=True, capture_output=True)
-        for f in ('test.sql', 'admin.sql', 'teacher.sql', 'pulse.sql'):
+        for f in ('test.sql', 'admin.sql', 'teacher.sql', 'pulse.sql', 'ai.sql'):
             subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase' / f)], check=True, capture_output=True)
         rep('схема накатывается повторно', True)
         rep('vk_seed: 80 профилей с паролями', psql("select count(*) from vk_seed(80, '5А:1-28,5Б:29-56,5В:57-80') where password ~ '^[а-я]+[0-9]{4}$'") == '80')
@@ -127,7 +131,7 @@ async def main():
             psql("update vk_settings set value = '{\"enabled\": true, \"per_student_day\": 2, \"total_day\": 100}' where key = 'ai'")
             rep('наставник: режим «сервер Вектора»', await pg.evaluate("ai.mode") == 'vektor' and await pg.evaluate("isOnline()"))
             await pg.goto(base + '/#lesson/1/practice'); await pg.wait_for_timeout(400)
-            await pg.fill('#chat-in-task', 'мой телефон 8 916 123-45-67, помоги'); await pg.click('.chat-task .chat-form button'); await pg.wait_for_timeout(1500)
+            await pg.fill('#chat-in-task', 'мой телефон 8 916 123-45-67, помоги'); await pg.click('.chat-task .chat-form button[type=submit]'); await pg.wait_for_timeout(1500)
             rep('наставник ответил через сервер', 'на сколько частей' in await pg.inner_text('.chat-task .chat-log'))
             last = json.loads(urllib.request.urlopen(f'http://127.0.0.1:{FAKE_PORT}/last').read())
             user_txt = ' '.join(m['content'] for m in last['body']['messages'] if m['role'] == 'user')
@@ -135,14 +139,14 @@ async def main():
             rep('ключ модели — только на сервере', last['auth'] == 'Bearer sk-test' and 'token' not in last['body'])
             rep('телефон вырезан из текста ребёнка', '916' not in user_txt and 'номер скрыт' in user_txt, user_txt[:80])
             rep('имя ученика не уходит в модель', 'Ученик 1' not in sys_txt and 'зовут' not in sys_txt)
-            await pg.fill('#chat-in-task', 'ты сука тупая'); await pg.click('.chat-task .chat-form button'); await pg.wait_for_timeout(1500)
+            await pg.fill('#chat-in-task', 'ты сука тупая'); await pg.click('.chat-task .chat-form button[type=submit]'); await pg.wait_for_timeout(1500)
             _log = await pg.inner_text('.chat-task .chat-log'); rep('модерация: мягкий ответ ребёнку', 'вернёмся к математике' in _log, _log[-200:])
             rep('модерация: сигнал учителю записан', psql("select count(*) from vk_events where type='ai_flag'") == '1')
-            await pg.fill('#chat-in-task', 'ещё подсказку'); await pg.click('.chat-task .chat-form button'); await pg.wait_for_timeout(1200)
-            await pg.fill('#chat-in-task', 'и ещё'); await pg.click('.chat-task .chat-form button'); await pg.wait_for_timeout(1500)
+            await pg.fill('#chat-in-task', 'ещё подсказку'); await pg.click('.chat-task .chat-form button[type=submit]'); await pg.wait_for_timeout(1200)
+            await pg.fill('#chat-in-task', 'и ещё'); await pg.click('.chat-task .chat-form button[type=submit]'); await pg.wait_for_timeout(1500)
             rep('лимит в день: понятное сообщение и урок не ломается', '30 вопросов' in await pg.inner_text('.chat-task') or 'конспект' in await pg.inner_text('.chat-task'))
             psql("update vk_settings set value = '{\"enabled\": false, \"per_student_day\": 30, \"total_day\": 100}' where key = 'ai'")
-            await pg.fill('#chat-in-task', 'а как дальше?'); await pg.click('.chat-task .chat-form button'); await pg.wait_for_timeout(1500)
+            await pg.fill('#chat-in-task', 'а как дальше?'); await pg.click('.chat-task .chat-form button[type=submit]'); await pg.wait_for_timeout(1500)
             log = await pg.inner_text('.chat-task')
             rep('ИИ выключен на сервере: урок молча идёт по конспекту (П-03)', 'не отвечает' not in log and 'выключен' not in log and 'без ИИ' in log, log[-120:])
             # профиль на сервере: без настроек ИИ, имя не редактируется, «Для взрослых» скрыто (П-04)
@@ -157,6 +161,55 @@ async def main():
             try: urllib.request.urlopen(r); code = 200
             except urllib.error.HTTPError as e: code = e.code
             rep('без входа наставник не отвечает (401)', code == 401, code)
+            # ---------- ИИ-режимы (CL-8) ----------
+            tok2 = j['token']
+            def fn_call(payload):
+                r = urllib.request.Request(base + '/functions/v1/tutor', data=json.dumps(payload).encode(), headers={'Content-Type': 'application/json'})
+                try:
+                    with urllib.request.urlopen(r) as x: return x.status, x.read().decode()
+                except urllib.error.HTTPError as e: return e.code, e.read().decode()
+            BUGS = [{'id': 'add-denominators', 'title': 'Складывает числители и знаменатели'}, {'id': 'forgot-scale-numerators', 'title': 'Не домножил числители'}]
+            used0 = int(psql("select coalesce(sum(n),0) from vk_ai_usage") or 0)
+            code, out = fn_call({'mode': 'classify', 'token': tok2, 'data': {'topic': 'add-diff', 'cond': '1/2 + 1/3', 'answer': '5/6', 'lines': [{'t': '= 4/6', 'v': '2/3'}], 'bugs': BUGS}})
+            c1 = json.loads(out) if code == 200 else {}
+            last = json.loads(urllib.request.urlopen(f'http://127.0.0.1:{FAKE_PORT}/last').read())['body']
+            rep('classify: ИИ узнал ошибку из каталога', c1.get('bug') == 'add-denominators' and c1.get('confidence', 0) >= 0.7, out[:120])
+            rep('classify: JSON-режим, температура 0, дешёвый провайдер и запасная модель', last.get('response_format', {}).get('type') == 'json_object' and last.get('temperature') == 0
+                and last.get('provider', {}).get('sort') == 'price' and 'google/gemini-2.5-flash-lite' in last.get('models', []) and last.get('max_tokens', 999) <= 120 + 600)
+            used1 = int(psql("select coalesce(sum(n),0) from vk_ai_usage"))
+            code, out = fn_call({'mode': 'classify', 'token': tok2, 'data': {'topic': 'add-diff', 'cond': '1/2 + 1/3', 'answer': '5/6', 'lines': [{'t': '=  4/6 ', 'v': '2/3'}], 'bugs': BUGS}})
+            rep('кэш: та же ошибка второй раз — без вызова модели и без траты лимита', json.loads(out).get('cached') is True and int(psql("select coalesce(sum(n),0) from vk_ai_usage")) == used1 == used0 + 1)
+            code, out = fn_call({'mode': 'classify', 'token': tok2, 'data': {'topic': 'add-diff', 'cond': '2/3 + 1/4', 'answer': '11/12', 'lines': [{'t': '= 3/7', 'v': '3/7'}], 'bugs': BUGS}})
+            rep('classify: id не из каталога → other', json.loads(out).get('bug') == 'other', out[:80])
+            code, out = fn_call({'mode': 'classify', 'token': 'x' * 64, 'data': {'topic': 'add-diff', 'cond': '1/2 + 1/3', 'lines': [{'t': '= 4/6'}], 'bugs': BUGS}})
+            rep('classify: без входа нельзя даже из кэша', code == 401)
+            rep('учёт: токены и доллары пишутся', float(psql("select coalesce(sum(usd),0) from vk_ai_usage")) > 0 and int(psql("select coalesce(sum(tokens_in),0) from vk_ai_usage")) >= 2400)
+            code, out = fn_call({'mode': 'explain_more', 'token': tok2, 'data': {'title': 'Складывает числители и знаменатели', 'fix': 'общий знаменатель', 'step': 'контрпример', 'task': '1/2 + 1/3'}})
+            last = json.loads(urllib.request.urlopen(f'http://127.0.0.1:{FAKE_PORT}/last').read())['body']
+            rep('«объясни иначе»: поток, потолок 300 токенов, промпт собран сервером', code == 200 and 'data:' in out and last.get('stream') is True
+                and last.get('max_tokens', 0) <= 300 and 'иначе' in last['messages'][0]['content'])
+            await_spend = float(psql("select coalesce(sum(usd),0) from vk_ai_usage"))
+            rep('поток: расход из usage записан', await_spend >= 0.00014 * 3 - 1e-9, str(await_spend))
+            psql("update vk_settings set value = value || '{\"usd_day\": 0}' where key = 'ai'")
+            code, out = fn_call({'token': tok2, 'messages': [{'role': 'user', 'content': 'помоги'}]})
+            rep('дневной бюджет в $ исчерпан → тихий режим (503)', code == 503 and 'budget' in out, out[:100])
+            psql("update vk_settings set value = value || '{\"usd_day\": 3}' where key = 'ai'")
+            try: psql("set role anon; select vk_ai_cache_put('k', '{}')"); rep('служебные ИИ-функции закрыты', False)
+            except RuntimeError: rep('служебные ИИ-функции закрыты', True)
+            psql("update vk_settings set value = '{\"enabled\": true, \"per_student_day\": 30, \"total_day\": 100, \"usd_day\": 3}' where key = 'ai'")
+            await pg.goto(base + '/#lesson/4/practice'); await pg.wait_for_timeout(500)
+            await pg.evaluate("""() => { const f=(a,b)=>`<span class="frac"><span>${a}</span><span>${b}</span></span>`;
+              Object.assign(session.task, { question: `${f(1,2)} + ${f(1,3)} = ?`, answer: '5/6', accept: 'equivalent', misc: () => null }); }""")
+            await pg.evaluate("v => fillAnswer(v)", '4/6'); await pg.click('form.answer button[type=submit]'); await pg.wait_for_timeout(200)
+            await pg.click('#xray-open'); await pg.locator('.xr-in').first.fill('4/6'); await pg.click('[data-xr="done"]')
+            await pg.wait_for_selector('.xr-found', timeout=8000)
+            rep('черновик: незнакомую ошибку нашёл ИИ (уровень 3)', 'Складыватель' in await pg.inner_text('.xr-result') and await pg.evaluate("session.xray && session.xray.level") == 3)
+            await pg.click('#review-open'); await pg.wait_for_timeout(200)
+            await pg.click('.rv-more'); await pg.wait_for_timeout(1500)
+            rep('разбор: «Не понимаю» — ИИ объясняет иначе', 'на сколько частей' in await pg.inner_text('.rv-more-out'))
+            await pg.goto(base + '/#lesson/1/practice'); await pg.wait_for_timeout(400)
+            has_sr = await pg.evaluate("!!(window.SpeechRecognition || window.webkitSpeechRecognition)")
+            rep('голосовой ввод: микрофон в чате, если браузер умеет', (await pg.locator('.chat-task .chat-mic').count() == 1) == has_sr, f'распознавание в браузере: {has_sr}')
             await ctx.set_offline(True)
             await pg.evaluate("logEvent('test_offline', {k: 1}); save()"); await pg.wait_for_timeout(2200)
             rep('без сети — «Нет связи»', 'Нет связи' in await pg.inner_text('#sync-status'))
@@ -302,6 +355,7 @@ async def main():
 
         # ---------- Пульс класса (CL-6) ----------
         psql("update vk_tests set closes_at = now() - interval '1 minute' where closes_at > now()")
+        psql("delete from vk_events where type = 'bug_found'")  # чистый Пульс: ошибки из прошлых шагов не считаем
         psql("update vk_students set pass_hash = extensions.crypt('пульс1234', extensions.gen_salt('bf', 8)) where login in ('ученик3','ученик4','ученик5','ученик6','ученик7','ученик8')")
         for k in range(3, 9):
             psql(f"insert into vk_events (event_id, student_id, type, data) select 'pulse{k}aaaaaa', id, 'bug_found', '{{\"bug\":\"add-diff:add-denominators\",\"topic\":\"add-diff\",\"level\":2}}' from vk_students where login='ученик{k}'")

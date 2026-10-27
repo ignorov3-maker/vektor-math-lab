@@ -28,7 +28,7 @@
   function answerer(el, p, onAnswer) {
     const X = root.VEKTOR_XRAY;
     if (p.expr && X) {
-      X.openDraft(el, { topic: p.topic, expr: p.expr, title: 'Реши по шагам', skip: false,
+      X.openDraft(el, { topic: p.topic, expr: p.expr, title: 'Реши по шагам', skip: false, ai: false,
         onResult: (a, lines) => onAnswer(lines[lines.length - 1].replace(/^=\s*/, ''), a) });
       return;
     }
@@ -67,13 +67,30 @@
     const dots = () => el.querySelectorAll('.rv-dot').forEach((d, k) => { d.classList.toggle('on', k === step); d.classList.toggle('done', k < step); });
     const next = label => `<button type="button" class="btn btn-primary rv-next">${label || 'Дальше'}</button>`;
     const bindNext = fn => { const b = body.querySelector('.rv-next'); if (b) b.onclick = fn; };
+    // «Не понимаю» — ИИ объясняет этот же шаг иначе, зная найденную ошибку (только если сервер ИИ доступен)
+    const STEP = ['найти ошибку', 'контрпример', 'починить'];
+    function more() {
+      const TU = root.VEKTOR_TUTOR;
+      if (!TU || !TU.serverReady || !TU.serverReady() || body.querySelector('.rv-more')) return;
+      body.insertAdjacentHTML('beforeend', '<button type="button" class="rv-more">Не понимаю</button><div class="rv-more-out" aria-live="polite"></div>');
+      const b = body.querySelector('.rv-more'), out = body.querySelector('.rv-more-out');
+      b.onclick = async () => {
+        b.disabled = true; out.innerHTML = '<p class="muted">Объясняю по-другому…</p>';
+        ev('explain_more', { step: STEP[step] || step });
+        try {
+          await TU.explainMore({ title: bug.title, fix: bug.fixIdea, step: STEP[step] || '', task: o.own ? o.own.text : '' },
+            t => { out.innerHTML = TU.render(t, { streaming: true }).html; });
+          b.remove();
+        } catch (e) { out.innerHTML = '<p class="muted">Сейчас не получилось. Посмотри на картинку ещё раз и попробуй следующий шаг.</p>'; b.disabled = false; }
+      };
+    }
 
     // 1. Найти
     function find() {
       step = 0; dots();
       body.innerHTML = `<div class="rv-find">${T.art(bug, { size: T.senior() ? 40 : 72, status: 'caught' })}
         <div><p class="rv-h">${T.t('findHead', bug)}</p><p>Похоже, ${esc(bug.kidRule)}.</p></div></div>${next()}`;
-      bindNext(clash);
+      bindNext(clash); more();
     }
     // 2. Столкнуть
     function clash() {
@@ -81,6 +98,7 @@
       const c = bug.conflicts[conflictIdx % bug.conflicts.length];
       body.innerHTML = `<p>${fr(c.text.replace(/\[\[[^\]]*\]\]/g, ''))}</p>${fig(c.figure)}
         <p class="rv-q">${fr(c.ask)}</p><div class="rv-choices">${c.choices.map(x => `<button type="button" class="btn btn-ghost rv-choice">${fr(x)}</button>`).join('')}</div><p class="rv-note" aria-live="polite"></p>`;
+      more();
       body.querySelectorAll('.rv-choice').forEach((b, k) => b.onclick = () => {
         const right = c.choices[k] === c.right;
         ev('bug_step', { step: 'conflict', ok: right });
@@ -99,6 +117,7 @@
       step = 2; dots();
       const p = o.own;
       body.innerHTML = `<p class="rv-h">${esc(bug.fixIdea)}</p>${p ? `<p>Теперь реши свою задачу заново:</p><p class="rv-task">${fr(p.text)}</p><div class="rv-ans-host"></div><p class="rv-note" aria-live="polite"></p>` : next()}`;
+      more();
       if (!p) return bindNext(twin);
       answerer(body.querySelector('.rv-ans-host'), p, (raw, a) => {
         const ok = isRight(p, raw) && (!a || a.stepsOk);

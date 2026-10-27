@@ -1,0 +1,20 @@
+// Запуск: bun tests/ai_modes.test.ts — режимы ИИ серверной функции (CL-8): промпты и проверка ответа модели
+(globalThis as any).Deno = { env: { get: () => undefined }, serve: () => {} };
+const M = await import('../supabase/functions/tutor/index.ts');
+let fails = 0; const ok = (c: boolean, m: string) => { if (!c) { fails++; console.log('FAIL', m); } };
+const bugs = [{ id: 'add-denominators', title: 'Складывает числители и знаменатели' }, { id: 'forgot-scale-numerators', title: 'Не домножил числители' }];
+const ids = bugs.map(b => b.id);
+const c = M.buildMode('classify', { topic: 'add-diff', cond: '1/2 + 1/3', answer: '5/6', lines: [{ t: '= 2/5', v: '2/5' }], bugs, kid: 'мой тел 89161234567' })!;
+ok(c.json && c.messages[0].role === 'system' && c.messages[0].content.includes('Ответь только JSON'), 'classify: системный промпт первым');
+ok(c.messages[1].content.includes('add-denominators: Складывает'), 'classify: каталог темы — стабильная часть до задачи');
+ok(c.messages[2].content.includes('[значение: 2/5]') && !c.messages[2].content.includes('89161234567'), 'classify: значения от движка, телефон вырезан');
+ok(M.buildMode('classify', { topic: 'x', lines: [], bugs }) === null && M.buildMode('classify', { lines: [{ t: '1' }], bugs: [{ id: 'DROP TABLE' }] }) === null, 'classify: без строк или с кривыми id — отказ');
+ok(M.buildMode('explain_more', { title: 'Складывает', fix: 'общий знаменатель', step: 'контрпример', task: '1/2+1/3' })!.json === false, 'explain_more: поток');
+ok(M.buildMode('chat', {}) === null && M.buildMode('explain_more', {}) === null, 'неизвестный режим или пустые данные');
+const v = (raw: string) => M.validClassify(raw, ids);
+ok(v('{"bug":"add-denominators","confidence":0.92,"step":1,"kid_rule":"складываю всё"}').bug === 'add-denominators', 'верный ответ модели принят');
+ok(v('```json\n{"bug":"add-denominators","confidence":0.9}\n```').bug === 'add-denominators', 'ответ в ```json``` принят');
+ok(v('{"bug":"add-denominators","confidence":0.5}').bug === 'other', 'уверенность ниже 0,7 → other');
+ok(v('{"bug":"rm -rf","confidence":0.99}').bug === 'other', 'id не из списка → other');
+ok(v('не JSON вовсе').bug === 'other' && v('{"bug":"other","note":"путает знак"}').note === 'путает знак', 'мусор → other; заметка other сохраняется');
+console.log(fails ? `ai_modes: ${fails} FAIL` : 'ai_modes: OK'); process.exit(fails ? 1 : 0);

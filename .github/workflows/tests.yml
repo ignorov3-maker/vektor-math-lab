@@ -29,6 +29,10 @@ jobs:
           node tests/warmup.test.js
           node tests/tone.test.js
 
+      - uses: oven-sh/setup-bun@v2
+      - name: ИИ-режимы серверной функции
+        run: bun tests/ai_modes.test.ts
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
