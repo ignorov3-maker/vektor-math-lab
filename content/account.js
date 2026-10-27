@@ -69,8 +69,9 @@
   function loginScreen(msg) {
     document.body.classList.add('logged-out');
     const app = document.getElementById('app');
-    app.innerHTML = `<section class="login sheet" aria-labelledby="login-title">
-      <h1 id="login-title">Вход в «Вектор»</h1>
+    const L = window.VEKTOR_LANDING;
+    const loginHtml = `<section class="login sheet" aria-labelledby="login-title">
+      ${L ? '<h2 id="login-title">Вход для ученика</h2>' : '<h1 id="login-title">Вход в «Вектор»</h1>'}
       <p class="muted">Логин и пароль написаны на твоей бумажке.</p>
       <form id="login-form" novalidate>
         <label>Логин<input name="login" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="ученик1" required></label>
@@ -79,7 +80,10 @@
         <p class="feedback ${msg ? 'bad' : ''}" id="login-msg" role="alert">${msg ? esc(msg) : ''}</p>
         <button class="btn btn-primary btn-big" type="submit">Войти</button>
       </form>
-      <div class="role-switch"><span>Я учитель</span><a class="btn btn-ghost btn-sm" href="teacher.html">Вход для учителя →</a></div></section>`;
+      <div class="role-switch"><span>Я учитель</span><a class="btn btn-ghost btn-sm" href="teacher.html">Вход для учителя</a></div></section>`;
+    // Первая страница — лендинг, форма входа внутри него
+    if (L) { document.body.classList.add('landing'); app.innerHTML = L.render(loginHtml); L.mount(app); }
+    else app.innerHTML = loginHtml;
     const f = document.getElementById('login-form'), out = document.getElementById('login-msg');
     document.getElementById('show-pass').onchange = e => { f.password.type = e.target.checked ? 'text' : 'password'; };
     const latin = /[a-z]/i;

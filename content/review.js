@@ -162,16 +162,31 @@
     if (!bug || !p || document.getElementById('push-card')) return false;
     const c = bug.conflicts[(pl.conflict || 0) % bug.conflicts.length];
     const V = root.VEKTOR_VISUALS, m = String(c.figure || '').match(/^\[\[(.+)\]\]$/), g = m && V && V.figureFromTag(m[1]);
-    const el = document.createElement('div'); el.id = 'push-card'; el.className = 'push-card card'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Задача от учителя');
-    el.innerHTML = `<p class="pc-kicker">Задача от учителя</p><p>${fr(c.text.replace(/\[\[[^\]]*\]\]/g, ''))}</p>${g ? `<div class="rv-fig">${V.figure(g)}</div>` : ''}
-      <p class="rv-task" data-expr="${esc(p.expr || '')}">${fr(p.text)}</p><div class="rv-ans-host"></div><p class="rv-note" aria-live="polite"></p>`;
+    // Окно поверх экрана с затемнением; «Позже» сворачивает его в плашку, задача не теряется
+    const el = document.createElement('div'); el.id = 'push-card'; el.className = 'push-wrap';
+    el.innerHTML = `<div class="push-back" data-pc="later"></div>
+      <section class="push-card" role="dialog" aria-modal="true" aria-labelledby="pc-title">
+        <div class="pc-head"><h2 id="pc-title">Задача от учителя</h2><button type="button" class="pc-later" data-pc="later">Позже</button></div>
+        <p>${fr(c.text.replace(/\[\[[^\]]*\]\]/g, ''))}</p>${g ? `<div class="rv-fig">${V.figure(g)}</div>` : ''}
+        <p class="rv-task pc-lead" data-expr="${esc(p.expr || '')}">${p.expr ? 'Теперь реши сам:' : fr(p.text)}</p>
+        <div class="rv-ans-host"></div><div class="pc-result" aria-live="polite"></div>
+      </section>
+      <button type="button" class="push-pill" data-pc="open" hidden>Задача от учителя</button>`;
     document.body.appendChild(el);
+    const card = el.querySelector('.push-card'), back = el.querySelector('.push-back'), pill = el.querySelector('.push-pill');
+    const show = on => { card.hidden = back.hidden = !on; pill.hidden = on; document.body.classList.toggle('push-open', on); };
+    el.querySelectorAll('[data-pc="later"]').forEach(b => b.onclick = () => show(false));
+    pill.onclick = () => show(true);
+    show(true);
     let sent = false;
     answerer(el.querySelector('.rv-ans-host'), p, (raw, a) => {
       const ok = isRight(p, raw) && (!a || a.stepsOk);
       if (!sent) { sent = true; onDone && onDone(ok); }
-      el.querySelector('.rv-note').innerHTML = (ok ? 'Верно!' : `Ответ: ${fr(p.answer)}.`) + ' <button type="button" class="btn btn-primary btn-sm" data-pc="close">Закрыть</button>';
-      el.querySelector('[data-pc="close"]').onclick = () => el.remove();
+      el.querySelector('.rv-ans-host').querySelectorAll('button, input').forEach(x => (x.disabled = true));
+      el.querySelector('.pc-result').innerHTML = `<p class="${ok ? 'pc-ok' : 'pc-bad'}">${ok ? 'Верно! Учитель увидит твою галочку.' : `Пока не так. Правильный ответ: ${fr(p.answer)}.`}</p>
+        <button type="button" class="btn btn-primary" data-pc="close">Готово</button>`;
+      el.querySelector('[data-pc="close"]').onclick = () => { document.body.classList.remove('push-open'); el.remove(); };
+      el.querySelector('[data-pc="later"].pc-later').hidden = true;
     });
     return true;
   }

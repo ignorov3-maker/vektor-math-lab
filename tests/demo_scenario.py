@@ -74,13 +74,13 @@ async def main():
             rep('5. в Пульсе живые имена из демо-класса', any(n in txt for n in ['Аня С.', 'Дима Л.', 'Маша К.', 'Артём В.', 'Соня П.', 'Егор Н.']))
             async with tp.expect_popup() as pop: await row.locator('[data-board]').click()
             bp = await pop.value; await bp.wait_for_load_state()
-            rep('6. мини-урок на доске', 'Бипыч думает' in await bp.inner_text('body')); await bp.close()
+            rep('6. мини-урок на доске', 'Бипыч' in await bp.inner_text('body')); await bp.close()
             await row.locator('[data-push]').click()
             done = ''
             for _ in range(30):
                 await tp.wait_for_timeout(1000); await tp.reload(); await tp.wait_for_selector('.pulse-row', timeout=8000)
-                r2 = tp.locator('.pulse-row[data-bug="add-diff:add-denominators"] .pr-push')
-                done = await r2.inner_text() if await r2.count() else ''
+                r2 = tp.locator('.pulse-row[data-bug="add-diff:add-denominators"] .nchip.ok')
+                done = await r2.first.inner_text() if await r2.count() else ''
                 if '✓' in done: break
             rep('7. боты решили задачу учителя — ✓ появляются', '✓' in done, done[:100])
             await tp.click('[data-summary]'); sm = await tp.inner_text('.summary')

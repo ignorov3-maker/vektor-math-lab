@@ -38,7 +38,10 @@ begin
     select distinct on (p.bug) p.bug, p.id, p.logins, p.created from vk_pushes p
     where p.teacher_id = uid and p.created >= since order by p.bug, p.created desc)
   select coalesce(jsonb_agg(jsonb_build_object('bug', a.bug, 'n', a.n, 'logins', a.logins, 'healing', a.healing,
-      'push', case when p.id is null then null else jsonb_build_object('id', p.id, 'total', cardinality(p.logins),
+      'push', case when p.id is null then null else jsonb_build_object('id', p.id, 'total', cardinality(p.logins), 'logins', to_jsonb(p.logins),
+        'age', extract(epoch from now() - p.created)::int, 'expired', p.created < now() - interval '20 minutes',
+        'answered', (select coalesce(jsonb_agg(distinct s.login), '[]') from vk_events e join vk_students s on s.id = e.student_id
+               where e.type = 'push_done' and e.ts_server >= p.created and (e.data->>'push')::int = p.id),
         'done', (select count(distinct e.student_id) from vk_events e where e.type = 'push_done' and e.ts_server >= p.created and (e.data->>'push')::int = p.id),
         'ok', (select coalesce(jsonb_agg(distinct s.login), '[]') from vk_events e join vk_students s on s.id = e.student_id
                where e.type = 'push_done' and e.ts_server >= p.created and (e.data->>'push')::int = p.id and (e.data->>'ok')::boolean)) end)

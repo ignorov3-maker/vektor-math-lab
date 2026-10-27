@@ -385,6 +385,18 @@
 
   /* ---------- Достраиваем поля ---------- */
   const ex = s => s.replace(/\[\[[^\]]*\]\]/g, '').trim();
+  // Мини-урок идёт на доску для всего класса: обращение не к одному ребёнку, а к правилу
+  const forClass = t => String(t).replace(/По твоему( правилу)?/g, 'По этому правилу').replace(/У тебя /g, 'Получилось ')
+    .replace(/Ты записал/g, 'Записали').replace(/Ты нашёл/g, 'Нашли').replace(/а ты ответил/g, 'а ответили')
+    .replace(/Твой ответ/g, 'Этот ответ').replace(/Что ты выберешь/g, 'Что выбрать').replace(/Тебе дали/g, 'Дали');
+  // Первый слайд: Бипыч решил по неверному правилу — пример считает движок, поэтому он всегда точный
+  function bipychSolved(b) {
+    const p = trapOf(b, 1, 200);
+    if (!p) return `<p>Бипыч думает так: ${b.title.toLowerCase()}.</p>`;
+    const w = b.wrong(p);
+    return p.expr ? `<p>Бипыч решил так:</p><p class="board-math">${p.expr} = ${w}</p>`
+      : `<p>${p.text}</p><p>Бипыч ответил: <b>${w}</b></p>`;
+  }
   const KID_RULE = {"concept:flipped": "ты пишешь сверху, на сколько частей разрезали, а снизу — сколько взяли", "concept:took-eaten": "ты считаешь съеденные куски, а спрашивали про оставшиеся", "concept:unequal-parts": "ты считаешь любые куски долями, даже неравные", "reduce:not-fully-reduced": "ты останавливаешься, хотя дробь ещё можно сократить", "reduce:only-one-part": "ты делишь только числитель, а знаменатель оставляешь", "reduce:subtract-instead": "ты вычитаешь из числителя и знаменателя, а не делишь", "compare:bigger-denominator-bigger": "ты думаешь: чем больше знаменатель, тем больше дробь", "compare:compare-numerators-only": "ты сравниваешь только числители, хотя доли разные", "add-same:add-denominators": "ты складываешь и числители, и знаменатели", "add-diff:add-denominators": "ты складываешь и числители, и знаменатели", "add-same:subtract-denominators": "ты вычитаешь и числители, и знаменатели", "add-diff:forgot-scale-numerators": "ты меняешь знаменатели, а числители оставляешь прежними", "mixed:add-whole-to-numerator": "ты прибавляешь целую часть прямо к числителю", "mixed:multiply-whole-numerator": "ты умножаешь целую часть на числитель", "mult:cross-multiply": "ты умножаешь крест-накрест", "mult:multiply-both": "ты умножаешь на число и числитель, и знаменатель", "div:multiply-instead-of-divide": "ты умножаешь, не перевернув вторую дробь", "div:flip-first": "ты переворачиваешь первую дробь вместо второй", "part-of:flip-fraction": "ты делишь на числитель и умножаешь на знаменатель", "part-of:only-one-step": "ты находишь одну долю и останавливаешься", "part-of:part-instead-of-whole": "ты ищешь часть, хотя нужно найти целое"};
   for (const b of B) {
     b.kidRule = KID_RULE[`${b.topic}:${b.id}`];
@@ -392,8 +404,8 @@
     b.key = `${b.topic}:${b.id}`;
     b.explainRight = 0; // explainOptions[0] — верное; интерфейс перемешивает
     b.lesson = [
-      { kind: 'wrong', html: `<p>Бипыч думает, что так можно:</p><p>${ex(b.conflicts[0].text).split('.')[0]}.</p>`, question: 'Согласны с Бипычем?' },
-      { kind: 'conflict', html: `<p>${ex(b.conflicts[0].text)}</p>${b.conflicts[0].figure}`, question: b.conflicts[0].ask },
+      { kind: 'wrong', html: bipychSolved(b), question: 'Согласны с Бипычем?' },
+      { kind: 'conflict', html: `<p>${forClass(ex(b.conflicts[0].text))}</p>${b.conflicts[0].figure}`, question: forClass(b.conflicts[0].ask) },
       { kind: 'fix', html: `<p><b>${b.fixIdea}</b></p>`, question: 'Решим вместе: ' + (() => { const p = trapOf(b, 2); return p ? p.text : ''; })(), answerHtml: (() => { const p = b._lastTrap; return p ? p.answer : ''; })() },
     ];
   }

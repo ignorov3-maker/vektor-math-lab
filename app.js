@@ -259,7 +259,7 @@ function chatBox(i, kind) {
     <div class="chat-quick">${quickReplies(i, kind).map(([v, l, main]) => `<button type="button" class="btn ${main ? 'btn-primary' : 'btn-ghost'} btn-sm" data-quick="${esc(v)}">${l}</button>`).join('')}</div>
     ${kind === 'lesson' && c.pending ? `<form class="chat-form chat-answer" autocomplete="off">${answerInput(c.pending.task, 'Проверить')}</form>` : `<form class="chat-form" autocomplete="off"><label class="visually-hidden" for="chat-in-${kind}">Сообщение наставнику</label>
       <input id="chat-in-${kind}" placeholder="${ph}" maxlength="400"${c.busy ? ' disabled' : ''}>${SPEECH ? `<button class="btn btn-ghost chat-mic" type="button" aria-label="Сказать голосом" title="Сказать голосом"${c.busy ? ' disabled' : ''}>${MIC_SVG}</button>` : ''}<button class="btn btn-primary" type="submit"${c.busy ? ' disabled' : ''}>Отправить</button></form>`}
-    <p class="chat-mode small muted">${online && !c.forceOffline ? `Наставник: ${esc(modelName())}.` : online ? 'ИИ временно недоступен — урок идёт по конспекту.' : 'Наставник без ИИ — отвечает по конспекту.'} ${online || SERVER ? '' : '<a href="#settings">Подключить ИИ</a>'}</p>
+    <p class="chat-mode small muted">${online && !c.forceOffline ? (SERVER ? 'Наставник не скажет ответ — поможет дойти до него самому.' : `Наставник: ${esc(modelName())}.`) : online ? 'ИИ временно недоступен — урок идёт по конспекту.' : 'Наставник без ИИ — отвечает по конспекту.'} ${online || SERVER ? '' : '<a href="#settings">Подключить ИИ</a>'}</p>
   </div>`;
 }
 
@@ -341,8 +341,8 @@ function mountPetsAndCollection(page, stage) {
   const home = app.querySelector('#pet-home');
   if (home) { const ch = dayCharge(); petMount(home, { size: 104, state: ch.done >= ch.goal ? 'celebrate' : 'idle', charge: ch }); }
   if (page === 'lesson' && stage === 'practice') {
-    const fb = app.querySelector('#feedback');
-    if (fb && !app.querySelector('.task-pet')) { const d = document.createElement('div'); d.className = 'task-pet'; d.setAttribute('aria-hidden', 'true'); fb.before(d); taskPet = petMount(d, { size: 64, state: 'idle', charge: dayCharge() }); }
+    const at = app.querySelector('#answer-form') && app.querySelector('.story');
+    if (at && !app.querySelector('.task-pet')) { const d = document.createElement('div'); d.className = 'task-pet'; d.setAttribute('aria-hidden', 'true'); at.before(d); taskPet = petMount(d, { size: 64, state: 'idle', charge: dayCharge() }); }
   }
   const cb = app.querySelector('#col-bugs'), cs = app.querySelector('#col-shop');
   if (C && cb) C.renderBugs(cb, { bugs: collectionBugs(), rank: bugRank(beatenCount()) });
@@ -779,7 +779,7 @@ function lessonPage(i, stage) {
   return `<div class="lesson-top"><button class="btn btn-ghost btn-sm back" data-go="home">← К пути</button></div>
     <div class="page-head"><h1>${t.title}</h1></div>
     ${steps}
-    <p class="do-now">${G.icon('target', 20)}<span><b>Что делать сейчас:</b> ${DO_NOW[stage] ? DO_NOW[stage]() : ''}</span></p>
+    ${stage === 'practice' ? '' : `<p class="do-now">${G.icon('target', 20)}<span><b>Что делать сейчас:</b> ${DO_NOW[stage] ? DO_NOW[stage]() : ''}</span></p>`}
     ${reqHtml}${body}`;
 }
 
@@ -1130,7 +1130,7 @@ function bind(page, i, stage) {
           petState('thinking');
           fb.className = 'feedback bad big';
           fb.innerHTML = `<p class="fb-title">${G.icon('repeat', 22)} Пока не так — попробуй ещё раз</p><p>${feedbackFor(r, s.task, i)}</p>` + eventsHtml(ev, i) +
-            `<div class="fb-actions">${xrayExpr ? `<button class="btn btn-primary" id="xray-open">${window.VEKTOR_TONE.t('catchBtn')}</button>` : ''}<button class="btn ${xrayExpr ? 'btn-ghost' : 'btn-primary'}" id="try-again">Исправить ответ</button>${s.hints < s.task.hints.length ? '<button class="btn btn-ghost" id="fb-hint">Подсказка</button>' : ''}${t.legacy ? '' : '<button class="btn btn-ghost" id="ask-tutor">Разобрать с наставником</button>'}</div>`;
+            `<div class="fb-actions">${xrayExpr ? `<button class="btn btn-primary" id="xray-open">${window.VEKTOR_TONE.t('catchBtn')}</button>` : ''}<button class="btn ${xrayExpr ? 'btn-ghost' : 'btn-primary'}" id="try-again">Исправить ответ</button></div><div class="fb-links">${s.hints < s.task.hints.length ? '<button class="link" id="fb-hint">Подсказка</button>' : ''}${t.legacy ? '' : '<button class="link" id="ask-tutor">Спросить наставника</button>'}</div>`;
           fb.querySelector('#try-again').onclick = () => { const inp = app.querySelector('#ans-num'); if (inp) { inp.focus(); inp.select(); } };
           const fh = fb.querySelector('#fb-hint'); if (fh) fh.onclick = () => app.querySelector('#hint-btn')?.click();
           sfx('wrong');
@@ -1170,6 +1170,7 @@ function bind(page, i, stage) {
               onSkip: () => { xo.disabled = false; } });
             host.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
           };
+          fb.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); // на телефоне отклик сразу на виду
           save(); return;
         }
         s.answered = true; m.practice++; petState('happy'); if (taskPet) try { taskPet.setCharge(Math.min(dayCharge().done + 1, dayCharge().goal), dayCharge().goal); } catch {}
