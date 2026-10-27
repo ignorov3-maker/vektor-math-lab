@@ -45,7 +45,7 @@
     ['hat-mushroom', 'hat', 'Мухомор-путешественник', 75, null, 'Лесная шляпка с крошечным светлячком.'],
     ['hat-arcade', 'hat', 'Аркадный шлем', 110, null, 'На макушке играет собственный пиксельный эквалайзер.'],
     ['net-orbit', 'net', 'Орбитальный сачок', 95, null, 'Ромбовидная рамка и крошечный спутник на орбите.'],
-    ['net-honey', 'net', 'Соты охотника', 80, null, 'Янтарная рамка и необычная сетка из пиксельных сот.'],
+    ['net-honey', 'net', 'Соты охотника', 80, null, 'Золотистая рамка, семь открытых сот и деревянная ручка.'],
     ['net-comet', 'net', 'Ловец комет', 0, 'ten-bugs', 'Сачок-звезда со следом из мерцающей звёздной пыли.']
   ].map(function (c) {
     return Object.freeze({ id: c[0], slot: c[1], name: c[2], price: c[3], unlock: c[4] || null, description: c[5] || '' });
@@ -123,8 +123,14 @@
       netMesh = 'M112 42H113V58H112ZM119 42H120V58H119ZM108 46H124V47H108ZM108 54H124V55H108Z';
       netEffect = '<g class="bipych-orbit-mote">' + rect(96, 38, 4, 4, '#FFE79C') + '</g>';
     } else if (map.net === 'net-honey') {
-      netRim = 'M108 32H124V36H128V40H132V60H128V64H124V68H108V64H104V60H100V40H104V36H108ZM108 38H124V42H128V58H124V62H108V58H104V42H108Z';
-      netMesh = 'M112 38H113V42H119V38H120V43H124V44H120V50H124V51H120V57H124V58H120V62H119V58H113V62H112V57H108V56H112V50H108V49H112V43H108V42H112ZM113 44V49H119V44ZM113 51V56H119V51Z';
+      netRim = 'M108 30H124V34H128V38H132V42H134V56H132V60H128V64H124V68H108V64H104V60H100V56H98V42H100V38H104V34H108ZM109 34H123V38H127V42H130V56H127V60H123V64H109V60H105V56H102V42H105V38H109Z';
+      netMesh = [[112, 37], [106, 41], [118, 41], [112, 45], [106, 49], [118, 49], [112, 53]].map(function (xy) {
+        var x = xy[0], y = xy[1];
+        return 'M' + (x + 2) + ' ' + y + 'H' + (x + 6) + 'V' + (y + 2) + 'H' + (x + 8) + 'V' + (y + 6) +
+          'H' + (x + 6) + 'V' + (y + 8) + 'H' + (x + 2) + 'V' + (y + 6) + 'H' + x + 'V' + (y + 2) + 'H' + (x + 2) + 'Z';
+      }).join('');
+      netEffect = path('M109 31H123V33H109ZM99 43H101V55H99Z', '#FFE6A1', 'bipych-honey-detail') +
+        path('M114 70H118V73H114ZM114 77H118V79H114Z', '#E6B862');
     } else if (map.net === 'net-comet') {
       netRim = 'M112 28H120V36H124V40H128V44H136V52H128V56H124V60H120V68H112V60H108V56H104V52H96V44H104V40H108V36H112ZM112 40H120V44H124V52H120V56H112V52H108V44H112Z';
       netMesh = 'M114 42H115V54H114ZM119 42H120V54H119ZM110 46H122V47H110ZM110 50H122V51H110Z';
@@ -163,8 +169,8 @@
       '<g class="bipych-hand bipych-hand-right">' +
       '<g class="bipych-net"' + (map.net ? ' data-equipped="true"' : '') + '>' +
       rect(114, 64, 4, 28, '#806247', 'bipych-net-handle') +
-      '<path d="' + netRim + '" fill="' + netColor + '" fill-rule="evenodd" stroke="' + p[0] + '" stroke-width="1" class="bipych-net-rim"/>' +
-      '<path d="' + netMesh + '" fill="#6A9284" opacity=".65" class="bipych-net-mesh"/>' + netEffect + '</g>' +
+      '<path d="' + netRim + '" fill="' + netColor + '" fill-rule="evenodd" stroke="' + (map.net === 'net-honey' ? '#6B4B2C' : p[0]) + '" stroke-width="1" class="bipych-net-rim"/>' +
+      '<path d="' + netMesh + '" ' + (map.net === 'net-honey' ? 'fill="none" stroke="#8EAD9D" stroke-width=".75"' : 'fill="#6A9284"') + ' opacity=".65" class="bipych-net-mesh"/>' + netEffect + '</g>' +
       rect(108, 82, 16, 16, p[0], 'bipych-grip') + rect(111, 84, 10, 10, limb) + rect(112, 84, 4, 4, p[2]) + '</g>' +
       '<g class="bipych-shy-hands"><g class="bipych-shy-hand-left">' + shyHand +
       '</g><g class="bipych-shy-hand-right"><g transform="translate(136 0) scale(-1 1)">' + shyHand + '</g></g></g>' +
