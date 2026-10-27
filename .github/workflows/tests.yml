@@ -24,6 +24,7 @@ jobs:
           node tests/worker.test.mjs
           node tests/rational.test.js
           node tests/stubs.test.js
+          node tests/bugs.test.js
 
       - uses: actions/setup-python@v5
         with:
