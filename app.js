@@ -72,6 +72,23 @@ document.addEventListener('click', e => {
 });
 // журнал событий для анализа пилота (раздел 7 ТЗ); без сервера ничего не делает
 const logEvent = (type, data) => { if (window.VEKTOR_SYNC) window.VEKTOR_SYNC.event(type, data); };
+// Разбор жучка (Рентген мышления, шаги 1–4). Своя задача ребёнка — в виде структуры для движка.
+function ownProblem(task, topic) {
+  const X = window.VEKTOR_XRAY, expr = X && X.exprOf(task);
+  const text = String(task.question || '').replace(/<span class="frac"><span>(\d+)<\/span><span>(\d+)<\/span><\/span>/g, '$1/$2').replace(/<[^>]+>/g, '');
+  const p = { topic, expr, text: [task.story, text].filter(Boolean).join(' ').replace(/<[^>]+>/g, ''), answer: task.answer };
+  if (['<', '>', '='].includes(task.answer)) p.sign = task.answer;
+  else { const r = window.VEKTOR_RATIONAL.evalLine(String(task.answer)); if (r.ok) p.value = r.value; }
+  return p;
+}
+function openReview(host, key, s, i) {
+  const RV = window.VEKTOR_REVIEW; if (!RV) return;
+  RV.open(host, { bugKey: key, own: ownProblem(s.task, topics[i].id), today: today(), bugs: RV.ensure(state), lv: meta(i).level || 2,
+    onEvent: (type, data) => { logEvent(type, data); save(); },
+    onStars: n => { game().stars += n; save(); const h = document.querySelector('#hud-stars'); if (h) h.textContent = game().stars; },
+    onClose: () => { save(); host.innerHTML = ''; app.querySelector('#ans-num')?.focus(); } });
+  save(); host.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
 let ai = T.loadCfg();
 const game = () => G.ensure(state);
 
@@ -992,6 +1009,16 @@ function bind(page, i, stage) {
           const ask = fb.querySelector('#ask-tutor');
           if (ask) ask.onclick = () => { tutorSay(i, 'task', `Я ответил «${value}», но не получилось. Помоги понять, где ошибка.`); app.querySelector('.chat-task')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
           bindEventButtons(fb, i);
+          const rk = !xrayExpr && r.mistake && window.VEKTOR_BUGS && window.VEKTOR_BUGS.byKey[`${t.id}:${r.mistake}`];
+          if (rk && !t.legacy) {
+            fb.querySelector('.fb-actions').insertAdjacentHTML('afterbegin', '<button class="btn btn-primary" id="review-open">Поймать жучка</button>');
+            fb.querySelector('#try-again').className = 'btn btn-ghost';
+            fb.querySelector('#review-open').onclick = () => {
+              let host = app.querySelector('#xray-host'); if (!host) { host = document.createElement('div'); host.id = 'xray-host'; fb.after(host); }
+              if (!(s.xray && s.xray.key === rk.key)) { s.xray = { key: rk.key, level: 1, step: null }; logEvent('bug_found', { bug: rk.key, topic: t.id, level: 1, step: null }); }
+              openReview(host, rk.key, s, i);
+            };
+          }
           const xo = fb.querySelector('#xray-open');
           if (xo) xo.onclick = () => {
             let host = app.querySelector('#xray-host');
@@ -1003,6 +1030,11 @@ function bind(page, i, stage) {
                 if (a.bug && !(s.xray && s.xray.key === a.bug.key)) {
                   s.xray = { key: a.bug.key, level: a.level, step: a.errorAt };
                   logEvent('bug_found', { bug: a.bug.key, topic: t.id, level: a.level, step: a.errorAt });
+                }
+                if (a.bug) {
+                  const res = host.querySelector('.xr-result');
+                  res.insertAdjacentHTML('beforeend', '<button type="button" class="btn btn-primary" id="review-open">Разобраться с жучком</button>');
+                  res.querySelector('#review-open').onclick = () => openReview(host, a.bug.key, s, i);
                 }
               },
               onSkip: () => { xo.disabled = false; } });

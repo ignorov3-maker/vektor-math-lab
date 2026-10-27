@@ -736,3 +736,25 @@ body.test-mode main>header{position:static}
 .xr-skip { margin-top: 10px; background: none; border: 0; color: var(--muted, #888); font: inherit; font-size: 14px; text-decoration: underline; cursor: pointer; padding: 0; }
 .xr-found { font-weight: 700; color: #C44E43; margin: 12px 0 0; }
 .xr-note { margin: 12px 0 0; }
+
+/* ---------- Разбор жучка ---------- */
+.review { margin-top: 12px; padding: 16px; }
+.rv-dots { display: flex; gap: 6px; margin-bottom: 12px; }
+.rv-dot { flex: 1; height: 4px; border-radius: 2px; background: var(--line, #e2e2e2); }
+.rv-dot.done { background: var(--green, #1E7358); }
+.rv-dot.on { background: #E46A5E; }
+.rv-find { display: flex; gap: 14px; align-items: center; margin-bottom: 12px; }
+.rv-find svg { flex: none; }
+.rv-h { font-weight: 700; font-size: 18px; margin: 0 0 4px; }
+.rv-q { font-weight: 700; }
+.rv-fig { margin: 8px 0; overflow-x: auto; }
+.rv-choices { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.rv-choices .btn { flex: 1 1 40%; font-size: 18px; }
+.rv-choice:disabled { opacity: .45; }
+.rv-task { font-size: 20px; margin: 8px 0; }
+.rv-note { min-height: 1.2em; }
+.rv-stars { font-weight: 700; color: var(--green, #1E7358); }
+.rv-ans { display: flex; gap: 8px; align-items: center; }
+.rv-ans .xr-in { flex: 1; }
+.review .xray { margin-top: 4px; padding: 0; box-shadow: none; border: 0; background: none; }
+.review .rv-next { margin-top: 12px; width: 100%; }

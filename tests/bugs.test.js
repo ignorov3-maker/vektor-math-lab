@@ -7,7 +7,7 @@ ok(K.list.length === 21, 'жучков 21, а не ' + K.list.length);
 ok(new Set(K.list.map(b => b.key)).size === 21, 'ключи уникальны');
 const N = +process.env.N || 1000;
 for (const b of K.list) {
-  for (const f of ['kidName', 'title', 'fixIdea']) ok(b[f], `${b.key}: нет ${f}`);
+  for (const f of ['kidName', 'title', 'fixIdea', 'kidRule']) ok(b[f], `${b.key}: нет ${f}`);
   ok(b.conflicts.length >= 2, `${b.key}: нужно 2 контрпримера`);
   b.conflicts.forEach((c, i) => { ok(c.verify(), `${b.key}: контрпример ${i + 1} не даёт абсурда`); ok(c.choices.includes(c.right), `${b.key}: верный вариант не среди кнопок`); });
   ok(b.explainOptions.length === 3, `${b.key}: 3 варианта объяснения`);

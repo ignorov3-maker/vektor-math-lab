@@ -39,9 +39,9 @@
     <span class="xr-prev" aria-hidden="true"></span><span class="xr-mark"></span></div>`;
 
   /* openDraft(el, { topic, expr, mistakeId, onResult(res, lines), onSkip() }) */
-  function openDraft(el, { topic, expr, mistakeId, prefill = '', onResult, onSkip } = {}) {
+  function openDraft(el, { topic, expr, mistakeId, prefill = '', title = 'Давай поймаем жучка! Запиши, как считал', skip = true, onResult, onSkip } = {}) {
     el.innerHTML = `<div class="xray card">
-      <p class="xr-title">Давай поймаем жучка! Запиши, как считал</p>
+      <p class="xr-title">${esc(title)}</p>
       <div class="xr-lines">
         <div class="xr-row xr-cond"><span class="xr-eq"></span><span class="xr-prev">${pretty(expr)}</span></div>
         ${ROW(1, prefill)}
@@ -51,7 +51,7 @@
         <button type="button" class="btn btn-ghost btn-sm" data-xr="add">+ строка</button>
         <button type="button" class="btn btn-primary" data-xr="done">Готово</button>
       </div>
-      <button type="button" class="xr-skip" data-xr="skip">Не помню, как решал</button>
+      ${skip ? '<button type="button" class="xr-skip" data-xr="skip">Не помню, как решал</button>' : ''}
       <div class="xr-result" aria-live="polite"></div>
     </div>`;
     const box = el.querySelector('.xray'), lines = box.querySelector('.xr-lines');
@@ -102,7 +102,7 @@
     }
     box.querySelector('[data-xr="add"]').onclick = add;
     box.querySelector('[data-xr="done"]').onclick = done;
-    box.querySelector('[data-xr="skip"]').onclick = () => { el.innerHTML = ''; onSkip && onSkip(); };
+    if (skip) box.querySelector('[data-xr="skip"]').onclick = () => { el.innerHTML = ''; onSkip && onSkip(); };
     setTimeout(() => rows()[0].querySelector('.xr-in').focus(), 0);
     return { done, add };
   }
