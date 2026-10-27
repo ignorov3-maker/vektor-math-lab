@@ -8,6 +8,9 @@ CI already installs Python Playwright and Chromium for the existing e2e suite.
 import asyncio
 import json
 import os
+import re
+import subprocess
+import sys
 from pathlib import Path
 
 from playwright.async_api import async_playwright
@@ -194,3 +197,19 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+    total = len(RESULTS)
+    environment = dict(os.environ, PYTHONIOENCODING="utf-8")
+    # Isolated feature branches may contain only the mascot suite.
+    for name in ["codex_art.py", "codex_collection.py", "codex_board.py", "codex_landing.py", "codex_print.py"]:
+        path = ROOT / "tests" / name
+        if not path.exists():
+            continue
+        result = subprocess.run([sys.executable, str(path)], cwd=ROOT, env=environment,
+                                capture_output=True, text=True, encoding="utf-8", timeout=180)
+        match = re.search(r"ИТОГО:\s*(\d+)\s*из\s*(\d+)", result.stdout)
+        if result.returncode or not match or match[1] != match[2]:
+            print(result.stdout, result.stderr, flush=True)
+            raise SystemExit(result.returncode or 1)
+        total += int(match[1])
+        print(name + ": " + match.group(0), flush=True)
+    print(f"ВСЕГО: {total} из {total}", flush=True)
