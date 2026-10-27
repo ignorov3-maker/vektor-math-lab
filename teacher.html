@@ -334,7 +334,7 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
 
   /* ---------- Пульс: жучки сейчас (CL-6) ---------- */
   const BUGS = window.VEKTOR_BUGS, V = window.VEKTOR_VISUALS;
-  const who = l => esc(label(l) || l);
+  const who = l => esc(label(l) || ((data.find(st => st.login === l) || {}).label) || l);
   const whoList = (ls, k = 2) => ls.slice(0, k).map(who).join(', ') + (ls.length > k ? ` и ещё ${ls.length - k}` : '');
   function paintPulse(control) {
     const list = control || !pulse ? [] : (pulse.bugs || []).filter(x => BUGS.byKey[x.bug]);
@@ -446,7 +446,7 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
   const minsLeft = t => Math.max(0, Math.ceil((Date.parse(t.closes_at) / 1000 - now) / 60));
   function paintTests() {
     const cl = (tests.classes || []).slice().sort((a, b) => (b.name === ui.cls) - (a.name === ui.cls) || a.name.localeCompare(b.name));
-    const who = l => esc(label(l) || l);
+    const who = l => esc(label(l) || ((data.find(st => st.login === l) || {}).label) || l);
     const html = cl.map(c => {
       const roster = data.filter(s => s.class === c.name);
       return `<div class="tclass"><h2>${esc(c.name)}${c.group === 'control' ? ' <span class="small muted">контрольный</span>' : ''}<span class="small muted">· ${c.total || roster.length} ${plural(c.total || roster.length, 'ученик', 'ученика', 'учеников')}</span></h2>

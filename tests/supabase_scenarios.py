@@ -56,8 +56,10 @@ class H(http.server.SimpleHTTPRequestHandler):
         sql = f"set role anon; select {fn}(" + ', '.join(f'{k} => {lit(v)}' for k, v in args.items()) + ")::text"
         try: out, code = psql(sql), 200
         except RuntimeError as e: out, code = json.dumps({'message': str(e).split('ERROR:')[-1].strip()}), 400
-        self.send_response(code); self.send_header('Content-Type', 'application/json'); self.end_headers()
-        self.wfile.write(out.encode())
+        try:
+            self.send_response(code); self.send_header('Content-Type', 'application/json'); self.end_headers()
+            self.wfile.write(out.encode())
+        except (BrokenPipeError, ConnectionResetError): pass  # клиент (бот) уже ушёл
 
 def rpc(base, fn, **args):
     req = urllib.request.Request(f'{base}/rest/v1/rpc/{fn}', data=json.dumps(args).encode(), headers={'Content-Type': 'application/json', 'apikey': 'anon-test'})
@@ -359,4 +361,5 @@ async def main():
     print(f'\nИТОГО: {sum(results)} из {len(results)}')
     sys.exit(0 if all(results) else 1)
 
-asyncio.run(main())
+if __name__ == '__main__':
+    asyncio.run(main())

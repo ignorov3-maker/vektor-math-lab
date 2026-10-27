@@ -38,7 +38,7 @@
 ## Запуск на Vercel + Supabase (рабочий вариант пилота)
 Сайт — статический (Vercel), данные и логика входа — в Supabase. Публичный ключ и адрес базы лежат в `config.js`.
 
-**База.** В Supabase → SQL Editor по очереди выполнить `supabase/schema.sql`, `supabase/test.sql`, `supabase/admin.sql`, `supabase/teacher.sql`, `supabase/pulse.sql`.
+**База.** В Supabase → SQL Editor по очереди выполнить `supabase/schema.sql`, `supabase/test.sql`, `supabase/admin.sql`, `supabase/teacher.sql`, `supabase/pulse.sql`, `supabase/pilot_report.sql`. Демо для сцены — `docs/demo.md`.
 Серверная функция наставника — `supabase/functions/tutor`, секрет `OPENROUTER_API_KEY` (Edge Functions → Secrets).
 
 **Администрирование — в SQL Editor:**
