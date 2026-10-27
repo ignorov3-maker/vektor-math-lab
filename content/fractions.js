@@ -70,6 +70,7 @@
             hints: ['Сколько всего равных кусков? Это знаменатель.', `Осталось ${n} − ${k} = ${n - k} ${pieces(n - k)}. Это числитель.`],
             solution: `Всего ${n} ${pieces(n)}, осталось ${n - k}: ${f(n - k, n)}.`,
             misc: got => (is(got, k, n) ? 'took-eaten' : is(got, n, n - k) ? 'flipped' : null),
+            p: { kind: 'left', n, k }, // числа для сюжетов про интересы (stories.js)
           };
         }
         return {
@@ -80,6 +81,7 @@
           hints: ['На сколько равных частей разделили полоску?', `Закрашено ${k} ${parts(k)} из ${n}.`],
           solution: `${k} ${parts(k)} из ${n}: ${f(k, n)}.`,
           misc: got => (is(got, n, k) ? 'flipped' : is(got, n - k, n) ? 'took-eaten' : null),
+          p: { kind: 'shaded', n, k },
         };
       },
     },
@@ -204,6 +206,7 @@
           figureIsHint: true,
           solution: `${a} ${op} ${b} = ${n}, знаменатель остаётся ${d}: ${f(n, d)}${gcd(n, d) > 1 ? ` = ${fracHtml(n, d)}` : ''}.`,
           misc: got => (plus && is(got, a + b, 2 * d) ? 'add-denominators' : null),
+          p: { kind: plus ? 'sum' : 'diff', x: [a, d], y: [b, d] },
         };
       },
     },
@@ -248,6 +251,7 @@
             if (got && got.kind === 'frac' && got.d === L && got.n !== n && got.n === (plus ? A + C : A - C)) return 'forgot-scale-numerators';
             return null;
           },
+          p: { kind: plus ? 'sum' : 'diff', x: [A, B], y: [C, D] },
         };
       },
     },
@@ -416,6 +420,7 @@
             hints: [`Сначала найди ${f(1, b)}: ${N} : ${b}.`, `${f(1, b)} — это ${unit}. Возьми ${take(a)}.`],
             solution: `${N} : ${b} · ${a} = ${ans}.`,
             misc: got => (!got ? null : got.v === unit && a !== 1 ? 'only-one-step' : Math.abs(got.v - (N / a) * b) < 1e-9 ? 'flip-fraction' : null),
+            p: { kind: 'part', N, a, b },
           };
         }
         const M = unit * a, whole = unit * b;
@@ -426,6 +431,7 @@
           hints: [`${a} ${parts(a)} — это ${M}. Сколько приходится на одну часть?`, `Одна часть — ${unit}. А всего частей ${b}.`],
           solution: `${M} : ${a} · ${b} = ${whole}.`,
           misc: got => (!got ? null : got.v === unit && a !== 1 ? 'only-one-step' : Math.abs(got.v - (M / b) * a) < 1e-9 && a !== b ? 'part-instead-of-whole' : null),
+          p: { kind: 'whole', M, a, b },
         };
       },
     },

@@ -778,3 +778,12 @@ body.test-mode main>header{position:static}
 .chat-mic.on { color: #fff; background: #E46A5E; border-color: #E46A5E; animation: micPulse 1.2s ease-in-out infinite; }
 @keyframes micPulse { 50% { opacity: .7; } }
 @media (prefers-reduced-motion: reduce) { .chat-mic.on { animation: none; } }
+
+/* ---------- Интересы ---------- */
+.interests { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; margin: 10px 0; }
+.int-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.int-chip span { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; border: 1.5px solid var(--line, #d8d8d8); border-radius: 12px; font-size: 14px; cursor: pointer; text-align: center; }
+.int-chip input:checked + span { border-color: var(--green, #1E7358); background: color-mix(in srgb, var(--green, #1E7358) 10%, transparent); font-weight: 700; }
+.int-chip input:focus-visible + span { outline: 3px solid var(--green, #1E7358); outline-offset: 2px; }
+.interests-ask { margin-bottom: 12px; }
+.story-ic { display: inline-block; vertical-align: middle; margin-right: 6px; }

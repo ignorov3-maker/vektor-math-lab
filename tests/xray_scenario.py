@@ -118,6 +118,23 @@ async def main():
         rep('8 класс: без «жучков», методическое название', 'жуч' not in txt.lower() and 'Складыватель' not in txt and 'складывает' in txt.lower(), txt[:80])
         rep('8 класс: без мультяшного рисунка', await pg.locator('#xray-host svg[data-bug]').count()==0)
         await pg.goto(B+'#settings'); rep('класс есть в профиле', await pg.locator('#set-grade').count()==1)
+
+        # задачи про интересы: выбор на главной → сюжеты про футбол в тренировке
+        await pg.evaluate("() => { state.settings.grade = 5; delete state.settings.interests; localStorage.setItem('vektor-progress-v3', JSON.stringify(state)); }")
+        await pg.goto(B+'#home'); await pg.reload(); await pg.wait_for_timeout(300)
+        rep('интересы: на главной предлагают выбрать', await pg.locator('.interests-ask .int-chip').count() == 12)
+        for k in ['football', 'games', 'animals', 'space']: await pg.locator(f'.interests-ask label:has(input[value={k}])').click()
+        rep('интересы: не больше трёх', await pg.locator('.interests-ask input:checked').count() == 3)
+        await pg.click('[data-interests-save]'); await pg.wait_for_timeout(200)
+        rep('интересы: сохранены, вопрос больше не показывается', await pg.evaluate("state.settings.interests.length") == 3 and await pg.locator('.interests-ask').count() == 0)
+        await pg.evaluate("() => { state.settings.interests = ['football']; save(); }")
+        await pg.goto(B+'#lesson/0/practice'); await pg.wait_for_timeout(200)
+        seen = 0
+        for _ in range(20):
+            await pg.evaluate("() => { session = null; render(); }"); await pg.wait_for_timeout(80)
+            if await pg.locator('.story .story-ic').count() and ('удар' in await pg.inner_text('.story') or 'матч' in await pg.inner_text('.story')): seen += 1
+        rep('интересы: в тренировке есть задачи про футбол с иконкой', 4 <= seen <= 16, f'{seen} из 20')
+        await pg.goto(B+'#settings'); rep('интересы: можно поменять в профиле', await pg.locator('#settings-form .int-chip').count() == 12)
         rep('нет ошибок JavaScript', not errs, '; '.join(errs)[:200])
         await b.close()
     print(f'\nИТОГО: {sum(R)} из {len(R)}')

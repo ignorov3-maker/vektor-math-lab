@@ -28,6 +28,7 @@ jobs:
           node tests/review.test.js
           node tests/warmup.test.js
           node tests/tone.test.js
+          node tests/stories.test.js
 
       - uses: oven-sh/setup-bun@v2
       - name: ИИ-режимы серверной функции

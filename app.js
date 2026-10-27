@@ -56,6 +56,7 @@ try { state = Object.assign(fresh(), JSON.parse(localStorage.getItem(KEY))); } c
   if (typeof state.settings.name !== 'string' || !state.settings.name.trim()) state.settings.name = d.settings.name;
   if (!['steps', 'visual'].includes(state.settings.style)) state.settings.style = 'steps';
   if (typeof state.settings.sound !== 'boolean') state.settings.sound = true;
+  if (state.settings.interests !== undefined && !Array.isArray(state.settings.interests)) delete state.settings.interests;
   if (![5, 6, 7, 8, 9].includes(state.settings.grade)) state.settings.grade = 5;
   if (!Array.isArray(state.diag.results) || !Number.isInteger(state.diag.step)) state.diag = d.diag;
   state.attempts = state.attempts.filter(a => a && typeof a === 'object');
@@ -178,7 +179,7 @@ function answerInput(task, button) {
 }
 
 function taskCard(task, { formId = 'answer-form', button = 'Проверить', exam = false, hints = false } = {}) {
-  return `<p class="story">${task.story}</p>${exam && task.figureIsHint ? '' : figure(task.figure)}<p class="question" id="q">${task.question}</p>
+  return `<p class="story">${task.interest && window.VEKTOR_ART ? `<span class="story-ic" aria-hidden="true">${window.VEKTOR_ART.interest(task.interest, { size: 28 })}</span>` : ''}${task.story}</p>${exam && task.figureIsHint ? '' : figure(task.figure)}<p class="question" id="q">${task.question}</p>
     <form class="answer" id="${formId}" autocomplete="off">${answerInput(task, button)}</form>
     ${hints ? `<div class="hint-zone"><div id="hints"></div><button type="button" class="btn btn-ghost" id="hint-btn">Подсказка</button></div>` : ''}
     <div class="feedback" id="feedback" role="status" aria-live="polite"></div>`;
@@ -299,6 +300,22 @@ function listen(inp, btn) {
   r.onend = r.onerror = () => { listening = null; btn.classList.remove('on'); btn.setAttribute('aria-label', 'Сказать голосом'); inp.focus(); };
   listening = r; btn.classList.add('on'); btn.setAttribute('aria-label', 'Остановить запись');
   try { r.start(); } catch { r.onend(); }
+}
+
+/* Интересы ребёнка (CL-9): 12 иконок, до трёх; сюжеты задач — из заранее написанного банка, числа — от движка */
+function interestPicker(sel) {
+  const S = window.VEKTOR_STORIES, A = window.VEKTOR_ART;
+  return `<div class="interests" role="group" aria-label="Интересы">${S.INTERESTS.map(x => `<label class="int-chip"><input type="checkbox" name="interest" value="${x.id}"${sel.includes(x.id) ? ' checked' : ''}><span>${A ? A.interest(x.id, { size: 28 }) : ''}${x.name}</span></label>`).join('')}</div>`;
+}
+const pickedInterests = el => [...el.querySelectorAll('input[name=interest]:checked')].map(x => x.value).slice(0, 3);
+function withInterests(task) { const S = window.VEKTOR_STORIES; return S && Array.isArray(state.settings.interests) ? S.apply(task, state.settings.interests) : task; }
+function bindInterests(root) {
+  root.querySelectorAll('.interests').forEach(g => g.addEventListener('change', e => {
+    const on = g.querySelectorAll('input:checked'); if (on.length > 3) e.target.checked = false;
+  }));
+  const box = root.querySelector('.interests-ask'); if (!box) return;
+  box.querySelector('[data-interests-save]').onclick = () => { state.settings.interests = pickedInterests(box); save(); render(); };
+  box.querySelector('[data-interests-skip]').onclick = () => { state.settings.interests = []; save(); render(); };
 }
 
 function bindChat(i, kind) {
@@ -588,6 +605,7 @@ function home() {
   ${state.warmupDay !== today() && warmupPlan().length ? `<section class="hero-next hero-warmup" aria-label="Разминка">
     <div class="hero-text"><p class="hero-kicker">Разминка</p><h2>Две минуты перед занятием</h2><p class="muted">${window.VEKTOR_TONE.t('warmupSub')}</p></div>
     <button class="btn btn-primary btn-big btn-go" data-warmup>${G.icon('rocket', 22)} Начать</button></section>` : ''}
+  ${!Array.isArray(state.settings.interests) && window.VEKTOR_STORIES ? `<section class="sheet interests-ask" aria-label="Интересы"><h2>Что тебе нравится?</h2><p class="muted">Выбери 2–3 — задачи будут про это.</p>${interestPicker([])}<div class="row-actions"><button class="btn btn-primary" data-interests-save>Готово</button><button class="btn btn-ghost" data-interests-skip>Пропустить</button></div></section>` : ''}
   <section class="hero-next" aria-label="Следующий шаг">
     <div class="hero-text">
       <p class="hero-kicker">${ct.stage === 'review' ? 'Повторение' : ct.reason ? 'Сначала повторим' : 'Продолжай отсюда'}</p>
@@ -735,7 +753,7 @@ function learnStage(i) {
 function newPracticeTask(i) {
   const m = meta(i), t = topics[i], p = pace();
   if (m.level == null && !t.legacy) m.level = A.startLevel(p);
-  session = { i, mode: 'practice', task: t.generate(t.legacy ? undefined : m.level), hints: 0, answered: false, tries: [], started: Date.now(), lastMistake: null, autoHint: false };
+  session = { i, mode: 'practice', task: withInterests(t.generate(t.legacy ? undefined : m.level)), hints: 0, answered: false, tries: [], started: Date.now(), lastMistake: null, autoHint: false };
   if (!t.legacy && A.autoHint(m, p)) { session.hints = 1; session.autoHint = true; }
   const tc = chats[`${t.id}:task`]; if (tc && !tc.busy) Object.assign(tc, { msgs: [], hint: 0 });
 }
@@ -885,6 +903,7 @@ function settings() {
     <div class="stack">
       <form class="sheet" id="settings-form">
         <h2>Ученик</h2>
+        ${window.VEKTOR_STORIES ? `<div class="field">Мои интересы <span class="muted small">(до 3)</span>${interestPicker(state.settings.interests || [])}</div>` : ''}
         <label class="field">Имя ученика<input name="name" id="set-name" value="${esc(s.name)}" maxlength="30" required></label>
         <label class="field">Класс<select name="grade" id="set-grade">${[5, 6, 7, 8, 9].map(n => `<option value="${n}"${s.grade === n ? ' selected' : ''}>${n} класс</option>`).join('')}</select></label>
         <label class="field">Цель дня<select name="goal" id="set-goal">${[3, 5, 10].map(n => `<option value="${n}"${game().goal === n ? ' selected' : ''}>${n} задач в день</option>`).join('')}</select></label>
@@ -975,6 +994,7 @@ function render() {
   document.querySelector('#avatar').textContent = (state.settings.name[0] || 'А').toUpperCase();
   app.innerHTML = ({ home, map: () => mapPage(filterState.map), diagnostic, library: () => library(filterState.library), awards, teacher, settings, lesson: () => lessonPage(i, lessonStage), warmup: warmupPage })[page]();
   bind(page, i, lessonStage);
+  bindInterests(app);
   if (page === 'warmup') runWarmup();
   app.querySelectorAll('[data-warmup]').forEach(b => b.onclick = () => { location.hash = 'warmup'; });
   hud();
@@ -1166,7 +1186,7 @@ function bind(page, i, stage) {
   if (sform) sform.onsubmit = e => {
     e.preventDefault();
     const nm = sform.querySelector('#set-name');
-    state.settings = { ...state.settings, name: nm ? nm.value.trim() || 'Ученик' : state.settings.name, style: sform.style.value, sound: sform.sound.checked, grade: +sform.grade.value || 5 }; game().goal = +sform.goal.value || 5; save();
+    state.settings = { ...state.settings, name: nm ? nm.value.trim() || 'Ученик' : state.settings.name, style: sform.style.value, sound: sform.sound.checked, grade: +sform.grade.value || 5, interests: pickedInterests(sform) }; game().goal = +sform.goal.value || 5; save();
     document.querySelector('#student-name').textContent = state.settings.name;
     document.querySelector('#avatar').textContent = state.settings.name[0].toUpperCase();
     app.querySelector('#feedback').textContent = 'Сохранено.';
