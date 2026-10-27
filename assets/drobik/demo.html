@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ru" data-skin="notebook">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Бипыч — живой напарник Вектора</title>
+  <link rel="stylesheet" href="../../style.css">
+  <link rel="stylesheet" href="../../skins.css">
+  <link rel="stylesheet" href="../../styles/drobik.css">
+  <link rel="stylesheet" href="demo.css">
+  <script src="../../content/drobik.js" defer></script>
+  <script src="demo.js" defer></script>
+</head>
+<body>
+<div class="demo-shell">
+  <header class="demo-header"><a href="../../index.html" class="demo-brand">↗ Вектор</a><span>Лаборатория персонажа</span>
+    <label class="demo-skin">Оформление <select id="skin"><option value="notebook">Тетрадь</option><option value="orbit">Орбита</option><option value="pop">Стикеры</option><option value="pixel">Пиксель</option></select></label>
+  </header>
+  <main class="demo-main">
+    <section class="demo-intro">
+      <div><p class="demo-eyebrow">Знакомься, твой напарник</p><h1>Бипыч.<br>Маленький, но с характером.</h1><p class="demo-lead">Замечает интересное, радуется находкам и иногда сам путается. А потом пробует ещё раз — вместе с тобой.</p><a class="demo-link" href="#playground">Посмотреть, что он умеет ↓</a></div>
+      <div class="demo-family" aria-label="Три версии Бипыча">
+        <figure><div data-hero="screen-raspberry"></div><figcaption>Малиновый</figcaption></figure>
+        <figure><div data-hero="screen-turquoise"></div><figcaption>Бирюзовый</figcaption></figure>
+        <figure><div data-hero="screen-black"></div><figcaption>Чёрный</figcaption></figure>
+      </div>
+    </section>
+    <section id="playground" class="demo-section" aria-labelledby="play-title">
+      <div class="demo-section-title"><div><p class="demo-eyebrow">Попробуй сам</p><h2 id="play-title">Как настроение, Бипыч?</h2></div><button type="button" id="cycle" aria-pressed="false">Проиграть все состояния</button></div>
+      <div class="demo-playground">
+        <div class="demo-stage"><div id="main-bipych"></div><p id="state-description" class="demo-stage-caption" aria-live="polite">Осматривается и моргает. Всё спокойно.</p></div>
+        <div class="demo-controls">
+          <fieldset><legend>Настроение</legend><div class="demo-state-buttons" id="states"></div></fieldset>
+          <fieldset><legend>Цвет персонажа</legend><div id="palettes" class="demo-palette-buttons">
+            <button type="button" data-palette="screen-raspberry" aria-pressed="false"><i class="swatch swatch-raspberry"></i>Малиновый</button>
+            <button type="button" data-palette="screen-turquoise" aria-pressed="true"><i class="swatch swatch-turquoise"></i>Бирюзовый</button>
+            <button type="button" data-palette="screen-black" aria-pressed="false"><i class="swatch swatch-black"></i>Чёрный</button>
+          </div></fieldset>
+          <div class="demo-two"><label>Решено задач <input id="done" type="range" min="0" max="5" value="2"></label><label>Цель дня <select id="goal"><option>3</option><option>4</option><option selected>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select></label></div>
+          <label class="demo-check"><input id="senior" type="checkbox">Спокойная версия для 7–9 класса</label>
+          <fieldset><legend>Реплика</legend><form id="speech"><label class="demo-sr" for="line">Что скажет Бипыч</label><input id="line" value="Бип! Кажется, мы что-то нашли." maxlength="140"><button type="submit">Сказать</button><label class="demo-check"><input type="checkbox" id="voice">Произнести вслух</label></form><p class="demo-hint">Голос зависит от голосов, установленных в браузере.</p></fieldset>
+        </div>
+      </div>
+    </section>
+    <section class="demo-section" aria-labelledby="dress-title">
+      <p class="demo-eyebrow">Немного индивидуальности</p><h2 id="dress-title">Примерочная</h2><p>30 предметов: три цвета, семь пикселей-спутников, десять головных уборов и десять сачков.</p>
+      <div class="demo-dress"><label>Пиксель-спутник<select id="antenna"></select></label><label>Головной убор<select id="hat"></select></label><label>Сачок<select id="net"></select></label><button type="button" id="reset">Снять аксессуары</button></div>
+      <p class="demo-hint">Здесь можно примерить всё. Покупки и награды передаёт приложение.</p>
+    </section>
+    <section class="demo-section" aria-labelledby="states-title">
+      <p class="demo-eyebrow">Один характер — девять состояний</p><h2 id="states-title">Бипыч в деле</h2><div class="demo-matrix" id="matrix"></div>
+    </section>
+    <section class="demo-section demo-scale" aria-labelledby="scale-title"><div><h2 id="scale-title">Даже крошечный — узнаваемый</h2><p>32, 48, 64 и 96 пикселей. Заряд живёт рядом с персонажем.</p></div><div id="scales"></div></section>
+  </main>
+  <footer class="demo-footer">Бипыч · Вектор <span>Анимации учитывают настройку «Уменьшить движение».</span></footer>
+</div>
+</body>
+</html>
