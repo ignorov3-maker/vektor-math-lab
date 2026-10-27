@@ -247,7 +247,13 @@ async def main():
             for(const c of VEKTOR_DROBIK.COSMETICS.filter(c=>c.slot==='net')){
                 contractPet.setCosmetics({screen:'screen-black',net:c.id});
                 const card=[...host.querySelectorAll('[data-item]')].find(el=>el.dataset.item===c.id);
-                if(!card || card.querySelector('.bipych-net').innerHTML!==document.querySelector('#contract-host .bipych-net').innerHTML){ok=false;break;}
+                const normalize=html=>html.replace(/bipych-[0-9]+-net-weave/g,'net-weave');
+                if(!card || normalize(card.querySelector('.bipych-net').innerHTML)!==normalize(document.querySelector('#contract-host .bipych-net').innerHTML)){ok=false;break;}
+                for(const svg of [card.querySelector('svg'),document.querySelector('#contract-host svg')]){
+                    const mesh=svg.querySelector('.bipych-net-mesh'),ref=mesh.getAttribute('fill').slice(5,-1);
+                    const pattern=document.getElementById(ref),rim=svg.querySelector('.bipych-net-rim').getAttribute('d');
+                    if(!pattern || pattern.closest('svg')!==svg || mesh.getAttribute('d')!==rim.slice(rim.lastIndexOf('M'))){ok=false;break;}
+                }
             }
             VEKTOR_COLLECTION.renderBugs(host,{bugs:[]});host.remove();return ok;
         }"""))

@@ -45,7 +45,7 @@
     ['hat-mushroom', 'hat', 'Мухомор-путешественник', 75, null, 'Лесная шляпка с крошечным светлячком.'],
     ['hat-arcade', 'hat', 'Аркадный шлем', 110, null, 'На макушке играет собственный пиксельный эквалайзер.'],
     ['net-orbit', 'net', 'Орбитальный сачок', 95, null, 'Ромбовидная рамка и крошечный спутник на орбите.'],
-    ['net-honey', 'net', 'Соты охотника', 80, null, 'Золотистая рамка, семь открытых сот и деревянная ручка.'],
+    ['net-honey', 'net', 'Соты охотника', 80, null, 'Золотистая рамка, тонкая ромбовая сетка и деревянная ручка.'],
     ['net-comet', 'net', 'Ловец комет', 0, 'ten-bugs', 'Сачок-звезда со следом из мерцающей звёздной пыли.']
   ].map(function (c) {
     return Object.freeze({ id: c[0], slot: c[1], name: c[2], price: c[3], unlock: c[4] || null, description: c[5] || '' });
@@ -61,6 +61,7 @@
   var NETS = ['#C8A366', '#6AD3B7', '#F483AD', '#82C5F0', '#E9C24A', '#B29CE8', '#A8C6DD', '#8DBA77', '#FFE58A', '#EAB1E5', '#AFA0F3', '#E9AD46', '#A9E7F4'];
   var OUTLINE = 'M42 34H92V38H100V42H108V50H112V90H108V98H100V106H36V102H28V94H24V50H28V42H34V38H42Z';
   var INSIDE = 'M42 38H90V42H98V46H104V52H108V88H104V96H98V102H38V98H32V92H28V52H32V44H38V42H42Z';
+  var NET_WEAVE = 'M0 0H1V1H2V2H3V3H4V4H5V5H6V6H7V7M7 0H6V1H5V2H4V3H3V4H2V5H1V6H0V7';
   var serial = 0;
 
   function shape(tag, attrs, children) {
@@ -114,28 +115,19 @@
     var netRim = squareNet
       ? 'M100 36H132V68H100ZM104 40H128V64H104Z'
       : 'M110 32H122V36H126V40H130V60H126V64H122V68H110V64H106V60H102V40H106V36H110ZM110 36H122V40H126V60H122V64H110V60H106V40H110Z';
-    var netMesh = squareNet
-      ? 'M112 40H113V64H112ZM119 40H120V64H119ZM108 46H124V47H108ZM108 57H124V58H108Z'
-      : 'M112 38H113V62H112ZM119 38H120V62H119ZM108 44H124V45H108ZM108 55H124V56H108Z';
     var netEffect = '';
     if (map.net === 'net-orbit') {
       netRim = 'M112 30H120V34H124V38H128V42H132V46H136V54H132V58H128V62H124V66H120V70H112V66H108V62H104V58H100V54H96V46H100V42H104V38H108V34H112ZM112 38H120V42H124V46H128V54H124V58H120V62H112V58H108V54H104V46H108V42H112Z';
-      netMesh = 'M112 42H113V58H112ZM119 42H120V58H119ZM108 46H124V47H108ZM108 54H124V55H108Z';
       netEffect = '<g class="bipych-orbit-mote">' + rect(96, 38, 4, 4, '#FFE79C') + '</g>';
     } else if (map.net === 'net-honey') {
       netRim = 'M108 30H124V34H128V38H132V42H134V56H132V60H128V64H124V68H108V64H104V60H100V56H98V42H100V38H104V34H108ZM109 34H123V38H127V42H130V56H127V60H123V64H109V60H105V56H102V42H105V38H109Z';
-      netMesh = [[112, 37], [106, 41], [118, 41], [112, 45], [106, 49], [118, 49], [112, 53]].map(function (xy) {
-        var x = xy[0], y = xy[1];
-        return 'M' + (x + 2) + ' ' + y + 'H' + (x + 6) + 'V' + (y + 2) + 'H' + (x + 8) + 'V' + (y + 6) +
-          'H' + (x + 6) + 'V' + (y + 8) + 'H' + (x + 2) + 'V' + (y + 6) + 'H' + x + 'V' + (y + 2) + 'H' + (x + 2) + 'Z';
-      }).join('');
       netEffect = path('M109 31H123V33H109ZM99 43H101V55H99Z', '#FFE6A1', 'bipych-honey-detail') +
         path('M114 70H118V73H114ZM114 77H118V79H114Z', '#E6B862');
     } else if (map.net === 'net-comet') {
       netRim = 'M112 28H120V36H124V40H128V44H136V52H128V56H124V60H120V68H112V60H108V56H104V52H96V44H104V40H108V36H112ZM112 40H120V44H124V52H120V56H112V52H108V44H112Z';
-      netMesh = 'M114 42H115V54H114ZM119 42H120V54H119ZM110 46H122V47H110ZM110 50H122V51H110Z';
       netEffect = '<g class="bipych-stardust">' + rect(100, 26, 4, 4, '#F4B5D4') + rect(92, 20, 3, 3, '#FFE59C') + rect(88, 12, 2, 2, '#B7EAF2') + '</g>';
     }
+    var netOpening = netRim.slice(netRim.lastIndexOf('M'));
     var satellite = map.antenna || (map.screen === 'screen-black' ? '' : 'pixel-sun');
     var limb = map.screen === 'screen-black' ? p[3] : p[4];
     var shyLimb = map.screen === 'screen-black' ? p[2] : limb;
@@ -151,6 +143,8 @@
     var sleeping = rect(44, 73, 14, 4, p[5]) + rect(76, 73, 14, 4, p[5]);
     var result = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 144" class="bipych-svg" aria-hidden="true" focusable="false" shape-rendering="crispEdges">' +
       '<title id="' + uid + '">Бипыч</title>' +
+      '<defs><pattern id="' + uid + '-net-weave" x="30" y="22" width="7" height="7" patternUnits="userSpaceOnUse">' +
+      '<path d="' + NET_WEAVE + '" fill="none" stroke="#527D70" stroke-width=".65" opacity=".62"/></pattern></defs>' +
       '<g class="bipych-shadow">' + rect(32, 120, 76, 4, p[0]) + rect(40, 116, 60, 4, p[0]) + '</g>' +
       '<g class="bipych-actor">' +
       '<g class="bipych-foot bipych-foot-left">' + rect(40, 102, 16, 14, p[0]) + rect(44, 104, 8, 8, limb) + '</g>' +
@@ -170,7 +164,7 @@
       '<g class="bipych-net"' + (map.net ? ' data-equipped="true"' : '') + '>' +
       rect(114, 64, 4, 28, '#806247', 'bipych-net-handle') +
       '<path d="' + netRim + '" fill="' + netColor + '" fill-rule="evenodd" stroke="' + (map.net === 'net-honey' ? '#6B4B2C' : p[0]) + '" stroke-width="1" class="bipych-net-rim"/>' +
-      '<path d="' + netMesh + '" ' + (map.net === 'net-honey' ? 'fill="none" stroke="#8EAD9D" stroke-width=".75"' : 'fill="#6A9284"') + ' opacity=".65" class="bipych-net-mesh"/>' + netEffect + '</g>' +
+      '<path d="' + netOpening + '" fill="url(#' + uid + '-net-weave)" class="bipych-net-mesh"/>' + netEffect + '</g>' +
       rect(108, 82, 16, 16, p[0], 'bipych-grip') + rect(111, 84, 10, 10, limb) + rect(112, 84, 4, 4, p[2]) + '</g>' +
       '<g class="bipych-shy-hands"><g class="bipych-shy-hand-left">' + shyHand +
       '</g><g class="bipych-shy-hand-right"><g transform="translate(136 0) scale(-1 1)">' + shyHand + '</g></g></g>' +

@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   var lib = window.VEKTOR_DROBIK, NS = 'http://www.w3.org/2000/svg', serial = 0;
-  var color = 'screen-turquoise', selected = 'diamond', pets = [], framePets = [];
+  var color = 'screen-turquoise', selected = 'fine', pets = [], framePets = [];
   var variants = [
     { id: 'diamond', name: 'Крупные ромбы', description: 'Редкая диагональная сетка. Хорошо видна даже на маленьком сачке.' },
     { id: 'fine', name: 'Тонкие ромбы', description: 'Более частое плетение. Лёгкая сетка привычного сачка для бабочек.' },
@@ -44,6 +44,7 @@
   }
   function applyMesh(host, id) {
     var svg = host.querySelector('svg'), rim = svg.querySelector('.bipych-net-rim');
+    svg.querySelectorAll('defs').forEach(function (el) { el.remove(); });
     var old = svg.querySelector('.bipych-net-mesh'), d = rim.getAttribute('d');
     var clipId = 'net-choice-' + (++serial), defs = svgNode('defs', {});
     var clip = svgNode('clipPath', { id: clipId, clipPathUnits: 'userSpaceOnUse' });

@@ -133,7 +133,8 @@
     } catch (e) { notice(e.message); }
   });
   syncOutfit(); renderWardrobe();
-  if (new URLSearchParams(location.search).get('wardrobe') === 'special') byId('wardrobe').querySelector('[data-slot=special]').click();
+  var requestedSlot = new URLSearchParams(location.search).get('wardrobe');
+  if (['special', 'screen', 'antenna', 'hat', 'net'].indexOf(requestedSlot) >= 0) byId('wardrobe').querySelector('[data-slot=' + requestedSlot + ']').click();
   byId('senior').addEventListener('change', function (e) { age = e.target.checked ? 'senior' : 'junior'; resetMain(); });
   byId('done').addEventListener('input', function (e) { done = Number(e.target.value); main.setCharge(done, goal); });
   byId('goal').addEventListener('change', function (e) {
