@@ -920,3 +920,47 @@ body.landing #app { max-width: none; padding: 0; }
   .tour-tip p { font-size: 14.5px; margin-bottom: 4px; }
   .tour-tip .btn { padding-top: 8px; padding-bottom: 8px; }
 }
+
+/* ---------- Программа 5–9 на «Все темы» ---------- */
+.grade-tabs { margin: 4px 0 18px; flex-wrap: wrap; }
+.strand h2 { margin-bottom: 10px; }
+.strand-sub { font-size: 16px; color: var(--ink-2); margin: 4px 0 10px; font-weight: 700; }
+.soon-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0 24px; }
+.soon-list li { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 9px 0; border-bottom: 1px dashed var(--line, #d6dde5); color: var(--ink-2); }
+.soon-list small { color: var(--ink-2); opacity: .75; white-space: nowrap; font-size: 13px; }
+.bug-sample { margin-top: 14px; padding: 12px 16px; border-left: 3px solid #E46A5E; background: color-mix(in srgb, #E46A5E 6%, var(--sheet, #fff)); border-radius: 0 10px 10px 0; max-width: 640px; }
+.bug-sample p { margin: 0; }
+.bs-label { font-size: 13px; color: var(--ink-2); margin-bottom: 4px !important; }
+.bs-rule { font-weight: 700; }
+.bs-rule s { text-decoration-color: #D2493D; text-decoration-thickness: 2px; }
+.bs-counter { margin-top: 4px !important; }
+.grade-note { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+.grade-note p { margin: 0; max-width: 64ch; }
+
+/* лендинг: «Не только дроби» */
+.ld-all { padding: 56px 0; border-top: 1px solid var(--line, #dde3ea); }
+.ld-all-lead { font-size: 17px; line-height: 1.55; color: var(--ink-2, #4F5D72); max-width: 64ch; margin: -12px 0 28px; }
+.ld-rules { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 48px; }
+.ld-rules li { display: grid; gap: 4px; padding: 16px 0; border-top: 1px solid var(--line, #dde3ea); }
+.ld-where { font-size: 13.5px; color: var(--ink-2, #4F5D72); }
+.ld-rules s { font-size: 21px; font-weight: 700; color: var(--pen); text-decoration-color: var(--red-pen); text-decoration-thickness: 2.5px; }
+.ld-why { font-size: 15.5px; }
+.ld-hole { margin-top: 36px; padding: 22px 24px; background: #fff; border: 1px solid var(--line, #dde3ea); border-radius: 12px; }
+.ld-hole-title { margin: 0 0 14px; font-size: 20px; font-weight: 800; }
+.ld-trace { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; counter-reset: t; }
+.ld-trace li { position: relative; padding: 0 22px 0 0; font-size: 15.5px; line-height: 1.45; counter-increment: t; }
+.ld-trace li::before { content: counter(t); display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--green); color: #fff; font-weight: 800; margin-bottom: 10px; }
+.ld-trace li:not(:last-child)::after { content: ""; position: absolute; top: 15px; left: 38px; right: 8px; height: 2px; background: repeating-linear-gradient(90deg, var(--green) 0 6px, transparent 6px 11px); }
+.ld-hole-note { margin: 16px 0 0; color: var(--ink-2, #4F5D72); font-size: 15px; }
+.ld-now { margin: 24px 0 0; font-size: 15.5px; color: var(--ink-2, #4F5D72); max-width: 70ch; }
+@media (max-width: 900px) {
+  .ld-all { padding: 40px 0; }
+  .ld-rules { grid-template-columns: minmax(0, 1fr); }
+  .ld-trace { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .ld-trace li { padding: 0 0 0 42px; }
+  .ld-trace li::before { position: absolute; left: 0; top: -2px; margin: 0; }
+  .ld-trace li:not(:last-child)::after { top: 32px; bottom: -14px; left: 14px; right: auto; width: 2px; height: auto; background: repeating-linear-gradient(180deg, var(--green) 0 6px, transparent 6px 11px); }
+}
+.ld-rules s, .bs-rule s { text-decoration: underline wavy; text-decoration-color: var(--red-pen, #D2493D); text-decoration-thickness: 1.5px; text-underline-offset: 5px; }
+.ld-rules s::before, .bs-rule s::before { content: "✗ "; color: var(--red-pen, #D2493D); text-decoration: none; display: inline-block; margin-right: 2px; }
+@media (max-width: 600px) { .grade-tabs .gt-s { display: none; } .grade-tabs button { min-width: 48px; } .grade-tabs::before { content: "Класс"; align-self: center; padding: 0 6px 0 10px; color: var(--ink-2); font-size: 14px; } }

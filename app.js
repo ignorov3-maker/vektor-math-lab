@@ -698,6 +698,7 @@ function home() {
   ${state.warmupDay !== today() && warmupPlan().length ? `<section class="hero-next hero-warmup" aria-label="Разминка">
     <div class="hero-text"><p class="hero-kicker">Разминка</p><h2>Две минуты перед занятием</h2><p class="muted">${window.VEKTOR_TONE.t('warmupSub')}</p></div>
     <button class="btn btn-primary btn-big btn-go" data-warmup>${G.icon('rocket', 22)} Начать</button></section>` : ''}
+  ${(state.settings.grade || 5) >= 7 ? `<section class="sheet grade-note"><p><b>Программа ${state.settings.grade} класса скоро появится.</b> А пока проверим фундамент: ошибки в алгебре и геометрии часто растут из дробей 5–6 класса — найдём и закроем такие дыры.</p><a href="#map" class="btn btn-ghost btn-sm">Что будет в ${state.settings.grade} классе</a></section>` : ''}
   ${!Array.isArray(state.settings.interests) && window.VEKTOR_STORIES ? `<section class="sheet interests-ask" aria-label="Интересы"><h2>Что тебе нравится?</h2><p class="muted">Выбери 2–3 — задачи будут про это.</p>${interestPicker([])}<div class="row-actions"><button class="btn btn-primary" data-interests-save>Готово</button><button class="btn btn-ghost" data-interests-skip>Пропустить</button></div></section>` : ''}
   <section class="hero-next" aria-label="Следующий шаг">
     <div class="hero-text">
@@ -769,20 +770,37 @@ function drawRoute() {
 
 const filters = cur => `<div class="filters" role="group" aria-label="Фильтр по разделам">${['Все', ...SECTIONS].map(s => `<button class="chip" data-filter="${s}" aria-pressed="${s === cur}">${s}</button>`).join('')}</div>`;
 
-function mapPage(filter = 'Все') {
+/* «Все темы» — вся программа 5–9 по классам. Готовое открывается, остальное помечено «скоро»
+   и показывает, как Рентген мышления поймает ошибку в этом разделе: метод не только про дроби. */
+let mapGrade = null;
+function topicCards(ids) {
   const cur = continueTarget().i;
-  return head('Все темы', 'Можно открыть любую тему. «Урок» — объяснение с наставником, «Конспект» — коротко прочитать правило и примеры.') + filters(filter) +
-    SECTIONS.filter(s => filter === 'Все' || s === filter).map(s => {
-      const ix = topics.map((t, i) => i).filter(i => topics[i].section === s), done = ix.filter(i => pct(i) >= DONE).length;
-      return `<section class="section"><h2>${s === 'Дроби' ? 'Обыкновенные дроби' : s} <small>освоено ${done} из ${ix.length}</small></h2><div class="topics">${ix.map(i => {
-        const t = topics[i];
-        return `<article class="topic is-${status(i)}${i === cur ? ' is-current' : ''}">
-          <h3>${t.title}</h3>
-          <span class="status">${i === cur ? 'Ты здесь' : statusText(i)}${t.legacy ? ' · пока одна задача' : ''}</span>
-          ${t.legacy ? '' : miniSteps(i)}
-          <div class="topic-actions"><button class="btn btn-primary btn-sm" data-lesson="${i}">${t.legacy ? 'Решить задачу' : pct(i) >= DONE ? 'Повторить урок' : 'Урок'}</button>${t.legacy ? '' : `<button class="btn btn-ghost btn-sm" data-lesson="${i}" data-tab="notes">Конспект</button>`}</div>
-        </article>`; }).join('')}</div></section>`;
-    }).join('');
+  return `<div class="topics">${ids.map(id => topics.findIndex(t => t.id === id)).filter(i => i >= 0).map(i => {
+    const t = topics[i];
+    return `<article class="topic is-${status(i)}${i === cur ? ' is-current' : ''}">
+      <h3>${t.title}</h3>
+      <span class="status">${i === cur ? 'Ты здесь' : statusText(i)}</span>
+      ${miniSteps(i)}
+      <div class="topic-actions"><button class="btn btn-primary btn-sm" data-lesson="${i}">${pct(i) >= DONE ? 'Повторить урок' : 'Урок'}</button><button class="btn btn-ghost btn-sm" data-lesson="${i}" data-tab="notes">Конспект</button></div>
+    </article>`; }).join('')}</div>`;
+}
+function mapPage() {
+  const P = window.VEKTOR_PROGRAM;
+  if (!P) return head('Все темы', '') + topicCards(topics.map(t => t.id));
+  const gn = mapGrade || state.settings.grade || 5, g = P.grade(gn);
+  const tabs = `<div class="segmented grade-tabs" role="tablist" aria-label="Класс">${P.GRADES.map(x => `<button role="tab" data-map-grade="${x.n}" aria-selected="${x.n === gn}" aria-pressed="${x.n === gn}" aria-label="${x.n} класс">${x.n}<span class="gt-s"> класс</span></button>`).join('')}</div>`;
+  const body = g.strands.map(st => {
+    const ready = st.topics.filter(t => t.ready), soon = st.topics.filter(t => !t.ready);
+    const waves = [...new Set(soon.map(t => t.wave))], when = waves.length === 1 && P.WAVES[waves[0]] ? `появится ${P.WAVES[waves[0]]}` : '';
+    return `<section class="section strand"><h2>${esc(st.name)}${!ready.length && when ? ` <small>${when}</small>` : ''}</h2>
+      ${ready.map(t => `<h3 class="strand-sub">${esc(t.title)}</h3>${topicCards(t.ready)}`).join('')}
+      ${soon.length ? `<ul class="soon-list">${soon.map(t => `<li><span>${esc(t.title)}</span>${ready.length || !when ? `<small>скоро${P.WAVES[t.wave] ? ', ' + P.WAVES[t.wave] : ''}</small>` : ''}</li>`).join('')}</ul>` : ''}
+      ${st.bug ? `<div class="bug-sample"><p class="bs-label">Как Вектор поймает ошибку здесь</p><p class="bs-rule"><s>${esc(st.bug.rule)}</s></p><p class="bs-counter">${esc(st.bug.counter)}</p></div>` : ''}
+    </section>`;
+  }).join('');
+  const lead = gn <= 6 ? 'Можно открыть любую готовую тему. Остальные разделы появятся по плану.'
+    : `Программа ${gn} класса в работе. Ошибки здесь часто растут из 5–6 класса — Вектор найдёт такую «дыру» и закроет её на простых числах.`;
+  return head('Все темы', lead) + tabs + body;
 }
 const library = filter => mapPage(filter);
 
@@ -1088,6 +1106,7 @@ function render() {
   document.title = (page === 'home' ? '' : (page === 'lesson' ? topics[i].title : pages[page]) + ' — ') + 'Вектор';
   document.querySelectorAll('.sidebar [data-page]').forEach(b => (b.dataset.page === page || (page === 'library' && b.dataset.page === 'map')) ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
   document.querySelector('#student-name').textContent = state.settings.name;
+  { const sm = document.querySelector('.sidebar .profile small'); if (sm) sm.textContent = `Математика, ${state.settings.grade || 5} класс`; }
   document.querySelector('#avatar').textContent = (state.settings.name[0] || 'А').toUpperCase();
   app.innerHTML = ({ home, map: () => mapPage(filterState.map), diagnostic, library: () => library(filterState.library), awards, teacher, settings, lesson: () => lessonPage(i, lessonStage), warmup: warmupPage })[page]();
   bind(page, i, lessonStage);
@@ -1121,6 +1140,7 @@ function bind(page, i, stage) {
   app.querySelectorAll('[data-review]').forEach(b => b.onclick = () => { session = null; location.hash = `lesson/${b.dataset.review}/review`; });
   app.querySelectorAll('[data-stage]').forEach(b => b.onclick = () => { session = null; location.hash = `lesson/${i}/${b.dataset.stage}`; });
   app.querySelectorAll('[data-filter]').forEach(b => b.onclick = () => { filterState[page] = b.dataset.filter; render(); });
+  app.querySelectorAll('[data-map-grade]').forEach(b => b.onclick = () => { mapGrade = +b.dataset.mapGrade; render(); });
   app.querySelectorAll('[data-learn-tab]').forEach(b => b.onclick = () => { learnTab = b.dataset.learnTab; render(); });
   V.labBind(app);
   app.querySelectorAll('[data-insert]').forEach(b => b.onclick = () => {

@@ -12,7 +12,7 @@
     return `<div class="ld">
   <div class="ld-top" role="banner">
     <span class="ld-brand"><svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7"/><path d="M9 23 23 9M13 9h10v10" stroke-width="3.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>вектор</span>
-    <nav class="ld-nav" aria-label="Разделы страницы"><a href="#ld-how">Как это работает</a><a href="#ld-teacher">Учителю</a><a class="ld-nav-cta" href="teacher.html">Вход для учителя</a></nav>
+    <nav class="ld-nav" aria-label="Разделы страницы"><a href="#ld-how">Как это работает</a><a href="#ld-all">5–9 класс</a><a href="#ld-teacher">Учителю</a><a class="ld-nav-cta" href="teacher.html">Вход для учителя</a></nav>
   </div>
 
   <section class="ld-hero">
@@ -45,6 +45,27 @@
       <li><b>Чинит</b><span>Одна верная идея и та же задача заново — каждая строка сразу получает галочку.</span></li>
       <li><b>Проверяет через дни</b><span>Через день и через три в разминке ждёт задача-ловушка. Не попался — ошибка закрыта.</span></li>
     </ol>
+  </section>
+
+  <section class="ld-all" id="ld-all">
+    <h2>Не только дроби — вся математика 5–9 класса</h2>
+    <p class="ld-all-lead">Ошибка почти никогда не бывает случайной: за ней стоит устойчивое неверное правило. Такие правила есть в каждой теме, и метод тот же — найти, столкнуть с абсурдом, починить, проверить через дни.</p>
+    <ul class="ld-rules">
+      <li><span class="ld-where">Алгебра, 7 класс</span><s>(a + b)² = a² + b²</s><span class="ld-why">Возьми a = b = 1: слева 4, справа 2.</span></li>
+      <li><span class="ld-where">Уравнения, 8 класс</span><s>x² = 9, значит x = 3</s><span class="ld-why">А если подставить −3?</span></li>
+      <li><span class="ld-where">Геометрия, 8 класс</span><s>Подобие в 2 раза — площадь тоже в 2 раза</s><span class="ld-why">Сколько маленьких квадратов помещается в большом?</span></li>
+      <li><span class="ld-where">Вероятность, 7 класс</span><s>Два исхода — значит, шанс 1/2</s><span class="ld-why">Выиграть в лотерею или нет — тоже 1/2?</span></li>
+    </ul>
+    <div class="ld-hole">
+      <p class="ld-hole-title">Дыра из 5 класса</p>
+      <ol class="ld-trace">
+        <li>Девятиклассник ошибается в задании ОГЭ с алгебраической дробью</li>
+        <li>Вектор узнаёт неверное правило и находит, где оно родилось: сложение дробей, 5 класс</li>
+        <li>Чинит его на простых числах и возвращает к задаче ОГЭ</li>
+      </ol>
+      <p class="ld-hole-note">Репетитор ищет такую дыру час. Платформа с проверкой ответов не находит её вовсе.</p>
+    </div>
+    <p class="ld-now">Сейчас работают дроби 5–6 класса — на них мы проводим пилот. Дальше по плану: 5–6 класс целиком, алгебра и геометрия 7–8, затем 9 класс и подготовка к ОГЭ.</p>
   </section>
 
   <section class="ld-teacher" id="ld-teacher">

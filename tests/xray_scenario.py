@@ -150,6 +150,17 @@ async def main():
         await pg.evaluate("""() => { const K=VEKTOR_BUGS.list; state.bugs={}; K.slice(0,10).forEach(b => state.bugs[b.key]={topic:b.topic,status:'beaten',found:'2026-10-01',beatenAt:'2026-10-05',stage:3}); save(); render(); }""")
         await pg.wait_for_timeout(300)
         rep('мастерская: 10 побеждённых жучков → «Золотой сачок»', await pg.evaluate("state.workshop.owned.includes('net-gold')"))
+
+        # программа 5–9: вся структура видна, наполнены дроби
+        await pg.evaluate("() => { state.settings.grade = 8; save(); }")
+        await pg.goto(B+'#map'); await pg.reload(); await pg.wait_for_timeout(300)
+        rep('«Все темы»: открывается класс ученика (8)', await pg.locator('[data-map-grade="8"][aria-selected="true"]').count() == 1 and 'Квадратные уравнения' in await pg.inner_text('#app'))
+        rep('«Все темы»: у разделов 7–9 пример неверного правила', await pg.locator('.bug-sample').count() >= 2)
+        await pg.click('[data-map-grade="5"]'); await pg.wait_for_timeout(200)
+        rep('«Все темы»: в 5 классе работают 9 тем дробей', await pg.locator('.topic [data-lesson]').count() >= 9)
+        await pg.goto(B+'#home'); await pg.wait_for_timeout(200)
+        rep('главная 8 класса: объяснение про фундамент', 'Программа 8 класса' in await pg.inner_text('.grade-note'))
+        await pg.evaluate("() => { state.settings.grade = 5; save(); }")
         rep('нет ошибок JavaScript', not errs, '; '.join(errs)[:200])
         await b.close()
     print(f'\nИТОГО: {sum(R)} из {len(R)}')
