@@ -7,7 +7,7 @@
 .bipych-actor{transform-origin:50% 100%}
 .bipych-shadow{opacity:.12}
 [data-skin=orbit] .bipych[data-color=black] .bipych-outline{stroke:#77909A;stroke-width:1}
-.bipych-blush,.bipych-question,.bipych-zzz,.bipych-thought,.bipych-pride,.bipych-confetti,.bipych-eyes-happy,.bipych-eyes-sleep,.bipych-net{display:none}
+.bipych-blush,.bipych-question,.bipych-zzz,.bipych-thought,.bipych-pride,.bipych-shy-hands,.bipych-confetti,.bipych-eyes-happy,.bipych-eyes-sleep,.bipych-net{display:none}
 .bipych-hand-right{transform-box:view-box;transform-origin:116px 90px}
 .bipych-net[data-equipped=true]{display:block}
 .bipych[data-state=idle] .bipych-actor{animation:bipych-breathe 4s steps(3,end) infinite}
@@ -35,10 +35,15 @@
 .bipych-pride-star-1{animation-delay:-.3s}
 .bipych[data-state=proud] .bipych-satellite{animation:bipych-proud-pixel var(--bipych-proud-speed) steps(4,end) infinite}
 .bipych[data-state=shy] .bipych-blush{display:block}
-.bipych[data-state=shy] .bipych-eyes-normal{transform:translate(-4px,4px)}
-.bipych[data-state=shy] .bipych-actor{transform:rotate(4deg)}
-.bipych[data-state=shy] .bipych-hand-left{transform:translate(4px,0)}
-.bipych[data-state=shy] .bipych-hand-right{transform:translate(-4px,0)}
+.bipych[data-state=shy]{--bipych-shy-speed:3.2s}
+.bipych[data-state=shy] .bipych-eyes-normal{transform:translate(0,5px) scaleY(.85)}
+.bipych[data-state=shy] .bipych-actor{transform:translateY(2px) rotate(2deg);animation:bipych-shy-sway var(--bipych-shy-speed) steps(4,end) infinite}
+.bipych[data-state=shy] .bipych-hand-left,.bipych[data-state=shy] .bipych-hand-right{visibility:hidden}
+.bipych[data-state=shy] .bipych-shy-hands{display:block}
+.bipych-shy-hand-left,.bipych-shy-hand-right{transform-box:view-box;transform-origin:68px 88px}
+.bipych-shy-hand-left{transform:translateX(3px);animation:bipych-shy-left var(--bipych-shy-speed,3.2s) steps(4,end) infinite}
+.bipych-shy-hand-right{transform:translateX(-3px);animation:bipych-shy-right var(--bipych-shy-speed,3.2s) steps(4,end) infinite}
+.bipych[data-state=shy] .bipych-net[data-equipped=true]{visibility:visible;transform:translate(6px,22px)}
 .bipych[data-state=catching] .bipych-net{display:block}
 .bipych[data-state=catching] .bipych-hand-right{animation:bipych-catch 1.7s steps(5,end) infinite}
 .bipych[data-state=catching] .bipych-actor{transform:rotate(5deg)}
@@ -56,6 +61,7 @@
 .bipych[data-state=sleep] .bipych-satellite{opacity:.35;animation:none}
 .bipych-satellite{animation:bipych-float 3s steps(4,end) infinite}
 .bipych[data-age=senior]{--bipych-hop:-3px;--bipych-think-speed:4s;--bipych-proud-speed:4s}
+.bipych[data-age=senior][data-state=shy]{--bipych-shy-speed:4s}
 .bipych[data-age=senior] .bipych-actor{animation-duration:4s}
 .bipych-charge{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;color:var(--ink,#1E2B40);font-size:11px;font-weight:700;line-height:1.3}
 .bipych-charge-cells{display:grid;grid-template-columns:repeat(var(--bipych-goal,5),minmax(0,1fr));gap:2px;flex:1;max-width:96px}
@@ -79,6 +85,9 @@
 @keyframes bipych-proud-hand{0%,100%{transform:translate(-2px,-6px) rotate(18deg)}20%,45%{transform:translate(-2px,-24px) rotate(8deg)}60%{transform:translate(-2px,-6px) rotate(18deg)}75%{transform:translate(-2px,-16px) rotate(8deg)}}
 @keyframes bipych-proud-glint{0%,10%,65%,100%{opacity:0;transform:translateY(2px) scale(.5)}20%,45%{opacity:1;transform:translateY(-2px) scale(1)}}
 @keyframes bipych-proud-pixel{0%,100%{transform:translateY(0)}20%,40%{transform:translateY(-8px)}65%{transform:translateY(-2px)}}
+@keyframes bipych-shy-left{0%,100%{transform:translateX(0)}25%,40%{transform:translateX(4px)}50%{transform:translateX(1px)}60%,75%{transform:translateX(4px)}90%{transform:translateX(0)}}
+@keyframes bipych-shy-right{0%,100%{transform:translateX(0)}25%,40%{transform:translateX(-4px)}50%{transform:translateX(-1px)}60%,75%{transform:translateX(-4px)}90%{transform:translateX(0)}}
+@keyframes bipych-shy-sway{0%,100%{transform:translateY(2px) rotate(2deg)}35%{transform:translateY(3px) rotate(-1deg)}70%{transform:translateY(2px) rotate(1deg)}}
 @keyframes bipych-question{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
 @keyframes bipych-catch{0%,100%{transform:translate(0,0)}45%{transform:translate(2px,-4px)}}
 @keyframes bipych-dance{0%,100%{transform:translateY(0) rotate(-3deg)}25%{transform:translateY(var(--bipych-hop)) rotate(3deg)}60%{transform:translateY(0) rotate(3deg)}80%{transform:translateY(var(--bipych-hop)) rotate(-3deg)}}

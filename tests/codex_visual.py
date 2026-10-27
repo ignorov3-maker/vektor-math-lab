@@ -106,6 +106,35 @@ async def main():
                 && dim!==getComputedStyle(root.querySelector('.bipych-pride-star')).opacity
                 && getComputedStyle(root.querySelector('.bipych-confetti')).display==='none';
         }"""))
+        check("shy index fingers touch twice and separate on all three colors", await page.evaluate("""() => {
+            for(const screen of ['screen-raspberry','screen-turquoise','screen-black']){
+                contractPet.setCosmetics({screen});contractPet.setState('shy');
+                const root=document.querySelector('#contract-host .bipych');
+                const left=root.querySelector('.bipych-shy-hand-left .bipych-shy-palm');
+                const right=root.querySelector('.bipych-shy-hand-right .bipych-shy-palm');
+                const animations=root.getAnimations({subtree:true});animations.forEach(a=>a.pause());
+                const gap=time=>{
+                    animations.forEach(a=>a.currentTime=time);
+                    const l=new DOMPoint(64,87).matrixTransform(left.getScreenCTM());
+                    const r=new DOMPoint(64,87).matrixTransform(right.getScreenCTM());
+                    return Math.hypot(l.x-r.x,l.y-r.y);
+                };
+                if(!(gap(0)>5 && gap(1000)<.2 && gap(1600)>4 && gap(2200)<.2)
+                    || getComputedStyle(root.querySelector('.bipych-hand-left')).visibility!=='hidden'
+                    || getComputedStyle(root.querySelector('.bipych-blush')).display==='none')return false;
+            }
+            return true;
+        }"""))
+        check("shy frees both paws while keeping the owned net beside him", await page.evaluate("""() => {
+            contractPet.setCosmetics({net:'net-classic'});contractPet.setState('shy');
+            const root=document.querySelector('#contract-host .bipych'),net=root.querySelector('.bipych-net');
+            const visible=getComputedStyle(net).visibility==='visible' && getComputedStyle(net).display!=='none'
+                && getComputedStyle(root.querySelector('.bipych-shy-hands')).display!=='none';
+            contractPet.setState('idle');
+            return visible && getComputedStyle(net).transform==='none'
+                && getComputedStyle(root.querySelector('.bipych-shy-hands')).display==='none'
+                && getComputedStyle(root.querySelector('.bipych-hand-right')).visibility==='visible';
+        }"""))
         check("reworked headwear uses only orthogonal pixel edges", await page.evaluate("""() => {
             for(const hat of ['hat-bucket','hat-graduate','hat-captain','hat-leaf']){
                 contractPet.setCosmetics({hat});contractPet.setState('idle');

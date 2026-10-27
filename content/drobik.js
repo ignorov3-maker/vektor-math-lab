@@ -100,6 +100,10 @@
       : 'M112 38H113V62H112ZM119 38H120V62H119ZM108 44H124V45H108ZM108 55H124V56H108Z';
     var satellite = map.antenna || (map.screen === 'screen-black' ? '' : 'pixel-sun');
     var limb = map.screen === 'screen-black' ? p[3] : p[4];
+    var shyLimb = map.screen === 'screen-black' ? p[2] : limb;
+    var shyHand = path('M32 86H38V82H48V78H54V84H64V90H56V96H52V100H40V96H32Z', p[0], 'bipych-shy-palm') +
+      rect(36, 88, 8, 6, shyLimb) + rect(42, 84, 10, 12, shyLimb) + rect(50, 80, 2, 8, shyLimb) +
+      rect(50, 86, 12, 2, map.screen === 'screen-black' ? p[5] : shyLimb) + rect(42, 84, 4, 4, p[2]);
     var satColor = PIXELS[satellite] || p[4];
     if (!map.antenna && map.screen === 'screen-turquoise') satColor = '#F483AD';
     var eyes = rect(44, 66, 14, 10, p[5]) + rect(76, 66, 14, 10, p[5]) +
@@ -130,6 +134,8 @@
       '<path d="' + netRim + '" fill="' + netColor + '" fill-rule="evenodd" stroke="' + p[0] + '" stroke-width="1" class="bipych-net-rim"/>' +
       '<path d="' + netMesh + '" fill="#6A9284" opacity=".65" class="bipych-net-mesh"/></g>' +
       rect(108, 82, 16, 16, p[0], 'bipych-grip') + rect(111, 84, 10, 10, limb) + rect(112, 84, 4, 4, p[2]) + '</g>' +
+      '<g class="bipych-shy-hands"><g class="bipych-shy-hand-left">' + shyHand +
+      '</g><g class="bipych-shy-hand-right"><g transform="translate(136 0) scale(-1 1)">' + shyHand + '</g></g></g>' +
       '<g class="bipych-question">' + path('M12 32H28V36H32V44H24V52H18V42H26V38H12ZM18 58H24V64H18Z', p[4]) + '</g>' +
       '<g class="bipych-zzz">' + path('M100 16H116V20H112V24H108V28H116V32H100V28H104V24H108V20H100Z', p[4]) + '</g>' +
       '<g class="bipych-thought">' + rect(16, 28, 4, 4, p[0], 'bipych-thought-dot bipych-thought-dot-0') +
