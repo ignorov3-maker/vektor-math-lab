@@ -22,6 +22,18 @@ jobs:
           node tests/tutor.test.js
           node tests/game.test.js
           node tests/worker.test.mjs
+          node tests/rational.test.js
+          node tests/stubs.test.js
+          node tests/bugs.test.js
+          node tests/review.test.js
+          node tests/warmup.test.js
+          node tests/tone.test.js
+          node tests/stories.test.js
+          node tests/program.test.js
+
+      - uses: oven-sh/setup-bun@v2
+      - name: ИИ-режимы серверной функции
+        run: bun tests/ai_modes.test.ts
 
       - uses: actions/setup-python@v5
         with:
@@ -29,7 +41,7 @@ jobs:
 
       - name: Playwright
         run: |
-          pip install playwright
+          pip install playwright pypdf
           python -m playwright install --with-deps chromium
 
       - name: Сервер (PHP + SQLite)
@@ -38,4 +50,11 @@ jobs:
           python tests/server_scenarios.py
 
       - name: Сценарии в браузере
-        run: python tests/e2e_scenarios.py | tee e2e.log && grep -q "ИТОГО: \([0-9]*\) из \1$" e2e.log
+        run: |
+          # упавшие проверки — в аннотации, чтобы их было видно без скачивания лога
+          run() { c=0; python "tests/$1.py" > "$1.log" 2>&1 || c=$?; cat "$1.log"
+            grep -vE '^(OK|ИТОГО|ВСЕГО|$)' "$1.log" | tail -15 | while IFS= read -r l; do [ $c -eq 0 ] || echo "::error title=$1::$l"; done; return $c; }
+          run xray_scenario
+          run codex_visual
+          run tour_scenario
+          run e2e_scenarios && grep -q "ИТОГО: \([0-9]*\) из \1$" e2e_scenarios.log

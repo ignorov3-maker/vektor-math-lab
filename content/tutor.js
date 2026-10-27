@@ -126,7 +126,7 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
     return `Ошибка подключения (${status}). ${body ? String(body).slice(0, 120) : ''}`;
   }
 
-  async function stream(cfg, messages, onText, { maxTokens = 600, signal, onFinish } = {}) {
+  async function stream(cfg, messages, onText, { maxTokens = 600, signal, onFinish, mode, data } = {}) {
     const own = cfg.mode === 'vektor', proxy = cfg.mode === 'proxy';
     const SBC = window.VEKTOR_CONFIG || {};
     const url = own ? SBC.supabaseUrl.replace(/\/+$/, '') + '/functions/v1/tutor' : proxy ? cfg.proxy.trim() : OPENROUTER_URL;
@@ -143,7 +143,7 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
     // Рассуждения модели выключаем: наставнику нужен быстрый короткий ответ.
     // Если модель не умеет выключать рассуждения (400), повторяем запрос без этого параметра.
     const send = async withReasoningOff => {
-      const body = { model: cfg.model || DEFAULT_CFG.model, messages, stream: true, ...(token ? { token } : {}), max_tokens: withReasoningOff ? maxTokens : maxTokens + 600, temperature: 0.4 };
+      const body = { model: cfg.model || DEFAULT_CFG.model, messages, stream: true, ...(token ? { token } : {}), ...(mode ? { mode, data } : {}), max_tokens: withReasoningOff ? maxTokens : maxTokens + 600, temperature: 0.4 };
       if (withReasoningOff) body.reasoning = { enabled: false }; else body.reasoning = { exclude: true };
       try { return await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal }); }
       catch (e) { if (e.name === 'AbortError') throw e; throw new TutorError('Нет связи с сервером ИИ. Мешать может слабый интернет, VPN или блокировщик рекламы.'); }
@@ -297,5 +297,28 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
     return { html: `<p>Сейчас я работаю без ИИ и отвечаю только по конспекту. Спроси про <b>правило</b>, попроси <b>пример</b>, <b>картинку</b> или <b>подсказку</b>.</p>${window.VEKTOR_SYNC ? '' : '<p class="small muted">Чтобы задавать любые вопросы, подключи ИИ в настройках.</p>'}` };
   }
 
-  window.VEKTOR_TUTOR = { MODELS, DEFAULT_CFG, loadCfg, saveCfg, ready, systemPrompt, stream, testConnection, render, lessonBeats, localAnswer, plain, TutorError };
+  /* ---------- Режимы ИИ на сервере «Вектора» (CL-8) — только при входе через сервер ---------- */
+  const serverReady = () => serverAI() && navigator.onLine !== false;
+  // Классификатор незнакомой ошибки → { bug, confidence, step, kid_rule, note } или null (ИИ недоступен)
+  async function classify(data, { signal, timeoutMs = 8000 } = {}) {
+    if (!serverReady()) return null;
+    const SBC = window.VEKTOR_CONFIG; let token = '';
+    try { token = (JSON.parse(localStorage.getItem('vektor-session')) || {}).token || ''; } catch {}
+    const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), timeoutMs);
+    if (signal) signal.addEventListener('abort', () => ctl.abort());
+    try {
+      const r = await fetch(SBC.supabaseUrl.replace(/\/+$/, '') + '/functions/v1/tutor', { method: 'POST', signal: ctl.signal,
+        headers: { 'Content-Type': 'application/json', apikey: SBC.supabaseKey, Authorization: 'Bearer ' + SBC.supabaseKey },
+        body: JSON.stringify({ mode: 'classify', token, data }) });
+      if (!r.ok) return null;
+      const j = await r.json(); return j && typeof j.bug === 'string' ? j : null;
+    } catch { return null; } finally { clearTimeout(tm); }
+  }
+  // «Объясни иначе» — потоком, как обычный ответ наставника
+  function explainMore(data, onText, opts = {}) {
+    if (!serverReady()) return Promise.reject(new TutorError('Наставник с ИИ сейчас недоступен.'));
+    return stream({ mode: 'vektor' }, [{ role: 'user', content: '.' }], onText, { ...opts, maxTokens: 300, mode: 'explain_more', data });
+  }
+
+  window.VEKTOR_TUTOR = { MODELS, DEFAULT_CFG, loadCfg, saveCfg, ready, systemPrompt, stream, testConnection, render, lessonBeats, localAnswer, plain, TutorError, classify, explainMore, serverReady };
 })();

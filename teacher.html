@@ -152,6 +152,22 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
   .bar input{width:100%}
   .slips{grid-template-columns:1fr 1fr}
 }
+
+/* Пульс */
+.pulse h2{font-size:17px;margin:0}.pulse-head{display:flex;justify-content:space-between;align-items:center;margin:16px 0 8px}
+.pulse-list{display:flex;flex-direction:column;gap:8px}
+.pulse-row{display:flex;gap:12px;align-items:center;justify-content:space-between;background:var(--sheet);border:1px solid var(--line);border-left:4px solid #E46A5E;border-radius:10px;padding:10px 12px;flex-wrap:wrap}
+.pr-main{flex:1 1 280px}.pr-act{display:flex;gap:6px;flex-wrap:wrap}.pulse .ok{color:var(--green)}.pr-push{color:var(--blue);margin-top:2px}
+.overlay{position:fixed;inset:0;background:rgba(20,30,40,.35);display:grid;place-items:center;z-index:50;padding:16px}
+.summary{max-width:560px;width:100%;background:var(--sheet);border-radius:14px;padding:20px}.summary .kpis{margin:8px 0}.summary .rec{background:var(--green-soft);padding:10px;border-radius:8px}
+.frac{display:inline-flex;flex-direction:column;text-align:center;vertical-align:middle;line-height:1.05}.frac span:first-child{border-bottom:1.5px solid currentColor}
+.pr-title{margin-bottom:2px}.pr-names{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.nchip{font-size:12.5px;padding:2px 8px;border-radius:999px;background:var(--tint);color:var(--ink)}
+.nchip.ok{background:var(--green-soft);color:var(--green)}.nchip.bad{background:var(--red-soft);color:var(--red)}.nchip.wait{background:var(--amber-soft);color:var(--amber-ink)}
+.pr-push{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:13px;color:var(--ink)}.pr-push.done{color:var(--muted)}
+.pr-bar{width:120px;height:6px;border-radius:3px;background:var(--tint);overflow:hidden;flex:none}.pr-bar i{display:block;height:100%;background:var(--green)}
+.pulse-row.has-push{border-left-color:var(--green)}
+.pr-act .btn[disabled]{opacity:1;background:var(--green-soft);color:var(--green);border-color:var(--green-soft);cursor:default}
 </style>
 </head>
 <body>
@@ -173,6 +189,9 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
 <script src="content/check.js"></script>
 <script src="content/visuals.js"></script>
 <script src="content/fractions.js"></script>
+<script src="content/rational.js"></script>
+<script src="content/tone.js"></script>
+<script src="content/bugs.js"></script>
 <script>
 (() => {
   const CFG = window.VEKTOR_CONFIG || {}, SB = (CFG.supabaseUrl || '').replace(/\/+$/, '');
@@ -185,6 +204,7 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
   const plural = (n, a, b, c) => { const m = n % 10, h = n % 100; return m === 1 && h !== 11 ? a : m >= 2 && m <= 4 && (h < 10 || h >= 20) ? b : c; };
   const num = l => +(/(\d+)$/.exec(l) || [0, 0])[1];
   let sess = null; try { sess = JSON.parse(sessionStorage.getItem(KEY)); } catch {}
+  let pulse = null;
   let data = [], tests = { classes: [], scores: {} }, now = Date.now() / 1000, skew = 0, timer = null, ticker = null, lastOk = 0, failed = false;
   const ui = { tab: 'class', cls: '', only: '', q: '', sort: 'name', dir: 1, armed: null, drawer: null };
 
@@ -205,7 +225,8 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
   /* ---------- подписи учеников: только в этом браузере, на сервер не уходят (К-02) ---------- */
   const LKEY = () => 'vektor-labels:' + ((sess && sess.login) || 'teacher');
   let labels = {};
-  const label = l => labels[l] || '';
+  // своя подпись учителя (в этом браузере) → подпись с сервера → логин
+  const label = l => labels[l] || ((data.find(st => st.login === l) || {}).label) || '';
   const nameHtml = s => label(s.login) ? `<b>${esc(label(s.login))}</b><small>${esc(s.login)}</small>` : `<b>${esc(s.login)}</b>`;
   const nameText = s => label(s.login) ? `${label(s.login)} · ${s.login}` : s.login;
   function setLabel(login, v) { v = String(v || '').trim().slice(0, 40); if (v) labels[login] = v; else delete labels[login]; ls.set(LKEY(), labels); }
@@ -276,7 +297,9 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
       <section data-pane="class">
         <div id="banner"></div><div id="ctl"></div>
         <div class="kpis" id="kpis"></div>
+        <section class="pulse" id="pulse" aria-live="polite"></section>
         <section class="help" id="help" aria-live="polite"></section>
+        <div id="summary-host"></div>
         <div class="bar" id="bar">
           <span id="chips" role="group" aria-label="Фильтр"></span>
           <input id="q" type="search" placeholder="Поиск: имя или логин" aria-label="Поиск ученика">
@@ -317,14 +340,80 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
     sel.value = ui.cls; sel.hidden = !cl.length;
   }
 
+  /* ---------- Пульс: жучки сейчас (CL-6) ---------- */
+  const BUGS = window.VEKTOR_BUGS, V = window.VEKTOR_VISUALS;
+  const who = l => esc(label(l) || ((data.find(st => st.login === l) || {}).label) || l);
+  const whoList = (ls, k = 2) => ls.slice(0, k).map(who).join(', ') + (ls.length > k ? ` и ещё ${ls.length - k}` : '');
+  // Состояние задачи группе — словами, без двусмысленностей: отправлено → кто ответил → кто верно
+  function pushState(x) {
+    const p = x.push; if (!p) return null;
+    const ok = new Set(p.ok || []), ans = new Set(p.answered || p.ok || []), total = p.total || 0, done = p.done != null ? p.done : ans.size;
+    return { p, ok, ans, total, done, right: ok.size, active: !p.expired && done < total };
+  }
+  function nameChip(l, st) {
+    const cls = !st ? '' : st.ok.has(l) ? ' ok' : st.ans.has(l) ? ' bad' : (st.p.logins || []).includes(l) ? ' wait' : '';
+    const mark = cls === ' ok' ? '✓ ' : cls === ' bad' ? '✗ ' : cls === ' wait' ? '… ' : '';
+    const title = cls === ' ok' ? 'решил верно' : cls === ' bad' ? 'ответил неверно' : cls === ' wait' ? 'ещё решает' : '';
+    return `<span class="nchip${cls}"${title ? ` title="${title}"` : ''}>${mark}${esc(label(l) || l)}</span>`;
+  }
+  function paintPulse(control) {
+    const list = control || !pulse ? [] : (pulse.bugs || []).filter(x => BUGS.byKey[x.bug]);
+    put($('pulse'), list.length ? `<div class="pulse-head"><h2>Пульс: ошибки сейчас</h2><button class="btn btn-sm" data-summary="1">Сводка урока</button></div>
+      <div class="pulse-list">${list.slice(0, 8).map(x => { const b = BUGS.byKey[x.bug], st = pushState(x);
+        const names = [...new Set([...x.logins, ...(st ? st.p.logins || [] : [])])];
+        const status = !st ? '' : `<div class="pr-push${st.active ? '' : ' done'}">
+            <div class="pr-bar" role="img" aria-label="Ответили ${st.done} из ${st.total}"><i style="width:${st.total ? Math.round(st.done / st.total * 100) : 0}%"></i></div>
+            <span>${st.active ? 'Задача у учеников' : st.done >= st.total ? 'Все ответили' : 'Время вышло'}: ответили <b>${st.done} из ${st.total}</b>, верно <b>${st.right}</b></span></div>`;
+        const btn = st && st.active
+          ? `<button class="btn btn-sm btn-primary" disabled>Задача отправлена</button>`
+          : `<button class="btn btn-sm ${st ? '' : 'btn-primary'}" data-push="${esc(x.bug)}">${st ? 'Дать ещё задачу' : `Дать задачу ${x.n === 1 ? 'ему' : `этим ${x.n}`}`}</button>`;
+        return `<div class="pulse-row${st ? ' has-push' : ''}" data-bug="${esc(x.bug)}">
+          <div class="pr-main"><div class="pr-title"><b>${esc(b.title)}</b> <span class="muted small">«${esc(b.kidName)}»</span></div>
+            <div class="small muted">${x.n} ${plural(x.n, 'ученик', 'ученика', 'учеников')}${x.healing ? ` · <span class="ok">у ${x.healing} уже лечится</span>` : ''}</div>
+            <div class="pr-names">${names.map(l => nameChip(l, st)).join('')}</div>${status}</div>
+          <div class="pr-act"><button class="btn btn-sm" data-board="${esc(x.bug)}">Мини-урок на доску</button>${btn}</div></div>`; }).join('')}</div>` : '');
+  }
+  const figs = html => String(html).replace(/\[\[([^\]]+)\]\]/g, (m, t) => { const g = V.figureFromTag(t); return g ? V.figure(g) : ''; })
+    .replace(/(\d+)\/(\d+)/g, '<span class="frac"><span>$1</span><span>$2</span></span>');
+  function openBoard(key) {
+    const b = BUGS.byKey[key]; if (!b) return;
+    const slides = b.lesson.map(s => ({ kind: s.kind, html: figs(s.html), question: s.question ? figs(s.question) : undefined, answerHtml: s.answerHtml ? figs(s.answerHtml) : undefined }));
+    ls.set('vektor-board', { kidName: b.kidName, title: b.title, slides });
+    window.open('board.html', 'vektor-board');
+  }
+  async function pushGroup(key, btn) {
+    const x = (pulse.bugs || []).find(y => y.bug === key), b = BUGS.byKey[key]; if (!x || !b) return;
+    const problem = b.trap(2); if (!problem) return;
+    btn.disabled = true;
+    try { await rpc('vektor_teacher_push', { p_token: sess.token, p_logins: x.logins, p_bug: key, p_payload: { conflict: 0, problem: { ...problem, value: undefined } } }); btn.textContent = 'Задача отправлена'; setTimeout(load, 400); }
+    catch (e) { btn.disabled = false; btn.textContent = 'Не отправилось — ещё раз'; }
+  }
+  // рекомендация на следующий урок — правилом, без ИИ
+  function lessonSummary() {
+    const s = (pulse && pulse.summary) || {}, list = (pulse && pulse.bugs) || [];
+    const active = list.map(x => ({ x, b: BUGS.byKey[x.bug], left: x.n - (x.healing || 0) })).filter(y => y.b && y.left > 0).sort((a, c) => c.left - a.left);
+    const all = classRows(), weak = TOPICS.map(t => ({ t, k: all.filter(st => (st.topics[t.id] || {}).m).length })).filter(y => y.k < all.length).sort((a, c) => a.k - c.k)[0];
+    const rec = active.length ? `Начать с мини-урока «${esc(active[0].b.title.toLowerCase())}»: ошибка осталась у ${active[0].left} ${plural(active[0].left, 'ученика', 'учеников', 'учеников')}.`
+      : weak ? `Ошибок не осталось. Продолжить тему «${esc(weak.t.title)}» — её освоили ${weak.k} из ${all.length}.` : 'Все темы освоены — можно двигаться дальше.';
+    put($('summary-host'), `<div class="overlay" data-close-summary="1"><div class="sheet summary" role="dialog" aria-label="Сводка урока">
+      <h2>Сводка урока</h2><p class="muted small">За последние 45 минут</p>
+      <div class="kpis"><div class="kpi"><b>${s.tasks || 0}</b> задач решено</div><div class="kpi"><b>${s.mastered || 0}</b> тем освоено</div></div>
+      <div class="kpis"><div class="kpi"><b>${s.found || 0}</b> ошибок найдено</div><div class="kpi"><b>${s.healing || 0}</b> разобрано</div><div class="kpi"><b>${s.beaten || 0}</b> закрыто</div></div>
+      ${(s.idle || []).length ? `<p><b>Не начали:</b> ${(s.idle || []).map(who).join(', ')}</p>` : ''}
+      ${(s.stuck || []).length ? `<p><b>Застряли дольше 10 минут:</b> ${(s.stuck || []).map(who).join(', ')}</p>` : ''}
+      <p class="rec"><b>На следующий урок:</b> ${rec}</p><button class="btn btn-primary" data-close-summary="1">Закрыть</button></div></div>`);
+  }
+
   /* ---------- вкладка «Класс» ---------- */
   function paint() {
     now = Date.now() / 1000 + skew;
     pickClass();
     const C = curClass(), control = ui.cls !== '*' && C.group === 'control';
     const all = classRows();
-    const helpList = control ? [] : all.map(s => ({ s, n: need(s) })).filter(x => x.n).sort((a, b) => (b.n.min || 0) - (a.n.min || 0));
-    const needSet = new Set(helpList.map(x => x.s.login));
+    const inPulse = new Set(control || !pulse ? [] : (pulse.bugs || []).flatMap(x => x.logins));
+    const helpAll = control ? [] : all.map(s => ({ s, n: need(s) })).filter(x => x.n).sort((a, b) => (b.n.min || 0) - (a.n.min || 0));
+    const helpList = helpAll.filter(x => !inPulse.has(x.s.login)), helpInPulse = helpAll.length - helpList.length;
+    const needSet = new Set(helpAll.map(x => x.s.login));
     const onl = all.filter(online).length;
     const testOpen = (tests.classes || []).filter(c => ui.cls === '*' || c.name === ui.cls).flatMap(c => ['pre', 'post'].filter(ph => ((c.tests || {})[ph] || {}).open).map(ph => ({ c, ph, t: c.tests[ph] })));
     put($('banner'), testOpen.map(({ c, ph, t }) => `<div class="banner">Идёт ${ph === 'pre' ? 'входной' : 'итоговый'} тест · ${esc(c.name)} · сдали ${t.done || 0} из ${c.total || 0} · осталось ${minsLeft(t)} мин <button class="btn btn-sm" data-go="tests">К тестам →</button></div>`).join(''));
@@ -332,11 +421,12 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
     const done = ph => all.filter(s => ((tests.scores || {})[s.login] || {})[ph]).length;
     put($('kpis'), control
       ? `<div class="kpi"><b>${onl}</b> в сети</div><div class="kpi"><b>${done('pre')} из ${all.length}</b> сдали входной</div><div class="kpi"><b>${done('post')} из ${all.length}</b> сдали итоговый</div>`
-      : `<div class="kpi"><b>${onl}</b> в сети сейчас</div><div class="kpi${helpList.length ? ' warn' : ''}"><b>${helpList.length}</b> ${plural(helpList.length, 'нужна помощь', 'нужна помощь', 'нужна помощь')}</div><div class="kpi"><b>${all.reduce((a, s) => a + (s.mastered_today || 0), 0)}</b> ${plural(all.reduce((a, s) => a + (s.mastered_today || 0), 0), 'тема освоена', 'темы освоено', 'тем освоено')} сегодня</div>`);
-    put($('help'), control ? '' : helpList.length ? `<h2>Нужна помощь сейчас</h2><div class="cards">${helpList.slice(0, 9).map(({ s, n }) => { const t = TI[n.topic];
+      : `<div class="kpi"><b>${onl}</b> в сети сейчас</div><div class="kpi${helpAll.length ? ' warn' : ''}"><b>${helpAll.length}</b> ${plural(helpList.length, 'нужна помощь', 'нужна помощь', 'нужна помощь')}</div><div class="kpi"><b>${all.reduce((a, s) => a + (s.mastered_today || 0), 0)}</b> ${plural(all.reduce((a, s) => a + (s.mastered_today || 0), 0), 'тема освоена', 'темы освоено', 'тем освоено')} сегодня</div>`);
+    paintPulse(control);
+    put($('help'), control ? '' : helpList.length ? `<h2>Нужна помощь сейчас</h2>${helpInPulse ? `<p class="small muted">Ещё ${helpInPulse} — в Пульсе выше.</p>` : ''}<div class="cards">${helpList.slice(0, 9).map(({ s, n }) => { const t = TI[n.topic];
       return `<button class="card" data-open="${esc(s.login)}">${n.min ? `<span class="min">${n.min} мин</span>` : ''}<div class="who2">${label(s.login) ? `${esc(label(s.login))}<small>${esc(s.login)}</small>` : esc(s.login)}</div>
         <div class="t">${t ? `Тема ${t.n} · ${esc(t.title)}` : 'Сигнал от ИИ-наставника'}</div><div class="why">${esc(n.why.join(' · '))}</div></button>`; }).join('')}</div>${helpList.length > 9 ? `<p class="small muted">и ещё ${helpList.length - 9} — фильтр «Нужна помощь» ниже</p>` : ''}`
-      : (onl ? '<p class="allgood">Сейчас все справляются — никто не застрял.</p>' : ''));
+      : (helpInPulse ? '' : onl ? '<p class="allgood">Сейчас все справляются — никто не застрял.</p>' : ''));
     $('legend').hidden = control;
     const cnt = { '': all.length, on: onl, need: needSet.size, never: all.filter(s => !s.last_seen).length };
     if (!control || ui.only === 'need') { if (control && ui.only === 'need') ui.only = ''; }
@@ -382,7 +472,7 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
   const minsLeft = t => Math.max(0, Math.ceil((Date.parse(t.closes_at) / 1000 - now) / 60));
   function paintTests() {
     const cl = (tests.classes || []).slice().sort((a, b) => (b.name === ui.cls) - (a.name === ui.cls) || a.name.localeCompare(b.name));
-    const who = l => esc(label(l) || l);
+    const who = l => esc(label(l) || ((data.find(st => st.login === l) || {}).label) || l);
     const html = cl.map(c => {
       const roster = data.filter(s => s.class === c.name);
       return `<div class="tclass"><h2>${esc(c.name)}${c.group === 'control' ? ' <span class="small muted">контрольный</span>' : ''}<span class="small muted">· ${c.total || roster.length} ${plural(c.total || roster.length, 'ученик', 'ученика', 'учеников')}</span></h2>
@@ -481,6 +571,10 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
 
   /* ---------- нажатия ---------- */
   async function onClick(e) {
+    const pb = e.target.closest('[data-board]'); if (pb) return openBoard(pb.dataset.board);
+    const pp = e.target.closest('[data-push]'); if (pp) return pushGroup(pp.dataset.push, pp);
+    if (e.target.closest('[data-summary]')) return lessonSummary();
+    if (e.target.matches('[data-close-summary]')) return put($('summary-host'), '');
     const t = e.target.closest('[data-open],[data-close],[data-only],[data-sort],[data-go],[data-arm],[data-cancel],[data-test]'); if (!t) return;
     const d = t.dataset;
     if ('close' in d) return closeDrawer();
@@ -524,6 +618,7 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
   async function load() {
     try {
       const [a, b] = await Promise.all([rpc('vektor_teacher_class', { p_token: sess.token }), rpc('vektor_teacher_tests', { p_token: sess.token }).catch(() => tests)]);
+      try { pulse = await rpc('vektor_teacher_pulse', { p_token: sess.token, p_class: ui.cls || null, p_minutes: 45 }); } catch (e) { if (e.auth) throw e; }
       data = a.students || []; tests = b || tests; if (a.server_time) skew = a.server_time - Date.now() / 1000;
       lastOk = Date.now(); failed = false; paint();
     } catch (err) {

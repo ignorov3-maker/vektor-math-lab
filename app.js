@@ -34,7 +34,7 @@ const ROUTE = window.VEKTOR_FRACTIONS.topics.map((t, i) => i); // раздел �
 const DIAG = ['concept', 'reduce', 'compare', 'add-same', 'mult', 'part-of'].map(id => byId[id]);
 const DONE = 80;
 
-const pages = { home: 'Мой путь', map: 'Все темы', diagnostic: 'Диагностика', library: 'Все темы', awards: 'Награды', teacher: 'Отчёт для учителя', settings: 'Профиль', lesson: 'Занятие' };
+const pages = { home: 'Мой путь', map: 'Все темы', diagnostic: 'Диагностика', library: 'Все темы', awards: 'Награды', teacher: 'Отчёт для учителя', settings: 'Профиль', lesson: 'Занятие', warmup: 'Разминка' };
 const STAGES = [['learn', 'Узнать'], ['practice', 'Потренироваться'], ['check', 'Проверить себя']];
 
 /* ================= Состояние ================= */
@@ -56,6 +56,8 @@ try { state = Object.assign(fresh(), JSON.parse(localStorage.getItem(KEY))); } c
   if (typeof state.settings.name !== 'string' || !state.settings.name.trim()) state.settings.name = d.settings.name;
   if (!['steps', 'visual'].includes(state.settings.style)) state.settings.style = 'steps';
   if (typeof state.settings.sound !== 'boolean') state.settings.sound = true;
+  if (state.settings.interests !== undefined && !Array.isArray(state.settings.interests)) delete state.settings.interests;
+  if (![5, 6, 7, 8, 9].includes(state.settings.grade)) state.settings.grade = 5;
   if (!Array.isArray(state.diag.results) || !Number.isInteger(state.diag.step)) state.diag = d.diag;
   state.attempts = state.attempts.filter(a => a && typeof a === 'object');
 })();
@@ -72,6 +74,40 @@ document.addEventListener('click', e => {
 });
 // журнал событий для анализа пилота (раздел 7 ТЗ); без сервера ничего не делает
 const logEvent = (type, data) => { if (window.VEKTOR_SYNC) window.VEKTOR_SYNC.event(type, data); };
+// Разбор жучка (Рентген мышления, шаги 1–4). Своя задача ребёнка — в виде структуры для движка.
+function ownProblem(task, topic) {
+  const X = window.VEKTOR_XRAY, expr = X && X.exprOf(task);
+  const text = String(task.question || '').replace(/<span class="frac"><span>(\d+)<\/span><span>(\d+)<\/span><\/span>/g, '$1/$2').replace(/<[^>]+>/g, '');
+  const p = { topic, expr, text: [task.story, text].filter(Boolean).join(' ').replace(/<[^>]+>/g, ''), answer: task.answer };
+  if (['<', '>', '='].includes(task.answer)) p.sign = task.answer;
+  else { const r = window.VEKTOR_RATIONAL.evalLine(String(task.answer)); if (r.ok) p.value = r.value; }
+  return p;
+}
+function warmupPlan() {
+  const W = window.VEKTOR_WARMUP, RV = window.VEKTOR_REVIEW; if (!W || !RV) return [];
+  const done = topics.map((t, k) => k).filter(k => !topics[k].legacy && meta(k).mastered);
+  return W.plan(RV.ensure(state), today(), { reviewTopic: done.length ? done[Math.floor(Math.random() * done.length)] : null });
+}
+function warmupPage() { return '<div class="page-head"><h1>Разминка</h1></div><div id="wu"></div>'; }
+function runWarmup() {
+  const el = app.querySelector('#wu'); if (!el) return;
+  const items = warmupPlan();
+  if (!items.length) { location.hash = 'home'; return; }
+  window.VEKTOR_WARMUP.run(el, { items, bugs: window.VEKTOR_REVIEW.ensure(state), today: today(), lv: 2,
+    reviewTask: k => topics[k].generate(2), check,
+    onEvent: (type, data) => { logEvent(type, data); save(); },
+    onStars: n => { game().stars += n; save(); hud(); },
+    onReview: (key, p, back) => openReview(el, key, null, null, { own: p, onClose: back }),
+    onDone: () => { state.warmupDay = today(); save(); location.hash = 'home'; } });
+}
+function openReview(host, key, s, i, extra = {}) {
+  const RV = window.VEKTOR_REVIEW; if (!RV) return;
+  RV.open(host, { bugKey: key, own: extra.own || ownProblem(s.task, topics[i].id), today: today(), bugs: RV.ensure(state), lv: i == null ? 2 : meta(i).level || 2,
+    onEvent: (type, data) => { logEvent(type, data); save(); },
+    onStars: n => { game().stars += n; save(); const h = document.querySelector('#hud-stars'); if (h) h.textContent = game().stars; },
+    onClose: () => { save(); host.innerHTML = ''; if (extra.onClose) extra.onClose(); else app.querySelector('#ans-num')?.focus(); } });
+  save(); host.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
 let ai = T.loadCfg();
 const game = () => G.ensure(state);
 
@@ -143,7 +179,7 @@ function answerInput(task, button) {
 }
 
 function taskCard(task, { formId = 'answer-form', button = 'Проверить', exam = false, hints = false } = {}) {
-  return `<p class="story">${task.story}</p>${exam && task.figureIsHint ? '' : figure(task.figure)}<p class="question" id="q">${task.question}</p>
+  return `<p class="story">${task.interest && window.VEKTOR_ART ? `<span class="story-ic" aria-hidden="true">${window.VEKTOR_ART.interest(task.interest, { size: 28 })}</span>` : ''}${task.story}</p>${exam && task.figureIsHint ? '' : figure(task.figure)}<p class="question" id="q">${task.question}</p>
     <form class="answer" id="${formId}" autocomplete="off">${answerInput(task, button)}</form>
     ${hints ? `<div class="hint-zone"><div id="hints"></div><button type="button" class="btn btn-ghost" id="hint-btn">Подсказка</button></div>` : ''}
     <div class="feedback" id="feedback" role="status" aria-live="polite"></div>`;
@@ -222,8 +258,8 @@ function chatBox(i, kind) {
     <div class="chat-log" aria-live="polite">${c.msgs.filter(m => !m.hidden).map(msgHtml).join('') || (kind === 'task' ? '<p class="muted small chat-empty">Застрял? Спроси наставника — он не скажет ответ, но поможет дойти до него самому.</p>' : '')}</div>
     <div class="chat-quick">${quickReplies(i, kind).map(([v, l, main]) => `<button type="button" class="btn ${main ? 'btn-primary' : 'btn-ghost'} btn-sm" data-quick="${esc(v)}">${l}</button>`).join('')}</div>
     ${kind === 'lesson' && c.pending ? `<form class="chat-form chat-answer" autocomplete="off">${answerInput(c.pending.task, 'Проверить')}</form>` : `<form class="chat-form" autocomplete="off"><label class="visually-hidden" for="chat-in-${kind}">Сообщение наставнику</label>
-      <input id="chat-in-${kind}" placeholder="${ph}" maxlength="400"${c.busy ? ' disabled' : ''}><button class="btn btn-primary" type="submit"${c.busy ? ' disabled' : ''}>Отправить</button></form>`}
-    <p class="chat-mode small muted">${online && !c.forceOffline ? `Наставник: ${esc(modelName())}.` : online ? 'ИИ временно недоступен — урок идёт по конспекту.' : 'Наставник без ИИ — отвечает по конспекту.'} ${online || SERVER ? '' : '<a href="#settings">Подключить ИИ</a>'}</p>
+      <input id="chat-in-${kind}" placeholder="${ph}" maxlength="400"${c.busy ? ' disabled' : ''}>${SPEECH ? `<button class="btn btn-ghost chat-mic" type="button" aria-label="Сказать голосом" title="Сказать голосом"${c.busy ? ' disabled' : ''}>${MIC_SVG}</button>` : ''}<button class="btn btn-primary" type="submit"${c.busy ? ' disabled' : ''}>Отправить</button></form>`}
+    <p class="chat-mode small muted">${online && !c.forceOffline ? (SERVER ? 'Наставник не скажет ответ — поможет дойти до него самому.' : `Наставник: ${esc(modelName())}.`) : online ? 'ИИ временно недоступен — урок идёт по конспекту.' : 'Наставник без ИИ — отвечает по конспекту.'} ${online || SERVER ? '' : '<a href="#settings">Подключить ИИ</a>'}</p>
   </div>`;
 }
 
@@ -251,6 +287,95 @@ function updateLastMsg(i, kind, m) {
   const log = box.querySelector('.chat-log'); log.scrollTop = log.scrollHeight;
 }
 
+/* Голосовой ввод в чат: встроенное распознавание речи браузера (ru-RU), без платных моделей.
+   Где браузер не умеет — кнопки микрофона нет, остаётся текст. Речь → текст в поле, ребёнок проверяет и отправляет. */
+const SPEECH = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+const MIC_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-2.1A7 7 0 0 0 19 12z" fill="currentColor"/></svg>';
+let listening = null;
+function listen(inp, btn) {
+  if (listening) { listening.stop(); return; }
+  const r = new SPEECH(); r.lang = 'ru-RU'; r.interimResults = true; r.maxAlternatives = 1;
+  const before = inp.value ? inp.value.trim() + ' ' : '';
+  r.onresult = e => { inp.value = (before + [...e.results].map(x => x[0].transcript).join(' ')).slice(0, 400); };
+  r.onend = r.onerror = () => { listening = null; btn.classList.remove('on'); btn.setAttribute('aria-label', 'Сказать голосом'); inp.focus(); };
+  listening = r; btn.classList.add('on'); btn.setAttribute('aria-label', 'Остановить запись');
+  try { r.start(); } catch { r.onend(); }
+}
+
+/* Интересы ребёнка (CL-9): 12 иконок, до трёх; сюжеты задач — из заранее написанного банка, числа — от движка */
+/* ================= Маскот Бипыч, коллекция жучков, мастерская (CL-11, модули Codex) =================
+   Модули ничего не хранят сами: данные и обработчики передаём отсюда. */
+let pets = [], taskPet = null;
+const petAge = () => (window.VEKTOR_TONE && window.VEKTOR_TONE.senior() ? 'senior' : 'junior');
+const beatenCount = () => Object.values(window.VEKTOR_REVIEW ? window.VEKTOR_REVIEW.ensure(state) : {}).filter(b => b && b.status === 'beaten').length;
+const bugRank = n => (n >= 12 ? 'master' : n >= 5 ? 'catcher' : n >= 1 ? 'tracker' : 'novice');
+// особые вещи мастерской открываются достижениями учебного ядра
+const unlocked = () => { const n = beatenCount(); return new Set([n >= 10 && 'ten-bugs', bugRank(n) === 'master' && 'bug-master', mastered() >= 3 && 'topic-master'].filter(Boolean)); };
+function wardrobe() {
+  const D = window.VEKTOR_DROBIK, w = state.workshop && typeof state.workshop === 'object' ? state.workshop : (state.workshop = {});
+  if (!Array.isArray(w.owned)) w.owned = [];
+  if (!w.equipped || typeof w.equipped !== 'object') w.equipped = {};
+  if (D) {
+    const got = unlocked();
+    D.COSMETICS.forEach(c => { if (((!c.unlock && !c.price) || (c.unlock && got.has(c.unlock))) && !w.owned.includes(c.id)) w.owned.push(c.id); });
+    if (!w.equipped.screen && w.owned.includes('screen-turquoise')) w.equipped.screen = 'screen-turquoise';
+  }
+  return w;
+}
+function petMount(el, opts = {}) {
+  const D = window.VEKTOR_DROBIK; if (!D || !el) return null;
+  try { const p = D.mount(el, { age: petAge(), cosmetics: wardrobe().equipped, ...opts }); pets.push(p); return p; } catch { return null; }
+}
+function petsClear() { pets.forEach(p => { try { p.destroy(); } catch {} }); pets = []; taskPet = null; }
+const petState = s => { if (taskPet) try { taskPet.setState(s); } catch {} };
+function collectionBugs() {
+  const K = window.VEKTOR_BUGS, T = window.VEKTOR_TONE;
+  return Object.entries(window.VEKTOR_REVIEW.ensure(state)).filter(([k]) => K.byKey[k]).map(([key, b]) => {
+    const bug = K.byKey[key];
+    return { key, kidName: T.name(bug), title: bug.title, status: b.status, found: b.found, beaten: b.beatenAt || null, howBeaten: bug.fixIdea };
+  });
+}
+const dayCharge = () => { const g = game(), goal = Math.min(10, Math.max(3, g.goal)); return { done: Math.min(g.day === today() ? g.dayTasks : 0, goal), goal }; };
+function mountPetsAndCollection(page, stage) {
+  const g = game(), C = window.VEKTOR_COLLECTION;
+  const home = app.querySelector('#pet-home');
+  if (home) { const ch = dayCharge(); petMount(home, { size: 104, state: ch.done >= ch.goal ? 'celebrate' : 'idle', charge: ch }); }
+  if (page === 'lesson' && stage === 'practice') {
+    const at = app.querySelector('#answer-form') && app.querySelector('.story');
+    if (at && !app.querySelector('.task-pet')) { const d = document.createElement('div'); d.className = 'task-pet'; d.setAttribute('aria-hidden', 'true'); at.before(d); taskPet = petMount(d, { size: 64, state: 'idle', charge: dayCharge() }); }
+  }
+  const cb = app.querySelector('#col-bugs'), cs = app.querySelector('#col-shop');
+  if (C && cb) C.renderBugs(cb, { bugs: collectionBugs(), rank: bugRank(beatenCount()) });
+  if (C && cs) {
+    const shop = () => C.renderWorkshop(cs, { stars: g.stars, owned: wardrobe().owned.slice(), equipped: { ...wardrobe().equipped },
+      onBuy: async id => {
+        const it = window.VEKTOR_DROBIK.COSMETICS.find(c => c.id === id), w = wardrobe();
+        if (!it || w.owned.includes(id)) return;
+        if (it.unlock) throw new Error('Эта вещь открывается достижением.');
+        if (it.price > g.stars) throw new Error('Не хватает звёзд.');
+        g.stars -= it.price; w.owned.push(id); save(); hud(); shop();
+      },
+      onEquip: async (slot, id) => { const w = wardrobe(); if (!w.owned.includes(id)) throw new Error('Сначала получи эту вещь.'); w.equipped[slot] = id; save(); shop(); },
+    });
+    shop();
+  }
+}
+
+function interestPicker(sel) {
+  const S = window.VEKTOR_STORIES, A = window.VEKTOR_ART;
+  return `<div class="interests" role="group" aria-label="Интересы">${S.INTERESTS.map(x => `<label class="int-chip"><input type="checkbox" name="interest" value="${x.id}"${sel.includes(x.id) ? ' checked' : ''}><span>${A ? A.interest(x.id, { size: 28 }) : ''}${x.name}</span></label>`).join('')}</div>`;
+}
+const pickedInterests = el => [...el.querySelectorAll('input[name=interest]:checked')].map(x => x.value).slice(0, 3);
+function withInterests(task) { const S = window.VEKTOR_STORIES; return S && Array.isArray(state.settings.interests) ? S.apply(task, state.settings.interests) : task; }
+function bindInterests(root) {
+  root.querySelectorAll('.interests').forEach(g => g.addEventListener('change', e => {
+    const on = g.querySelectorAll('input:checked'); if (on.length > 3) e.target.checked = false;
+  }));
+  const box = root.querySelector('.interests-ask'); if (!box) return;
+  box.querySelector('[data-interests-save]').onclick = () => { state.settings.interests = pickedInterests(box); save(); render(); };
+  box.querySelector('[data-interests-skip]').onclick = () => { state.settings.interests = []; save(); render(); };
+}
+
 function bindChat(i, kind) {
   const box = app.querySelector(`.chat[data-chat="${kind}"]`); if (!box) return;
   const cf = box.querySelector('.chat-form');
@@ -263,11 +388,14 @@ function bindChat(i, kind) {
     };
     bindAnswerKeys();
     setTimeout(() => cf.querySelector('#ans-num')?.focus({ preventScroll: true }), 0);
-  } else cf.onsubmit = e => {
-    e.preventDefault();
-    const inp = cf.querySelector('input'), v = inp.value.trim(); if (!v) return;
-    inp.value = ''; tutorSay(i, kind, v);
-  };
+  } else {
+    cf.onsubmit = e => {
+      e.preventDefault();
+      const inp = cf.querySelector('input'), v = inp.value.trim(); if (!v) return;
+      inp.value = ''; tutorSay(i, kind, v);
+    };
+    const mic = cf.querySelector('.chat-mic'); if (mic) mic.onclick = () => listen(cf.querySelector('input'), mic);
+  }
   box.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => {
     const v = b.dataset.quick;
     if (v === 'go-practice') { session = null; location.hash = `lesson/${i}/practice`; return; }
@@ -417,28 +545,70 @@ function sfx(kind) {
 
 const TOUR = [
   { sel: '.hero-next [data-continue]', title: 'Главная кнопка', text: 'Всегда ведёт к следующему шагу. Не знаешь, что делать, — жми «Продолжить».' },
-  { sel: '#path', title: 'Твой путь', text: 'Кружки — темы по порядку. Зелёный — освоено, жёлтый — ты здесь. Нажми на любой кружок, чтобы открыть тему.' },
+  { sel: '#path .node.is-current .node-btn, #path .node .node-btn', title: 'Твой путь', text: 'Этот кружок — тема, где ты сейчас. Ниже — следующие темы по порядку: зелёный кружок — освоено. Нажми на кружок, чтобы открыть тему.' },
   { sel: '.hud', title: 'Звёзды и огонёк', text: 'Звёзды — за решённые задачи. Огонёк — сколько дней подряд ты занимаешься.' },
-  { sel: 'nav', title: 'Меню', text: 'Путь, все темы, награды и профиль. В профиле можно поменять имя и подключить ИИ-наставника.' },
+  { sel: '.sidebar nav', title: 'Меню', text: () => (innerWidth <= 760 ? 'Внизу экрана — путь, все темы, награды и профиль.' : 'Слева — путь, все темы, награды и профиль.') },
 ];
+/* Знакомство с интерфейсом. Подсказка сама меряет себя и встаёт туда, где не закрывает
+   подсвеченное: снизу, сверху, сбоку, а если места нет — шторкой у противоположного края экрана.
+   Пересчитывается при повороте экрана, изменении размера и прокрутке; Esc — пропустить. */
+let tourCleanup = null;
 function startTour(k = 0) {
+  if (tourCleanup) { tourCleanup(); tourCleanup = null; }
   document.querySelectorAll('.tour-hole, .tour-tip').forEach(el => el.remove());
   if (k >= TOUR.length) { state.toured = true; save(); return; }
-  const step = TOUR[k], el = [...document.querySelectorAll(step.sel)].find(e => e.offsetParent !== null || getComputedStyle(e).position === 'fixed');
+  const step = TOUR[k];
+  const el = step.sel.split(',').map(q => [...document.querySelectorAll(q.trim())].find(e => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden')).find(Boolean);
   if (!el) return startTour(k + 1);
-  el.scrollIntoView({ block: 'center', behavior: 'instant' });
-  const r = el.getBoundingClientRect(), pad = 8;
   const hole = document.createElement('div'); hole.className = 'tour-hole';
-  Object.assign(hole.style, { left: r.left - pad + 'px', top: r.top - pad + 'px', width: r.width + pad * 2 + 'px', height: Math.min(r.height, innerHeight * 0.6) + pad * 2 + 'px' });
-  const tip = document.createElement('div'); tip.className = 'tour-tip'; tip.setAttribute('role', 'dialog'); tip.setAttribute('aria-label', step.title);
-  tip.innerHTML = `<p class="tour-count">${k + 1} из ${TOUR.length}</p><h3>${step.title}</h3><p>${step.text}</p>
+  const tip = document.createElement('div'); tip.className = 'tour-tip'; tip.setAttribute('role', 'dialog'); tip.setAttribute('aria-modal', 'true'); tip.setAttribute('aria-labelledby', 'tour-h');
+  tip.innerHTML = `<p class="tour-count">${k + 1} из ${TOUR.length}</p><h3 id="tour-h">${step.title}</h3><p>${typeof step.text === 'function' ? step.text() : step.text}</p>
     <div class="row-actions"><button class="btn btn-primary" data-tour-next>${k + 1 < TOUR.length ? 'Дальше' : 'Понятно!'}</button><button class="btn btn-ghost" data-tour-skip>Пропустить</button></div>`;
   document.body.append(hole, tip);
-  const below = r.bottom + 200 < innerHeight, tw = Math.min(340, innerWidth - 32);
-  Object.assign(tip.style, { width: tw + 'px', left: Math.max(16, Math.min(innerWidth - tw - 16, r.left)) + 'px', top: (below ? Math.min(r.bottom + 16, innerHeight - 220) : Math.max(16, r.top - 216)) + 'px' });
+  const fixedEl = getComputedStyle(el).position === 'fixed' || !!el.closest('.sidebar');
+  if (!fixedEl) { const r0 = el.getBoundingClientRect(); if (r0.top < 72 || r0.bottom > innerHeight - 96) el.scrollIntoView({ block: 'center', behavior: 'instant' }); }
+  let shifted = false;
+  const place = () => {
+    const W = innerWidth, H = innerHeight, gap = 14, m = 12, pad = 8;
+    const r = el.getBoundingClientRect();
+    // подсветка — только видимая часть элемента
+    const hr = { l: Math.max(m / 2, r.left - pad), t: Math.max(m / 2, r.top - pad), r: Math.min(W - m / 2, r.right + pad), b: Math.min(H - m / 2, r.bottom + pad) };
+    Object.assign(hole.style, { left: hr.l + 'px', top: hr.t + 'px', width: Math.max(0, hr.r - hr.l) + 'px', height: Math.max(0, hr.b - hr.t) + 'px' });
+    const tw = Math.min(360, W - 2 * m); tip.style.width = tw + 'px'; tip.classList.remove('sheet-top', 'sheet-bottom');
+    const th = tip.offsetHeight;
+    const clampX = x => Math.max(m, Math.min(W - tw - m, x));
+    const opts = [
+      { ok: H - hr.b - gap >= th + m, x: clampX(hr.l), y: hr.b + gap },                      // снизу
+      { ok: hr.t - gap >= th + m, x: clampX(hr.l), y: hr.t - gap - th },                      // сверху
+      { ok: W - hr.r - gap >= tw + m, x: hr.r + gap, y: Math.max(m, Math.min(H - th - m, hr.t)) }, // справа
+      { ok: hr.l - gap >= tw + m, x: hr.l - gap - tw, y: Math.max(m, Math.min(H - th - m, hr.t)) }, // слева
+    ];
+    const o = opts.find(x => x.ok);
+    if (o) Object.assign(tip.style, { left: o.x + 'px', top: o.y + 'px', bottom: 'auto' });
+    else { // места нет — шторка у края; высоту меряем у самой шторки (у неё своя ширина)
+      tip.classList.add('sheet-bottom');
+      Object.assign(tip.style, { width: '', left: '', top: 'auto', bottom: 'calc(env(safe-area-inset-bottom, 0px) + 8px)' });
+      const sh = tip.offsetHeight + 8 + gap;
+      const fitsBottom = hr.b <= H - sh, fitsTop = hr.t >= sh;
+      // обычный элемент один раз сдвигаем так, чтобы он оказался над шторкой
+      if (!fitsBottom && !fitsTop && !fixedEl && !shifted) {
+        shifted = true; const need = hr.b - (H - sh), y0 = scrollY;
+        scrollBy({ top: need, behavior: 'instant' });
+        if (scrollY !== y0) return place();
+      }
+      const topFree = fitsTop && !fitsBottom || (!fitsTop && !fitsBottom && hr.t > H - hr.b);
+      if (topFree) { tip.classList.replace('sheet-bottom', 'sheet-top'); Object.assign(tip.style, { top: 'calc(env(safe-area-inset-top, 0px) + 8px)', bottom: 'auto' }); }
+    }
+  };
+  let raf = 0; const onMove = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(place); };
+  const onKey = e => { if (e.key === 'Escape') startTour(TOUR.length); };
+  addEventListener('resize', onMove); addEventListener('scroll', onMove, true); addEventListener('keydown', onKey);
+  if (window.visualViewport) visualViewport.addEventListener('resize', onMove);
+  tourCleanup = () => { removeEventListener('resize', onMove); removeEventListener('scroll', onMove, true); removeEventListener('keydown', onKey); if (window.visualViewport) visualViewport.removeEventListener('resize', onMove); cancelAnimationFrame(raf); };
+  place();
   tip.querySelector('[data-tour-next]').onclick = () => startTour(k + 1);
   tip.querySelector('[data-tour-skip]').onclick = () => startTour(TOUR.length);
-  tip.querySelector('[data-tour-next]').focus();
+  tip.querySelector('[data-tour-next]').focus({ preventScroll: true });
 }
 
 /* ================= Награды: тосты, праздник, счётчики ================= */
@@ -532,6 +702,11 @@ function home() {
     </li>`;
   }).join('');
   return `<div class="page-head home-head"><h1>${hello}, ${esc(state.settings.name)}!</h1></div>
+  ${state.warmupDay !== today() && warmupPlan().length ? `<section class="hero-next hero-warmup" aria-label="Разминка">
+    <div class="hero-text"><p class="hero-kicker">Разминка</p><h2>Две минуты перед занятием</h2><p class="muted">${window.VEKTOR_TONE.t('warmupSub')}</p></div>
+    <button class="btn btn-primary btn-big btn-go" data-warmup>${G.icon('rocket', 22)} Начать</button></section>` : ''}
+  ${(state.settings.grade || 5) >= 7 ? `<section class="sheet grade-note"><p><b>Программа ${state.settings.grade} класса скоро появится.</b> А пока проверим фундамент: ошибки в алгебре и геометрии часто растут из дробей 5–6 класса — найдём и закроем такие дыры.</p><a href="#map" class="btn btn-ghost btn-sm">Что будет в ${state.settings.grade} классе</a></section>` : ''}
+  ${!Array.isArray(state.settings.interests) && window.VEKTOR_STORIES ? `<section class="sheet interests-ask" aria-label="Интересы"><h2>Что тебе нравится?</h2><p class="muted">Выбери 2–3 — задачи будут про это.</p>${interestPicker([])}<div class="row-actions"><button class="btn btn-primary" data-interests-save>Готово</button><button class="btn btn-ghost" data-interests-skip>Пропустить</button></div></section>` : ''}
   <section class="hero-next" aria-label="Следующий шаг">
     <div class="hero-text">
       <p class="hero-kicker">${ct.stage === 'review' ? 'Повторение' : ct.reason ? 'Сначала повторим' : 'Продолжай отсюда'}</p>
@@ -539,6 +714,7 @@ function home() {
       <p class="muted">${ct.reason || ct.say}</p>
       ${ct.stage !== 'review' && !topics[ct.i].legacy ? miniSteps(ct.i) : ''}
     </div>
+    <div class="hero-pet" id="pet-home" aria-hidden="true"></div>
     <button class="btn btn-primary btn-big btn-go" data-continue>${G.icon('rocket', 22)} Продолжить</button>
   </section>
   <div class="layout home-layout">
@@ -601,20 +777,37 @@ function drawRoute() {
 
 const filters = cur => `<div class="filters" role="group" aria-label="Фильтр по разделам">${['Все', ...SECTIONS].map(s => `<button class="chip" data-filter="${s}" aria-pressed="${s === cur}">${s}</button>`).join('')}</div>`;
 
-function mapPage(filter = 'Все') {
+/* «Все темы» — вся программа 5–9 по классам. Готовое открывается, остальное помечено «скоро»
+   и показывает, как Рентген мышления поймает ошибку в этом разделе: метод не только про дроби. */
+let mapGrade = null;
+function topicCards(ids) {
   const cur = continueTarget().i;
-  return head('Все темы', 'Можно открыть любую тему. «Урок» — объяснение с наставником, «Конспект» — коротко прочитать правило и примеры.') + filters(filter) +
-    SECTIONS.filter(s => filter === 'Все' || s === filter).map(s => {
-      const ix = topics.map((t, i) => i).filter(i => topics[i].section === s), done = ix.filter(i => pct(i) >= DONE).length;
-      return `<section class="section"><h2>${s === 'Дроби' ? 'Обыкновенные дроби' : s} <small>освоено ${done} из ${ix.length}</small></h2><div class="topics">${ix.map(i => {
-        const t = topics[i];
-        return `<article class="topic is-${status(i)}${i === cur ? ' is-current' : ''}">
-          <h3>${t.title}</h3>
-          <span class="status">${i === cur ? 'Ты здесь' : statusText(i)}${t.legacy ? ' · пока одна задача' : ''}</span>
-          ${t.legacy ? '' : miniSteps(i)}
-          <div class="topic-actions"><button class="btn btn-primary btn-sm" data-lesson="${i}">${t.legacy ? 'Решить задачу' : pct(i) >= DONE ? 'Повторить урок' : 'Урок'}</button>${t.legacy ? '' : `<button class="btn btn-ghost btn-sm" data-lesson="${i}" data-tab="notes">Конспект</button>`}</div>
-        </article>`; }).join('')}</div></section>`;
-    }).join('');
+  return `<div class="topics">${ids.map(id => topics.findIndex(t => t.id === id)).filter(i => i >= 0).map(i => {
+    const t = topics[i];
+    return `<article class="topic is-${status(i)}${i === cur ? ' is-current' : ''}">
+      <h3>${t.title}</h3>
+      <span class="status">${i === cur ? 'Ты здесь' : statusText(i)}</span>
+      ${miniSteps(i)}
+      <div class="topic-actions"><button class="btn btn-primary btn-sm" data-lesson="${i}">${pct(i) >= DONE ? 'Повторить урок' : 'Урок'}</button><button class="btn btn-ghost btn-sm" data-lesson="${i}" data-tab="notes">Конспект</button></div>
+    </article>`; }).join('')}</div>`;
+}
+function mapPage() {
+  const P = window.VEKTOR_PROGRAM;
+  if (!P) return head('Все темы', '') + topicCards(topics.map(t => t.id));
+  const gn = mapGrade || state.settings.grade || 5, g = P.grade(gn);
+  const tabs = `<div class="segmented grade-tabs" role="tablist" aria-label="Класс">${P.GRADES.map(x => `<button role="tab" data-map-grade="${x.n}" aria-selected="${x.n === gn}" aria-pressed="${x.n === gn}" aria-label="${x.n} класс">${x.n}<span class="gt-s"> класс</span></button>`).join('')}</div>`;
+  const body = g.strands.map(st => {
+    const ready = st.topics.filter(t => t.ready), soon = st.topics.filter(t => !t.ready);
+    const waves = [...new Set(soon.map(t => t.wave))], when = waves.length === 1 && P.WAVES[waves[0]] ? `появится ${P.WAVES[waves[0]]}` : '';
+    return `<section class="section strand"><h2>${esc(st.name)}${!ready.length && when ? ` <small>${when}</small>` : ''}</h2>
+      ${ready.map(t => `<h3 class="strand-sub">${esc(t.title)}</h3>${topicCards(t.ready)}`).join('')}
+      ${soon.length ? `<ul class="soon-list">${soon.map(t => `<li><span>${esc(t.title)}</span>${ready.length || !when ? `<small>скоро${P.WAVES[t.wave] ? ', ' + P.WAVES[t.wave] : ''}</small>` : ''}</li>`).join('')}</ul>` : ''}
+      ${st.bug ? `<div class="bug-sample"><p class="bs-label">Как Вектор поймает ошибку здесь</p><p class="bs-rule"><s>${esc(st.bug.rule)}</s></p><p class="bs-counter">${esc(st.bug.counter)}</p></div>` : ''}
+    </section>`;
+  }).join('');
+  const lead = gn <= 6 ? 'Можно открыть любую готовую тему. Остальные разделы появятся по плану.'
+    : `Программа ${gn} класса в работе. Ошибки здесь часто растут из 5–6 класса — Вектор найдёт такую «дыру» и закроет её на простых числах.`;
+  return head('Все темы', lead) + tabs + body;
 }
 const library = filter => mapPage(filter);
 
@@ -646,7 +839,7 @@ function lessonPage(i, stage) {
   return `<div class="lesson-top"><button class="btn btn-ghost btn-sm back" data-go="home">← К пути</button></div>
     <div class="page-head"><h1>${t.title}</h1></div>
     ${steps}
-    <p class="do-now">${G.icon('target', 20)}<span><b>Что делать сейчас:</b> ${DO_NOW[stage] ? DO_NOW[stage]() : ''}</span></p>
+    ${stage === 'practice' ? '' : `<p class="do-now">${G.icon('target', 20)}<span><b>Что делать сейчас:</b> ${DO_NOW[stage] ? DO_NOW[stage]() : ''}</span></p>`}
     ${reqHtml}${body}`;
 }
 
@@ -679,7 +872,7 @@ function learnStage(i) {
 function newPracticeTask(i) {
   const m = meta(i), t = topics[i], p = pace();
   if (m.level == null && !t.legacy) m.level = A.startLevel(p);
-  session = { i, mode: 'practice', task: t.generate(t.legacy ? undefined : m.level), hints: 0, answered: false, tries: [], started: Date.now(), lastMistake: null, autoHint: false };
+  session = { i, mode: 'practice', task: withInterests(t.generate(t.legacy ? undefined : m.level)), hints: 0, answered: false, tries: [], started: Date.now(), lastMistake: null, autoHint: false };
   if (!t.legacy && A.autoHint(m, p)) { session.hints = 1; session.autoHint = true; }
   const tc = chats[`${t.id}:task`]; if (tc && !tc.busy) Object.assign(tc, { msgs: [], hint: 0 });
 }
@@ -783,6 +976,8 @@ function awards() {
         <div class="fact"><strong>${st}</strong><span>${plural(st, 'день', 'дня', 'дней')} подряд</span></div>
         <div class="fact"><strong>${g.earned.length}<small> из ${G.BADGES.length}</small></strong><span>достижений</span></div>
       </div>
+      ${window.VEKTOR_COLLECTION ? `<section class="sheet" aria-label="Мои жучки"><div id="col-bugs"></div></section>
+      <section class="sheet" aria-label="Мастерская"><div id="col-shop"></div></section>` : ''}
       <section class="sheet"><h2>Достижения</h2>
         <div class="badges">${G.BADGES.map(b => { const on = g.earned.includes(b.id); return `<div class="badge-card${on ? ' on' : ''}">${G.icon(b.icon, 30)}<div><b>${b.title}</b><span>${b.desc}</span></div>${on ? '' : '<span class="visually-hidden">Ещё не получено</span>'}</div>`; }).join('')}</div>
       </section>
@@ -829,7 +1024,9 @@ function settings() {
     <div class="stack">
       <form class="sheet" id="settings-form">
         <h2>Ученик</h2>
+        ${window.VEKTOR_STORIES ? `<div class="field">Мои интересы <span class="muted small">(до 3)</span>${interestPicker(state.settings.interests || [])}</div>` : ''}
         <label class="field">Имя ученика<input name="name" id="set-name" value="${esc(s.name)}" maxlength="30" required></label>
+        <label class="field">Класс<select name="grade" id="set-grade">${[5, 6, 7, 8, 9].map(n => `<option value="${n}"${s.grade === n ? ' selected' : ''}>${n} класс</option>`).join('')}</select></label>
         <label class="field">Цель дня<select name="goal" id="set-goal">${[3, 5, 10].map(n => `<option value="${n}"${game().goal === n ? ' selected' : ''}>${n} задач в день</option>`).join('')}</select></label>
         <label class="field">Как объяснять<select name="style" id="set-style"><option value="steps"${s.style === 'steps' ? ' selected' : ''}>Коротко и по шагам</option><option value="visual"${s.style === 'visual' ? ' selected' : ''}>Через наглядные примеры</option></select></label>
         <label class="switch"><input type="checkbox" name="sound" id="set-sound"${state.settings.sound === false ? '' : ' checked'}> Звуки при ответах</label>
@@ -885,6 +1082,7 @@ function settingsServer() {
       <form class="sheet" id="settings-form">
         <h2>${esc(s.name)}</h2>
         <p class="muted small">Так тебя видит учитель. Своё имя вписывать не нужно.</p>
+        <label class="field">Класс<select name="grade" id="set-grade">${[5, 6, 7, 8, 9].map(n => `<option value="${n}"${s.grade === n ? ' selected' : ''}>${n} класс</option>`).join('')}</select></label>
         <label class="field">Цель дня<select name="goal" id="set-goal">${[3, 5, 10].map(n => `<option value="${n}"${game().goal === n ? ' selected' : ''}>${n} задач в день</option>`).join('')}</select></label>
         <label class="field">Как объяснять<select name="style" id="set-style"><option value="steps"${s.style === 'steps' ? ' selected' : ''}>Коротко и по шагам</option><option value="visual"${s.style === 'visual' ? ' selected' : ''}>Через наглядные примеры</option></select></label>
         <label class="switch"><input type="checkbox" name="sound" id="set-sound"${s.sound === false ? '' : ' checked'}> Звуки при ответах</label>
@@ -907,15 +1105,22 @@ const filterState = { map: 'Все', library: 'Все' };
 const route = () => { const [page, arg, stage] = (location.hash.slice(1) || 'home').split('/'); return { page: pages[page] && !(SERVER && page === 'teacher') ? page : 'home', i: Math.min(Math.max(+arg || 0, 0), topics.length - 1), stage }; };
 
 function render() {
+  petsClear();
+  if (window.VEKTOR_TONE) { window.VEKTOR_TONE.setGrade(state.settings.grade); document.body.classList.toggle('age-senior', window.VEKTOR_TONE.senior()); }
   const { page, i, stage } = route();
   const lessonStage = stage || (topics[i].legacy || meta(i).practice ? 'practice' : 'learn');
   document.querySelector('#crumb').textContent = page === 'lesson' ? topics[i].title : pages[page];
   document.title = (page === 'home' ? '' : (page === 'lesson' ? topics[i].title : pages[page]) + ' — ') + 'Вектор';
   document.querySelectorAll('.sidebar [data-page]').forEach(b => (b.dataset.page === page || (page === 'library' && b.dataset.page === 'map')) ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
   document.querySelector('#student-name').textContent = state.settings.name;
+  { const sm = document.querySelector('.sidebar .profile small'); if (sm) sm.textContent = `Математика, ${state.settings.grade || 5} класс`; }
   document.querySelector('#avatar').textContent = (state.settings.name[0] || 'А').toUpperCase();
-  app.innerHTML = ({ home, map: () => mapPage(filterState.map), diagnostic, library: () => library(filterState.library), awards, teacher, settings, lesson: () => lessonPage(i, lessonStage) })[page]();
+  app.innerHTML = ({ home, map: () => mapPage(filterState.map), diagnostic, library: () => library(filterState.library), awards, teacher, settings, lesson: () => lessonPage(i, lessonStage), warmup: warmupPage })[page]();
   bind(page, i, lessonStage);
+  bindInterests(app);
+  mountPetsAndCollection(page, lessonStage);
+  if (page === 'warmup') runWarmup();
+  app.querySelectorAll('[data-warmup]').forEach(b => b.onclick = () => { location.hash = 'warmup'; });
   hud();
   if (page === 'home' && !state.toured && !navigator.webdriver) setTimeout(() => route().page === 'home' && startTour(0), 600);
   requestAnimationFrame(drawRoute);
@@ -942,6 +1147,7 @@ function bind(page, i, stage) {
   app.querySelectorAll('[data-review]').forEach(b => b.onclick = () => { session = null; location.hash = `lesson/${b.dataset.review}/review`; });
   app.querySelectorAll('[data-stage]').forEach(b => b.onclick = () => { session = null; location.hash = `lesson/${i}/${b.dataset.stage}`; });
   app.querySelectorAll('[data-filter]').forEach(b => b.onclick = () => { filterState[page] = b.dataset.filter; render(); });
+  app.querySelectorAll('[data-map-grade]').forEach(b => b.onclick = () => { mapGrade = +b.dataset.mapGrade; render(); });
   app.querySelectorAll('[data-learn-tab]').forEach(b => b.onclick = () => { learnTab = b.dataset.learnTab; render(); });
   V.labBind(app);
   app.querySelectorAll('[data-insert]').forEach(b => b.onclick = () => {
@@ -982,18 +1188,54 @@ function bind(page, i, stage) {
           if (r.mistake) s.lastMistake = r.mistake;
           m.errorsTotal++; G.wrong(game());
           const ev = t.legacy ? [] : A.afterAttempt(m, { solved: false, firstTry: false, hints: s.hints, sec: 0, mistake: r.mistake }, pace());
+          const X = window.VEKTOR_XRAY, xrayExpr = X && !t.legacy ? X.exprOf(s.task) : null;
+          petState('thinking');
           fb.className = 'feedback bad big';
           fb.innerHTML = `<p class="fb-title">${G.icon('repeat', 22)} Пока не так — попробуй ещё раз</p><p>${feedbackFor(r, s.task, i)}</p>` + eventsHtml(ev, i) +
-            `<div class="fb-actions"><button class="btn btn-primary" id="try-again">Исправить ответ</button>${s.hints < s.task.hints.length ? '<button class="btn btn-ghost" id="fb-hint">Подсказка</button>' : ''}${t.legacy ? '' : '<button class="btn btn-ghost" id="ask-tutor">Разобрать с наставником</button>'}</div>`;
+            `<div class="fb-actions">${xrayExpr ? `<button class="btn btn-primary" id="xray-open">${window.VEKTOR_TONE.t('catchBtn')}</button>` : ''}<button class="btn ${xrayExpr ? 'btn-ghost' : 'btn-primary'}" id="try-again">Исправить ответ</button></div><div class="fb-links">${s.hints < s.task.hints.length ? '<button class="link" id="fb-hint">Подсказка</button>' : ''}${t.legacy ? '' : '<button class="link" id="ask-tutor">Спросить наставника</button>'}</div>`;
           fb.querySelector('#try-again').onclick = () => { const inp = app.querySelector('#ans-num'); if (inp) { inp.focus(); inp.select(); } };
           const fh = fb.querySelector('#fb-hint'); if (fh) fh.onclick = () => app.querySelector('#hint-btn')?.click();
           sfx('wrong');
           const ask = fb.querySelector('#ask-tutor');
           if (ask) ask.onclick = () => { tutorSay(i, 'task', `Я ответил «${value}», но не получилось. Помоги понять, где ошибка.`); app.querySelector('.chat-task')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
           bindEventButtons(fb, i);
+          const rk = !xrayExpr && r.mistake && window.VEKTOR_BUGS && window.VEKTOR_BUGS.byKey[`${t.id}:${r.mistake}`];
+          if (rk && !t.legacy) {
+            fb.querySelector('.fb-actions').insertAdjacentHTML('afterbegin', `<button class="btn btn-primary" id="review-open">${window.VEKTOR_TONE.t('catchBtn')}</button>`);
+            fb.querySelector('#try-again').className = 'btn btn-ghost';
+            fb.querySelector('#review-open').onclick = () => {
+              let host = app.querySelector('#xray-host'); if (!host) { host = document.createElement('div'); host.id = 'xray-host'; fb.after(host); }
+              if (!(s.xray && s.xray.key === rk.key)) { s.xray = { key: rk.key, level: 1, step: null }; logEvent('bug_found', { bug: rk.key, topic: t.id, level: 1, step: null }); }
+              openReview(host, rk.key, s, i);
+            };
+          }
+          const xo = fb.querySelector('#xray-open');
+          if (xo) xo.onclick = () => {
+            let host = app.querySelector('#xray-host');
+            if (!host) { host = document.createElement('div'); host.id = 'xray-host'; fb.after(host); }
+            xo.disabled = true;
+            X.openDraft(host, { topic: t.id, expr: xrayExpr, mistakeId: r.mistake, prefill: value,
+              onResult: (a, lines) => {
+                logEvent('draft', { topic: t.id, lines: lines.length - 1, ok: a.stepsOk, step: a.errorAt });
+                if (a.ai && a.ai.bug === 'other') logEvent('bug_other', { topic: t.id, note: a.ai.note || '', lines: lines.slice(0, 5).map(x => String(x).slice(0, 60)) });
+                if (a.bug && !(s.xray && s.xray.key === a.bug.key)) {
+                  s.xray = { key: a.bug.key, level: a.level, step: a.errorAt };
+                  logEvent('bug_found', { bug: a.bug.key, topic: t.id, level: a.level, step: a.errorAt });
+                }
+                if (a.bug) petState('catching');
+                if (a.bug) {
+                  const res = host.querySelector('.xr-result');
+                  res.insertAdjacentHTML('beforeend', `<button type="button" class="btn btn-primary" id="review-open">${window.VEKTOR_TONE.t('reviewBtn')}</button>`);
+                  res.querySelector('#review-open').onclick = () => openReview(host, a.bug.key, s, i);
+                }
+              },
+              onSkip: () => { xo.disabled = false; } });
+            host.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          };
+          fb.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); // на телефоне отклик сразу на виду
           save(); return;
         }
-        s.answered = true; m.practice++;
+        s.answered = true; m.practice++; petState('happy'); if (taskPet) try { taskPet.setCharge(Math.min(dayCharge().done + 1, dayCharge().goal), dayCharge().goal); } catch {}
         const sec = Math.round((Date.now() - s.started) / 1000), firstTry = s.tries.length === 1, hints = s.hints;
         let ev = [];
         if (!t.legacy) {
@@ -1072,7 +1314,7 @@ function bind(page, i, stage) {
   if (sform) sform.onsubmit = e => {
     e.preventDefault();
     const nm = sform.querySelector('#set-name');
-    state.settings = { ...state.settings, name: nm ? nm.value.trim() || 'Ученик' : state.settings.name, style: sform.style.value, sound: sform.sound.checked }; game().goal = +sform.goal.value || 5; save();
+    state.settings = { ...state.settings, name: nm ? nm.value.trim() || 'Ученик' : state.settings.name, style: sform.style.value, sound: sform.sound.checked, grade: +sform.grade.value || 5, interests: pickedInterests(sform) }; game().goal = +sform.goal.value || 5; save();
     document.querySelector('#student-name').textContent = state.settings.name;
     document.querySelector('#avatar').textContent = state.settings.name[0].toUpperCase();
     app.querySelector('#feedback').textContent = 'Сохранено.';

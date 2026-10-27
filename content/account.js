@@ -23,6 +23,7 @@
     test_get: (b, t) => ['vektor_test_get', { p_token: t }],
     test_answer: (b, t) => ['vektor_test_answer', { p_token: t, p_n: b.n, p_answer: b.answer, p_sec: b.sec ?? null }],
     test_finish: (b, t) => ['vektor_test_finish', { p_token: t }],
+    push_get: (b, t) => ['vektor_push_get', { p_token: t }],
   };
   const STATUS = { bad_login: 401, no_session: 401, locked: 429, layout: 400, forbidden: 403, too_large: 413 };
 
@@ -68,8 +69,9 @@
   function loginScreen(msg) {
     document.body.classList.add('logged-out');
     const app = document.getElementById('app');
-    app.innerHTML = `<section class="login sheet" aria-labelledby="login-title">
-      <h1 id="login-title">Вход в «Вектор»</h1>
+    const L = window.VEKTOR_LANDING;
+    const loginHtml = `<section class="login sheet" aria-labelledby="login-title">
+      ${L ? '<h2 id="login-title">Вход для ученика</h2>' : '<h1 id="login-title">Вход в «Вектор»</h1>'}
       <p class="muted">Логин и пароль написаны на твоей бумажке.</p>
       <form id="login-form" novalidate>
         <label>Логин<input name="login" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="ученик1" required></label>
@@ -78,7 +80,10 @@
         <p class="feedback ${msg ? 'bad' : ''}" id="login-msg" role="alert">${msg ? esc(msg) : ''}</p>
         <button class="btn btn-primary btn-big" type="submit">Войти</button>
       </form>
-      <div class="role-switch"><span>Я учитель</span><a class="btn btn-ghost btn-sm" href="teacher.html">Вход для учителя →</a></div></section>`;
+      <div class="role-switch"><span>Я учитель</span><a class="btn btn-ghost btn-sm" href="teacher.html">Вход для учителя</a></div></section>`;
+    // Первая страница — лендинг, форма входа внутри него
+    if (L) { document.body.classList.add('landing'); app.innerHTML = L.render(loginHtml); L.mount(app); }
+    else app.innerHTML = loginHtml;
     const f = document.getElementById('login-form'), out = document.getElementById('login-msg');
     document.getElementById('show-pass').onchange = e => { f.password.type = e.target.checked ? 'text' : 'password'; };
     const latin = /[a-z]/i;
@@ -230,7 +235,14 @@
         <button class="btn btn-primary" id="test-go">Начать тест</button></div>`);
       document.getElementById('test-go').onclick = async () => { if (window.VEKTOR_SYNC) await window.VEKTOR_SYNC.flush(); location.reload(); };
     };
-    setInterval(tick, 20000);
+    // Пульс: задача от учителя для группы — тот же опрос раз в 20 секунд
+    const pushTick = async () => {
+      if (document.hidden || document.getElementById('push-card') || !window.VEKTOR_REVIEW) return;
+      let r = null; try { r = await call('push_get', {}, sess.token); } catch { return; }
+      if (!r || !r.push) return;
+      window.VEKTOR_REVIEW.pushCard(r.push, ok => { if (window.VEKTOR_SYNC) { window.VEKTOR_SYNC.event('push_done', { push: r.push.id, ok }); window.VEKTOR_SYNC.flush(); } });
+    };
+    setInterval(() => { tick(); pushTick(); }, 20000); setTimeout(pushTick, 3000);
   }
 
   function bareChrome(sess) {

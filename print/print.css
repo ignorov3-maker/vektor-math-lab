@@ -1,0 +1,25 @@
+@page{size:A4 portrait;margin:10mm}
+:root{--ink:#1E2B40;--green:#1E7358;--sheet:#FFF;color-scheme:light}
+*{box-sizing:border-box}body{margin:0;padding:24px;background:#E9EEE9;color:var(--ink);font:14px/1.4 system-ui,Arial,sans-serif}
+.print-toolbar{max-width:190mm;margin:0 auto 20px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+.print-toolbar h1{font-size:23px;margin:0 0 6px}.print-toolbar p{font-size:12px;margin:0;color:#52646B}
+.print-toolbar button{background:var(--green);color:#FFF;border:0;border-radius:6px;font:inherit;font-weight:700;padding:12px 18px;cursor:pointer}
+.sticker-sheet,.slip-sheet{width:190mm;margin:auto;padding:0;display:grid;background:#FFF;gap:2mm;box-shadow:0 2px 16px #0001}
+.sticker-sheet{grid-template-columns:repeat(4,46mm);grid-template-rows:repeat(6,42mm)}
+.sticker{border:.25mm dashed #B6C9BE;border-radius:3mm;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3mm 2mm;overflow:hidden;break-inside:avoid}
+.sticker .art-row{display:flex;align-items:center;justify-content:center;gap:3mm}
+.sticker strong{font-size:10pt;line-height:1.25;letter-spacing:-.02em;text-align:center;margin-top:2mm}
+.sticker p{font-size:6.5pt;color:#52646B;text-align:center;margin:1.5mm 0 0}
+.sticker small{font-size:6pt;color:var(--green);margin-top:2mm;font-weight:750}
+.sticker .bipych-charge,.slip .bipych-charge{display:none}
+.slip-sheet{grid-template-columns:repeat(2,94mm);grid-template-rows:repeat(4,64mm)}
+.slip{border:.25mm dashed #AABEB3;padding:4mm;break-inside:avoid;overflow:hidden}
+.slip-head{display:flex;justify-content:space-between;align-items:center;gap:3mm;height:17mm;margin-bottom:2mm}
+.slip-brand{color:var(--green);font-size:15pt;font-weight:850;letter-spacing:-.04em}
+.slip-class{font-size:8pt;color:#52646B;margin-top:1mm}
+.slip-fields{display:grid;grid-template-columns:18mm minmax(0,1fr);gap:2mm 3mm;font-size:9pt}
+.slip-fields span{color:#52646B}.slip-fields strong{font-family:Consolas,"Courier New",monospace;font-size:10pt;overflow-wrap:anywhere;line-height:1.3;max-height:11mm;overflow:hidden}
+.slip-url{font-size:8pt;line-height:1.4;overflow-wrap:anywhere;margin-top:3mm;color:var(--green);max-height:11mm;overflow:hidden}
+.slip-note{font-size:6.5pt;color:#52646B;margin-top:2mm}
+@media screen and (max-width:800px){body{padding:16px}.print-toolbar{align-items:flex-start;flex-direction:column}.sticker-sheet,.slip-sheet{transform-origin:top left}.print-toolbar{width:190mm;max-width:100%}}
+@media print{body{padding:0;background:#FFF}.print-toolbar{display:none!important}.sticker-sheet,.slip-sheet{margin:0;box-shadow:none;break-after:avoid;break-before:avoid}*{print-color-adjust:exact;-webkit-print-color-adjust:exact}.bipych *{animation:none!important;transition:none!important}}
