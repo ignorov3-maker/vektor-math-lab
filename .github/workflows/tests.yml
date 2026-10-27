@@ -51,7 +51,10 @@ jobs:
 
       - name: Сценарии в браузере
         run: |
-          python tests/xray_scenario.py
-          python tests/codex_visual.py
-          python tests/tour_scenario.py
-          python tests/e2e_scenarios.py | tee e2e.log && grep -q "ИТОГО: \([0-9]*\) из \1$" e2e.log
+          # упавшие проверки — в аннотации, чтобы их было видно без скачивания лога
+          run() { python "tests/$1.py" > "$1.log" 2>&1; c=$?; cat "$1.log"
+            grep -vE '^(OK|ИТОГО|ВСЕГО|$)' "$1.log" | tail -15 | while IFS= read -r l; do [ $c -ne 0 ] && echo "::error title=$1::$l"; done; return $c; }
+          run xray_scenario
+          run codex_visual
+          run tour_scenario
+          run e2e_scenarios && grep -q "ИТОГО: \([0-9]*\) из \1$" e2e_scenarios.log
