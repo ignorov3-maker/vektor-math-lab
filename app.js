@@ -982,15 +982,32 @@ function bind(page, i, stage) {
           if (r.mistake) s.lastMistake = r.mistake;
           m.errorsTotal++; G.wrong(game());
           const ev = t.legacy ? [] : A.afterAttempt(m, { solved: false, firstTry: false, hints: s.hints, sec: 0, mistake: r.mistake }, pace());
+          const X = window.VEKTOR_XRAY, xrayExpr = X && !t.legacy ? X.exprOf(s.task) : null;
           fb.className = 'feedback bad big';
           fb.innerHTML = `<p class="fb-title">${G.icon('repeat', 22)} Пока не так — попробуй ещё раз</p><p>${feedbackFor(r, s.task, i)}</p>` + eventsHtml(ev, i) +
-            `<div class="fb-actions"><button class="btn btn-primary" id="try-again">Исправить ответ</button>${s.hints < s.task.hints.length ? '<button class="btn btn-ghost" id="fb-hint">Подсказка</button>' : ''}${t.legacy ? '' : '<button class="btn btn-ghost" id="ask-tutor">Разобрать с наставником</button>'}</div>`;
+            `<div class="fb-actions">${xrayExpr ? '<button class="btn btn-primary" id="xray-open">Поймать жучка</button>' : ''}<button class="btn ${xrayExpr ? 'btn-ghost' : 'btn-primary'}" id="try-again">Исправить ответ</button>${s.hints < s.task.hints.length ? '<button class="btn btn-ghost" id="fb-hint">Подсказка</button>' : ''}${t.legacy ? '' : '<button class="btn btn-ghost" id="ask-tutor">Разобрать с наставником</button>'}</div>`;
           fb.querySelector('#try-again').onclick = () => { const inp = app.querySelector('#ans-num'); if (inp) { inp.focus(); inp.select(); } };
           const fh = fb.querySelector('#fb-hint'); if (fh) fh.onclick = () => app.querySelector('#hint-btn')?.click();
           sfx('wrong');
           const ask = fb.querySelector('#ask-tutor');
           if (ask) ask.onclick = () => { tutorSay(i, 'task', `Я ответил «${value}», но не получилось. Помоги понять, где ошибка.`); app.querySelector('.chat-task')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
           bindEventButtons(fb, i);
+          const xo = fb.querySelector('#xray-open');
+          if (xo) xo.onclick = () => {
+            let host = app.querySelector('#xray-host');
+            if (!host) { host = document.createElement('div'); host.id = 'xray-host'; fb.after(host); }
+            xo.disabled = true;
+            X.openDraft(host, { topic: t.id, expr: xrayExpr, mistakeId: r.mistake, prefill: value,
+              onResult: (a, lines) => {
+                logEvent('draft', { topic: t.id, lines: lines.length - 1, ok: a.stepsOk, step: a.errorAt });
+                if (a.bug && !(s.xray && s.xray.key === a.bug.key)) {
+                  s.xray = { key: a.bug.key, level: a.level, step: a.errorAt };
+                  logEvent('bug_found', { bug: a.bug.key, topic: t.id, level: a.level, step: a.errorAt });
+                }
+              },
+              onSkip: () => { xo.disabled = false; } });
+            host.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          };
           save(); return;
         }
         s.answered = true; m.practice++;

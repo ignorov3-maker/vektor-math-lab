@@ -714,3 +714,25 @@ body.test-mode main>header{position:static}
   .test-head h1{font-size:20px}
   .test-list{padding-left:20px}
 }
+
+/* ---------- Рентген мышления: черновик ---------- */
+.xray { margin-top: 12px; padding: 16px; }
+.xr-title { font-weight: 700; margin: 0 0 10px; }
+.xr-lines { display: flex; flex-direction: column; gap: 8px; }
+.xr-row { display: grid; grid-template-columns: 18px 1fr auto; grid-template-areas: "eq in mark" ". prev prev"; align-items: center; gap: 2px 8px; padding: 6px 8px; border-radius: 10px; }
+.xr-cond { grid-template-areas: "eq prev mark"; color: var(--muted, #888); }
+.xr-eq { grid-area: eq; font-weight: 700; color: var(--muted, #888); }
+.xr-in { grid-area: in; font: inherit; font-size: 18px; padding: 8px 10px; border: 1.5px solid var(--line, #d8d8d8); border-radius: 8px; min-width: 0; background: var(--paper, #fff); color: inherit; }
+.xr-in:focus { outline: none; border-color: var(--green, #1E7358); }
+.xr-prev { grid-area: prev; font-size: 18px; min-height: 0; }
+.xr-mark { grid-area: mark; min-width: 28px; text-align: center; font-weight: 700; color: var(--green, #1E7358); }
+.xr-row.ok { background: color-mix(in srgb, var(--green, #1E7358) 8%, transparent); }
+.xr-row.bad { background: color-mix(in srgb, #E46A5E 14%, transparent); }
+.xr-row.bad .xr-in { border-color: #E46A5E; }
+.xr-keys { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 12px 0; }
+.xr-key { font: inherit; font-size: 20px; padding: 10px 0; border-radius: 10px; border: 1px solid var(--line, #d8d8d8); background: var(--paper, #fff); color: inherit; cursor: pointer; }
+.xr-key[data-k="␣"] { font-size: 13px; }
+.xr-actions { display: flex; justify-content: space-between; gap: 8px; }
+.xr-skip { margin-top: 10px; background: none; border: 0; color: var(--muted, #888); font: inherit; font-size: 14px; text-decoration: underline; cursor: pointer; padding: 0; }
+.xr-found { font-weight: 700; color: #C44E43; margin: 12px 0 0; }
+.xr-note { margin: 12px 0 0; }
