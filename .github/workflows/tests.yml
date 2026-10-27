@@ -41,7 +41,7 @@ jobs:
 
       - name: Playwright
         run: |
-          pip install playwright
+          pip install playwright pypdf
           python -m playwright install --with-deps chromium
 
       - name: Сервер (PHP + SQLite)
