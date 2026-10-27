@@ -52,4 +52,5 @@ jobs:
         run: |
           python tests/xray_scenario.py
           python tests/codex_visual.py
+          python tests/tour_scenario.py
           python tests/e2e_scenarios.py | tee e2e.log && grep -q "ИТОГО: \([0-9]*\) из \1$" e2e.log

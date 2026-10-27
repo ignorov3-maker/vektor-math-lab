@@ -545,28 +545,63 @@ function sfx(kind) {
 
 const TOUR = [
   { sel: '.hero-next [data-continue]', title: 'Главная кнопка', text: 'Всегда ведёт к следующему шагу. Не знаешь, что делать, — жми «Продолжить».' },
-  { sel: '#path', title: 'Твой путь', text: 'Кружки — темы по порядку. Зелёный — освоено, жёлтый — ты здесь. Нажми на любой кружок, чтобы открыть тему.' },
+  { sel: '#path .node.is-current .node-btn, #path .node .node-btn', title: 'Твой путь', text: 'Этот кружок — тема, где ты сейчас. Ниже — следующие темы по порядку: зелёный кружок — освоено. Нажми на кружок, чтобы открыть тему.' },
   { sel: '.hud', title: 'Звёзды и огонёк', text: 'Звёзды — за решённые задачи. Огонёк — сколько дней подряд ты занимаешься.' },
-  { sel: 'nav', title: 'Меню', text: 'Путь, все темы, награды и профиль. В профиле можно поменять имя и подключить ИИ-наставника.' },
+  { sel: '.sidebar nav', title: 'Меню', text: () => (innerWidth <= 760 ? 'Внизу экрана — путь, все темы, награды и профиль.' : 'Слева — путь, все темы, награды и профиль.') },
 ];
+/* Знакомство с интерфейсом. Подсказка сама меряет себя и встаёт туда, где не закрывает
+   подсвеченное: снизу, сверху, сбоку, а если места нет — шторкой у противоположного края экрана.
+   Пересчитывается при повороте экрана, изменении размера и прокрутке; Esc — пропустить. */
+let tourCleanup = null;
 function startTour(k = 0) {
+  if (tourCleanup) { tourCleanup(); tourCleanup = null; }
   document.querySelectorAll('.tour-hole, .tour-tip').forEach(el => el.remove());
   if (k >= TOUR.length) { state.toured = true; save(); return; }
-  const step = TOUR[k], el = [...document.querySelectorAll(step.sel)].find(e => e.offsetParent !== null || getComputedStyle(e).position === 'fixed');
+  const step = TOUR[k];
+  const el = step.sel.split(',').map(q => [...document.querySelectorAll(q.trim())].find(e => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden')).find(Boolean);
   if (!el) return startTour(k + 1);
-  el.scrollIntoView({ block: 'center', behavior: 'instant' });
-  const r = el.getBoundingClientRect(), pad = 8;
   const hole = document.createElement('div'); hole.className = 'tour-hole';
-  Object.assign(hole.style, { left: r.left - pad + 'px', top: r.top - pad + 'px', width: r.width + pad * 2 + 'px', height: Math.min(r.height, innerHeight * 0.6) + pad * 2 + 'px' });
-  const tip = document.createElement('div'); tip.className = 'tour-tip'; tip.setAttribute('role', 'dialog'); tip.setAttribute('aria-label', step.title);
-  tip.innerHTML = `<p class="tour-count">${k + 1} из ${TOUR.length}</p><h3>${step.title}</h3><p>${step.text}</p>
+  const tip = document.createElement('div'); tip.className = 'tour-tip'; tip.setAttribute('role', 'dialog'); tip.setAttribute('aria-modal', 'true'); tip.setAttribute('aria-labelledby', 'tour-h');
+  tip.innerHTML = `<p class="tour-count">${k + 1} из ${TOUR.length}</p><h3 id="tour-h">${step.title}</h3><p>${typeof step.text === 'function' ? step.text() : step.text}</p>
     <div class="row-actions"><button class="btn btn-primary" data-tour-next>${k + 1 < TOUR.length ? 'Дальше' : 'Понятно!'}</button><button class="btn btn-ghost" data-tour-skip>Пропустить</button></div>`;
   document.body.append(hole, tip);
-  const below = r.bottom + 200 < innerHeight, tw = Math.min(340, innerWidth - 32);
-  Object.assign(tip.style, { width: tw + 'px', left: Math.max(16, Math.min(innerWidth - tw - 16, r.left)) + 'px', top: (below ? Math.min(r.bottom + 16, innerHeight - 220) : Math.max(16, r.top - 216)) + 'px' });
+  const fixedEl = getComputedStyle(el).position === 'fixed' || !!el.closest('.sidebar');
+  if (!fixedEl) { const r0 = el.getBoundingClientRect(); if (r0.top < 72 || r0.bottom > innerHeight - 96) el.scrollIntoView({ block: 'center', behavior: 'instant' }); }
+  let shifted = false;
+  const place = () => {
+    const W = innerWidth, H = innerHeight, gap = 14, m = 12, pad = 8;
+    const r = el.getBoundingClientRect();
+    // подсветка — только видимая часть элемента
+    const hr = { l: Math.max(m / 2, r.left - pad), t: Math.max(m / 2, r.top - pad), r: Math.min(W - m / 2, r.right + pad), b: Math.min(H - m / 2, r.bottom + pad) };
+    Object.assign(hole.style, { left: hr.l + 'px', top: hr.t + 'px', width: Math.max(0, hr.r - hr.l) + 'px', height: Math.max(0, hr.b - hr.t) + 'px' });
+    const tw = Math.min(360, W - 2 * m); tip.style.width = tw + 'px'; tip.classList.remove('sheet-top', 'sheet-bottom');
+    const th = tip.offsetHeight;
+    const clampX = x => Math.max(m, Math.min(W - tw - m, x));
+    const opts = [
+      { ok: H - hr.b - gap >= th + m, x: clampX(hr.l), y: hr.b + gap },                      // снизу
+      { ok: hr.t - gap >= th + m, x: clampX(hr.l), y: hr.t - gap - th },                      // сверху
+      { ok: W - hr.r - gap >= tw + m, x: hr.r + gap, y: Math.max(m, Math.min(H - th - m, hr.t)) }, // справа
+      { ok: hr.l - gap >= tw + m, x: hr.l - gap - tw, y: Math.max(m, Math.min(H - th - m, hr.t)) }, // слева
+    ];
+    const o = opts.find(x => x.ok);
+    if (o) Object.assign(tip.style, { left: o.x + 'px', top: o.y + 'px', bottom: 'auto' });
+    else { // места нет — шторка у того края, который дальше от подсветки
+      // обычный элемент один раз сдвигаем вверх, чтобы шторка снизу его не закрывала
+      if (!fixedEl && !shifted) { shifted = true; const need = hr.b - (H - th - 2 * gap); if (need > 0 && hr.t - need >= m) { scrollBy({ top: need, behavior: 'instant' }); return place(); } }
+      const topFree = hr.t > H - hr.b;
+      tip.classList.add(topFree ? 'sheet-top' : 'sheet-bottom');
+      Object.assign(tip.style, { width: '', left: '', top: topFree ? 'calc(env(safe-area-inset-top, 0px) + 8px)' : 'auto', bottom: topFree ? 'auto' : 'calc(env(safe-area-inset-bottom, 0px) + 8px)' });
+    }
+  };
+  let raf = 0; const onMove = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(place); };
+  const onKey = e => { if (e.key === 'Escape') startTour(TOUR.length); };
+  addEventListener('resize', onMove); addEventListener('scroll', onMove, true); addEventListener('keydown', onKey);
+  if (window.visualViewport) visualViewport.addEventListener('resize', onMove);
+  tourCleanup = () => { removeEventListener('resize', onMove); removeEventListener('scroll', onMove, true); removeEventListener('keydown', onKey); if (window.visualViewport) visualViewport.removeEventListener('resize', onMove); cancelAnimationFrame(raf); };
+  place();
   tip.querySelector('[data-tour-next]').onclick = () => startTour(k + 1);
   tip.querySelector('[data-tour-skip]').onclick = () => startTour(TOUR.length);
-  tip.querySelector('[data-tour-next]').focus();
+  tip.querySelector('[data-tour-next]').focus({ preventScroll: true });
 }
 
 /* ================= Награды: тосты, праздник, счётчики ================= */

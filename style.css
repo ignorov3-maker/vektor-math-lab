@@ -573,6 +573,9 @@ code{font-size:.9em;background:var(--tint);padding:1px 5px;border-radius:4px}
 /* — Знакомство с интерфейсом — */
 .tour-hole{position:fixed;z-index:40;border-radius:16px;box-shadow:0 0 0 9999px rgba(15,20,40,.62);pointer-events:none;transition:all .25s}
 .tour-tip{position:fixed;z-index:41;background:var(--sheet);color:var(--ink);border-radius:16px;padding:18px 20px;box-shadow:0 20px 50px -20px rgba(0,0,0,.6)}
+.tour-tip.sheet-top,.tour-tip.sheet-bottom{left:8px!important;right:8px;width:auto!important;max-width:520px;margin:0 auto}
+.tour-tip .row-actions{flex-wrap:wrap}
+@media (prefers-reduced-motion:reduce){.tour-hole{transition:none}}
 .tour-tip h3{margin:0 0 6px;font-size:19px}
 .tour-tip p{margin:0 0 6px;font-size:16px}
 .tour-count{font-size:13px!important;color:var(--ink-2)}
@@ -911,3 +914,9 @@ body.landing #app { max-width: none; padding: 0; }
 .ld-login .role-switch { display: none; }
 .ld-nav a { white-space: nowrap; }
 .ld .ld-nav { position: static !important; display: flex !important; inset: auto !important; background: none !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; width: auto !important; height: auto !important; z-index: auto !important; }
+@media (max-height: 620px), (max-width: 340px) {
+  .tour-tip { padding: 12px 14px; border-radius: 14px; }
+  .tour-tip h3 { font-size: 17px; margin-bottom: 2px; }
+  .tour-tip p { font-size: 14.5px; margin-bottom: 4px; }
+  .tour-tip .btn { padding-top: 8px; padding-bottom: 8px; }
+}
