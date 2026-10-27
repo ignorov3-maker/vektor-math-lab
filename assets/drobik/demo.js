@@ -15,12 +15,13 @@
   ];
   var colors = ['screen-raspberry', 'screen-turquoise', 'screen-black'];
   var handles = [], main, cycle = null, index = 0, currentState = 'idle', palette = 'screen-turquoise';
-  var map = {}, age = 'junior', done = 2, goal = 5, line = '';
+  var map = {}, savedOutfit = {}, age = 'junior', done = 2, goal = 5, line = '';
   var wallet = window.VEKTOR_WARDROBE;
   function readOutfit() {
     var saved = wallet.getState();
     palette = saved.equipped.screen || 'screen-turquoise';
     map = Object.assign({}, saved.equipped); delete map.screen;
+    savedOutfit = Object.assign({}, saved.equipped);
   }
   readOutfit();
   function byId(id) { return document.getElementById(id); }
@@ -71,10 +72,9 @@
   var requestedState = new URLSearchParams(location.search).get('state');
   if (lib.STATES.indexOf(requestedState) >= 0) setState(requestedState);
   document.querySelectorAll('[data-palette]').forEach(function (button) {
-    button.addEventListener('click', function () {
-      palette = button.dataset.palette;
-      main.setCosmetics(Object.assign({ screen: palette }, map));
-      document.querySelectorAll('[data-palette]').forEach(function (b) { b.setAttribute('aria-pressed', String(b === button)); });
+    button.addEventListener('click', async function () {
+      try { await wallet.equip('screen', button.dataset.palette); }
+      catch (e) { notice(e.message); }
     });
   });
   ['antenna', 'hat', 'net'].forEach(function (slot) {
@@ -100,7 +100,14 @@
   byId('reset').textContent = 'Вернуть свой образ';
   function notice(text) { byId('wardrobe-notice').textContent = text; }
   function syncOutfit() {
-    readOutfit();
+    var equipped = wallet.getState().equipped;
+    palette = equipped.screen || 'screen-turquoise';
+    ['antenna', 'hat', 'net'].forEach(function (slot) {
+      if (savedOutfit[slot] !== equipped[slot]) {
+        if (equipped[slot]) map[slot] = equipped[slot]; else delete map[slot];
+      }
+    });
+    savedOutfit = Object.assign({}, equipped);
     main.setCosmetics(Object.assign({ screen: palette }, map));
     ['antenna', 'hat', 'net'].forEach(function (slot) { byId(slot).value = map[slot] || ''; });
     document.querySelectorAll('[data-palette]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.palette === palette)); });
@@ -119,7 +126,11 @@
     try { await wallet.addDemoStars(50); notice('Добавили 50 пробных звёзд для примерки.'); } catch (e) { notice(e.message); }
   });
   byId('undress').addEventListener('click', async function () {
-    try { await wallet.clearAccessories(); notice('Аксессуары сняты. Покупки остались в твоих вещах.'); } catch (e) { notice(e.message); }
+    try {
+      await wallet.clearAccessories(); readOutfit(); syncOutfit();
+      byId('wardrobe').querySelector('[data-preview-reset]').click();
+      notice('Аксессуары сняты. Покупки остались в твоих вещах.');
+    } catch (e) { notice(e.message); }
   });
   syncOutfit(); renderWardrobe();
   byId('senior').addEventListener('change', function (e) { age = e.target.checked ? 'senior' : 'junior'; resetMain(); });

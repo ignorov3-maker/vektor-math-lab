@@ -100,6 +100,14 @@
     var owned = new Set((Array.isArray(data.owned) ? data.owned : []).filter(function (id) { return ids.has(id); }));
     var equipped = {};
     items.forEach(function (item) { if (data.equipped && data.equipped[item.slot] === item.id && owned.has(item.id)) equipped[item.slot] = item.id; });
+    var view = workshopViews.get(el) || { slot: 'hat', ownedOnly: false, outfit: Object.assign({}, equipped), equipped: {} };
+    ['screen', 'antenna', 'hat', 'net'].forEach(function (slot) {
+      if (view.equipped[slot] !== equipped[slot]) {
+        if (equipped[slot]) view.outfit[slot] = equipped[slot]; else delete view.outfit[slot];
+      }
+    });
+    view.equipped = Object.assign({}, equipped);
+    workshopViews.set(el, view);
     var stars = Number.isFinite(Number(data.stars)) ? Math.max(0, Math.floor(Number(data.stars))) : 0;
     var head = node('header', 'vc-head'), copy = node('div');
     copy.append(node('p', 'vc-eyebrow', 'Твой напарник — твой стиль'), node('h2', 'vc-title', 'Гардеробная Бипыча'), node('p', 'vc-subtitle', 'Примерь. Выбери. Забери в свои вещи.'));
@@ -107,18 +115,35 @@
     head.append(copy, balance); root.appendChild(head);
     var layout = node('div', 'vc-shop-layout'), aside = node('aside', 'vc-preview');
     var stage = node('div', 'vc-preview-stage');
-    var preview = mascot(stage, { size: 208, state: 'happy', cosmetics: equipped, charge: { done: 3, goal: 5 } }, ctx.pets);
+    var preview = mascot(stage, { size: 208, state: 'happy', cosmetics: view.outfit, charge: { done: 3, goal: 5 } }, ctx.pets);
     var previewTitle = node('p', 'vc-preview-title', 'Твой Бипыч');
-    var reset = button('Вернуть свой образ', function () { preview.setCosmetics(equipped); previewTitle.textContent = 'Твой Бипыч'; });
-    aside.append(stage, previewTitle, reset, node('p', 'vc-hint', 'Аксессуары меняют только внешний вид. Каждый предмет можно сначала примерить.'));
+    var paletteButtons = node('div', 'vc-preview-colors'); paletteButtons.setAttribute('role', 'group'); paletteButtons.setAttribute('aria-label', 'Цвет Бипыча для примерки');
+    items.filter(function (item) { return item.slot === 'screen'; }).forEach(function (item) {
+      var b = button(item.name.replace(' Бипыч', ''), function () { tryOn(item); });
+      b.dataset.previewColor = item.id; paletteButtons.appendChild(b);
+    });
+    var reset = button('Вернуть свой образ', function () { view.outfit = Object.assign({}, equipped); updatePreview('Твой Бипыч'); });
+    reset.dataset.previewReset = '';
+    aside.append(stage, previewTitle, paletteButtons, reset, node('p', 'vc-hint', 'Выбирай цвет и сочетай аксессуары. Примерка бесплатна; твой образ сохранится после «Надеть».'));
     var store = node('div', 'vc-store'), filters = node('div', 'vc-filters'), grid = node('div', 'vc-item-grid');
     var message = node('p', 'vc-message'); message.setAttribute('role', 'status'); message.setAttribute('aria-live', 'polite');
-    var view = workshopViews.get(el) || { slot: 'hat', ownedOnly: false };
-    workshopViews.set(el, view);
     var shownSlot = view.slot, cardPets = [];
     var viewButtons = node('div', 'vc-shop-views');
     var fullDispose = disposers.get(el);
     disposers.set(el, function () { cardPets.forEach(function (p) { p.destroy(); }); fullDispose(); });
+    function updatePreview(title) {
+      preview.setCosmetics(view.outfit);
+      previewTitle.textContent = title;
+      paletteButtons.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.previewColor === (view.outfit.screen || 'screen-turquoise'))); });
+      grid.querySelectorAll('[data-item]').forEach(function (card, i) {
+        var item = items.find(function (c) { return c.id === card.dataset.item; });
+        cardPets[i].setCosmetics(Object.assign({}, view.outfit, Object.fromEntries([[item.slot, item.id]])));
+      });
+    }
+    function tryOn(item) {
+      view.outfit[item.slot] = item.id;
+      updatePreview('Примеряем: ' + item.name);
+    }
     async function act(b, callback, args) {
       if (b.disabled || typeof callback !== 'function') return;
       var itemId = b.closest('[data-item]').dataset.item;
@@ -141,9 +166,9 @@
         var mine = owned.has(item.id), active = equipped[item.slot] === item.id;
         var card = node('article', 'vc-shop-item'); card.dataset.item = item.id;
         var art = node('div', 'vc-item-art');
-        mascot(art, { size: 96, cosmetics: Object.assign({}, equipped, Object.fromEntries([[item.slot, item.id]])) }, cardPets);
+        mascot(art, { size: 96, cosmetics: Object.assign({}, view.outfit, Object.fromEntries([[item.slot, item.id]])) }, cardPets);
         card.append(art, node('h3', '', item.name), node('p', 'vc-price', mine ? (active ? 'Сейчас надето' : 'Уже твоё') : item.unlock ? 'Награда' : item.price ? '★ ' + item.price : 'Бесплатно'));
-        var tryButton = button('Примерить', function () { preview.setCosmetics(Object.assign({}, equipped, Object.fromEntries([[item.slot, item.id]]))); previewTitle.textContent = 'Примеряем: ' + item.name; }, 'vc-button vc-button-quiet');
+        var tryButton = button('Примерить', function () { tryOn(item); }, 'vc-button vc-button-quiet');
         tryButton.dataset.try = item.id; card.appendChild(tryButton);
         if (mine) {
           var equip = button(active ? 'Надето' : 'Надеть', function () { act(equip, data.onEquip, [item.slot, item.id]); });
@@ -175,6 +200,7 @@
       b.dataset.slot = pair[0]; b.setAttribute('aria-pressed', String(shownSlot === pair[0])); filters.appendChild(b);
     });
     store.append(viewButtons, filters, message, grid); layout.append(aside, store); root.appendChild(layout); draw();
+    updatePreview(['screen', 'antenna', 'hat', 'net'].every(function (slot) { return view.outfit[slot] === equipped[slot]; }) ? 'Твой Бипыч' : 'Примеряем образ');
   }
   window.VEKTOR_COLLECTION = Object.freeze({ renderBugs: renderBugs, renderWorkshop: renderWorkshop });
 }());

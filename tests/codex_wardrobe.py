@@ -36,16 +36,67 @@ async def main():
             await page.goto(base + "/assets/drobik/demo.html#wardrobe-section")
             check("shop available directly in mascot demo", await page.locator("#wardrobe [data-buy=hat-cap]").count() == 1)
             check("initial demo balance", await page.evaluate("VEKTOR_WARDROBE.getState().stars === 90"))
+            await page.locator('#quick-dress summary').click()
+            await page.select_option('#hat', 'hat-cap')
+            for color in ['turquoise', 'raspberry', 'black']:
+                await page.locator(f'[data-palette=screen-{color}]').click()
+                await page.wait_for_function("color => document.querySelector('#wardrobe .vc-preview .bipych').dataset.color === color", arg=color)
+                check(f"main {color} selection reaches wardrobe and accessory cards", await page.evaluate("""color =>
+                    document.querySelector('#main-bipych .bipych').dataset.color === color
+                    && [...document.querySelectorAll('#wardrobe .vc-item-art .bipych')].every(p=>p.dataset.color===color)
+                    && VEKTOR_WARDROBE.getState().equipped.screen === 'screen-'+color
+                """, color))
+            check("main color changes keep freely tried accessories", await page.locator('#main-bipych .bipych-hat>*').count() > 0)
+            await page.select_option('#hat', '')
+            await page.locator('#quick-dress summary').click()
+            await page.locator('#wardrobe [data-try=hat-graduate]').click()
+            await page.locator('#wardrobe [data-slot=net]').click()
+            await page.locator('#wardrobe [data-try=net-mint]').click()
+            check("trying accessories combines hat and net on selected black character", await page.evaluate("""() => {
+                const p=document.querySelector('#wardrobe .vc-preview .bipych');
+                return p.dataset.color==='black' && p.querySelector('.bipych-hat').children.length>0
+                    && p.querySelector('.bipych-net').dataset.equipped==='true';
+            }"""))
+            await page.locator('#wardrobe [data-preview-color=screen-raspberry]').click()
+            check("preview color keeps tried accessories without saving or spending", await page.evaluate("""() => {
+                const p=document.querySelector('#wardrobe .vc-preview .bipych'),s=VEKTOR_WARDROBE.getState();
+                return p.dataset.color==='raspberry' && p.querySelector('.bipych-hat').children.length>0
+                    && p.querySelector('.bipych-net').dataset.equipped==='true'
+                    && [...document.querySelectorAll('#wardrobe .vc-item-art .bipych')].every(p=>p.dataset.color==='raspberry')
+                    && s.stars===90 && s.equipped.screen==='screen-black' && !s.equipped.hat && !s.equipped.net;
+            }"""))
+            await page.locator('#wardrobe [data-slot=screen]').click()
+            await page.locator('#wardrobe [data-try=screen-turquoise]').click()
+            await page.locator('#wardrobe [data-slot=hat]').click()
+            await page.locator('#wardrobe [data-try=hat-cap]').click()
+            check("color category preview survives trying the next accessory", await page.evaluate("""() => {
+                const p=document.querySelector('#wardrobe .vc-preview .bipych');
+                return p.dataset.color==='turquoise' && p.querySelector('.bipych-hat').children.length>0
+                    && p.querySelector('.bipych-net').dataset.equipped==='true';
+            }"""))
+            await page.get_by_role('button', name='Вернуть свой образ', exact=True).last.click()
+            check("reset restores saved color and removes unowned trial accessories", await page.evaluate("""() => {
+                const p=document.querySelector('#wardrobe .vc-preview .bipych');
+                return p.dataset.color==='black' && !p.querySelector('.bipych-hat').children.length
+                    && !p.querySelector('.bipych-net').hasAttribute('data-equipped')
+                    && document.querySelector('#wardrobe [data-preview-color=screen-black]').getAttribute('aria-pressed')==='true';
+            }"""))
             await page.locator("#wardrobe [data-try=hat-cap]").click()
             check("trying does not spend, own or equip", await page.evaluate("""() => {
                 const s=VEKTOR_WARDROBE.getState();
                 return s.stars===90&&!s.owned.includes('hat-cap')&&!s.equipped.hat
                     && document.querySelector('#main-bipych .bipych-hat').children.length===0;
             }"""))
+            await page.locator('#wardrobe [data-preview-color=screen-raspberry]').click()
             await page.locator("#wardrobe [data-buy=hat-cap]").click()
             await page.wait_for_function("VEKTOR_WARDROBE.getState().owned.includes('hat-cap')")
             check("purchase deducts exact price", await page.evaluate("VEKTOR_WARDROBE.getState().stars === 55"))
             check("purchase keeps category and replaces buy with equip", await page.locator("#wardrobe [data-slot=hat]").get_attribute("aria-pressed") == "true" and await page.locator("#wardrobe [data-equip=hat-cap]").count() == 1)
+            check("purchase rerender preserves preview color and tried hat", await page.evaluate("""() => {
+                const p=document.querySelector('#wardrobe .vc-preview .bipych');
+                return p.dataset.color==='raspberry' && p.querySelector('.bipych-hat').children.length>0
+                    && document.querySelector('#main-bipych .bipych').dataset.color==='black';
+            }"""))
             await page.evaluate("Promise.all([VEKTOR_WARDROBE.buy('hat-cap'),VEKTOR_WARDROBE.buy('hat-cap')])")
             check("repeated purchase does not charge twice", await page.evaluate("VEKTOR_WARDROBE.getState().stars === 55"))
             await page.locator("#wardrobe [data-equip=hat-cap]").click()
@@ -59,9 +110,17 @@ async def main():
             }"""))
             await page.locator("#wardrobe [data-shop-view=owned]").click()
             check("my items only shows owned hat", await page.locator("#wardrobe [data-item]").count() == 1 and await page.locator("#wardrobe [data-item=hat-cap]").count() == 1)
+            await page.locator('#quick-dress summary').click()
+            await page.select_option('#net', 'net-mint')
+            await page.locator('#quick-dress summary').click()
             await page.locator("#undress").click()
             await page.wait_for_function("!VEKTOR_WARDROBE.getState().equipped.hat")
             check("taking off keeps ownership", await page.evaluate("VEKTOR_WARDROBE.getState().owned.includes('hat-cap') && document.querySelector('#main-bipych .bipych-hat').children.length===0"))
+            check("taking off also clears trial accessories and keeps saved color", await page.evaluate("""() =>
+                !document.querySelector('#main-bipych .bipych-net').hasAttribute('data-equipped')
+                && !document.querySelector('#wardrobe .vc-preview .bipych-hat').children.length
+                && document.querySelector('#wardrobe .vc-preview .bipych').dataset.color==='black'
+            """))
             await page.locator("#wardrobe [data-slot=antenna]").click()
             check("empty owned category", await page.locator("#wardrobe .vc-empty-filter").count() == 1)
             await page.locator("#wardrobe [data-shop-view=store]").click()
