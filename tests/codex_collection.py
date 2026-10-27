@@ -33,7 +33,7 @@ async def main():
         await page.locator('[data-slot="screen"]').click()
         check("three approved colors", await page.locator(".vc-shop-item").count() == 3)
         await page.locator('[data-slot="hat"]').click()
-        check("ten hats", await page.locator(".vc-shop-item").count() == 10)
+        check("thirteen hats", await page.locator(".vc-shop-item").count() == 13)
         await page.locator('[data-try="hat-cap"]').click()
         check("trying does not spend or equip", await page.evaluate("collectionDemoState.stars === 90 && !collectionDemoState.equipped.hat"))
         await page.locator('[data-buy="hat-cap"]').click()
@@ -48,9 +48,15 @@ async def main():
         check("insufficient stars disables purchase", await page.locator('[data-buy="hat-captain"]').is_disabled())
         check("equipped item disabled", await page.locator('[data-equip="hat-cap"]').is_disabled())
         await page.locator('[data-slot="antenna"]').click()
-        check("seven pixel accessories", await page.locator(".vc-shop-item").count() == 7)
+        check("nine pixel companions", await page.locator(".vc-shop-item").count() == 9)
         await page.locator('[data-slot="net"]').click()
-        check("ten nets", await page.locator(".vc-shop-item").count() == 10)
+        check("thirteen nets", await page.locator(".vc-shop-item").count() == 13)
+        await page.locator('[data-slot="special"]').click()
+        check("eight special items with descriptions and trophy labels", await page.locator('.vc-shop-item').count() == 8 and await page.locator('.vc-item-description').count() == 8 and await page.get_by_text('Трофей', exact=True).count() == 2)
+        await page.locator('[data-try="pixel-ufo"]').click()
+        await page.locator('[data-try="hat-wizard"]').click()
+        await page.locator('[data-try="net-comet"]').click()
+        check("special items combine and achievement trophies are preview-only", await page.locator('.vc-preview .bipych-ufo-beam').count() == 1 and await page.locator('.vc-preview .bipych-magic-star').count() == 1 and await page.locator('.vc-preview .bipych-stardust').count() == 1 and await page.locator('[data-item="net-comet"] [data-buy]').count() == 0)
         for width in [1440, 768, 390]:
             await page.set_viewport_size({"width": width, "height": 1000})
             for skin in ["notebook", "orbit", "pop", "pixel"]:
@@ -76,7 +82,7 @@ async def main():
         check("rerender removes old mascot DOM", await page.evaluate("""() => {
             const el=document.createElement('div');document.body.append(el);
             for(let i=0;i<20;i++)VEKTOR_COLLECTION.renderWorkshop(el,{stars:0,owned:[],equipped:{}});
-            const ok=el.querySelectorAll('.bipych').length===11;
+            const ok=el.querySelectorAll('.bipych').length===14;
             VEKTOR_COLLECTION.renderBugs(el,{bugs:[]});el.remove();return ok;
         }"""))
         check("absent callbacks do not offer active transactions", await page.evaluate("""() => {

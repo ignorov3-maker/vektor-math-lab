@@ -162,12 +162,15 @@
     function draw() {
       cardPets.forEach(function (p) { p.destroy(); }); cardPets = [];
       grid.replaceChildren();
-      items.filter(function (c) { return c.slot === shownSlot && (!view.ownedOnly || owned.has(c.id)); }).forEach(function (item) {
+      items.filter(function (c) { return (shownSlot === 'special' ? !!c.description : c.slot === shownSlot) && (!view.ownedOnly || owned.has(c.id)); }).forEach(function (item) {
         var mine = owned.has(item.id), active = equipped[item.slot] === item.id;
         var card = node('article', 'vc-shop-item'); card.dataset.item = item.id;
         var art = node('div', 'vc-item-art');
         mascot(art, { size: 96, cosmetics: Object.assign({}, view.outfit, Object.fromEntries([[item.slot, item.id]])) }, cardPets);
         card.append(art, node('h3', '', item.name), node('p', 'vc-price', mine ? (active ? 'Сейчас надето' : 'Уже твоё') : item.unlock ? 'Награда' : item.price ? '★ ' + item.price : 'Бесплатно'));
+        if (item.description) {
+          card.append(node('span', 'vc-item-tag', item.unlock ? 'Трофей' : 'Особенная вещь'), node('p', 'vc-item-description', item.description));
+        }
         var tryButton = button('Примерить', function () { tryOn(item); }, 'vc-button vc-button-quiet');
         tryButton.dataset.try = item.id; card.appendChild(tryButton);
         if (mine) {
@@ -193,7 +196,7 @@
       b.setAttribute('aria-pressed', String(view.ownedOnly === pair[0]));
       viewButtons.appendChild(b);
     });
-    [['screen', 'Цвета'], ['antenna', 'Пиксели'], ['hat', 'Шапки'], ['net', 'Сачки']].forEach(function (pair) {
+    [['special', 'Особенные'], ['screen', 'Цвета'], ['antenna', 'Пиксели'], ['hat', 'Шапки'], ['net', 'Сачки']].forEach(function (pair) {
       var b = button(pair[1], function () {
         shownSlot = pair[0]; view.slot = pair[0]; filters.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); draw();
       });

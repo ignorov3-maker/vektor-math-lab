@@ -43,6 +43,8 @@
 .vc-item-art{text-align:center}.vc-item-art .bipych *{animation:none!important}
 .vc-shop-item h3{font-size:13px;line-height:1.35;margin:0;min-height:36px}
 .vc-price{font-size:12px;color:var(--ink-2,#536471);margin:0 0 4px}
+.vc-item-tag{align-self:flex-start;font-size:10px;font-weight:750;padding:3px 6px;border:1px solid var(--line,#DAE3DE);background:var(--green-soft,#E3F1E9);border-radius:3px}
+.vc-item-description{font-size:12px;line-height:1.5;color:var(--ink-2,#536471);margin:0 0 6px}
 .vc-shop-item .vc-button{font-size:11px;padding:8px;min-height:36px}
 .vc-button-quiet{border-color:transparent;color:var(--green,#1E7358);background:none}
 .vc-unlock{font-size:10px;color:var(--ink-2,#536471);line-height:1.5;margin:0}

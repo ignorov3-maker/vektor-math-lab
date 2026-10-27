@@ -38,9 +38,17 @@
     ['net-square', 'net', 'Пиксельный сачок', 45],
     ['net-leaf', 'net', 'Лесной сачок', 40],
     ['net-spark', 'net', 'Искристый сачок', 55],
-    ['net-master', 'net', 'Сачок мастера', 0, 'bug-master']
+    ['net-master', 'net', 'Сачок мастера', 0, 'bug-master'],
+    ['pixel-comet', 'antenna', 'Комета на поводке', 85, null, 'Маленькая комета с мерцающим пиксельным хвостом.'],
+    ['pixel-ufo', 'antenna', 'НЛО-попутчик', 100, null, 'Летает рядом и сканирует мир мятным лучом.'],
+    ['hat-wizard', 'hat', 'Шляпа пиксельного мага', 0, 'topic-master', 'Звезда на кончике шляпы тихонько колдует.'],
+    ['hat-mushroom', 'hat', 'Мухомор-путешественник', 75, null, 'Лесная шляпка с крошечным светлячком.'],
+    ['hat-arcade', 'hat', 'Аркадный шлем', 110, null, 'На макушке играет собственный пиксельный эквалайзер.'],
+    ['net-orbit', 'net', 'Орбитальный сачок', 95, null, 'Ромбовидная рамка и крошечный спутник на орбите.'],
+    ['net-honey', 'net', 'Соты охотника', 80, null, 'Янтарная рамка и необычная сетка из пиксельных сот.'],
+    ['net-comet', 'net', 'Ловец комет', 0, 'ten-bugs', 'Сачок-звезда со следом из мерцающей звёздной пыли.']
   ].map(function (c) {
-    return Object.freeze({ id: c[0], slot: c[1], name: c[2], price: c[3], unlock: c[4] || null });
+    return Object.freeze({ id: c[0], slot: c[1], name: c[2], price: c[3], unlock: c[4] || null, description: c[5] || '' });
   });
   Object.freeze(STATES);
   Object.freeze(COSMETICS);
@@ -50,7 +58,7 @@
     'pixel-sun': '#FFD46F', 'pixel-mint': '#96EBD1', 'pixel-lilac': '#C5A0F2',
     'pixel-coral': '#FF927F', 'pixel-ice': '#B5E7FF', 'pixel-double': '#F8B4D9', 'pixel-star': '#FFE58A'
   };
-  var NETS = ['#C8A366', '#6AD3B7', '#F483AD', '#82C5F0', '#E9C24A', '#B29CE8', '#A8C6DD', '#8DBA77', '#FFE58A', '#EAB1E5'];
+  var NETS = ['#C8A366', '#6AD3B7', '#F483AD', '#82C5F0', '#E9C24A', '#B29CE8', '#A8C6DD', '#8DBA77', '#FFE58A', '#EAB1E5', '#AFA0F3', '#E9AD46', '#A9E7F4'];
   var OUTLINE = 'M42 34H92V38H100V42H108V50H112V90H108V98H100V106H36V102H28V94H24V50H28V42H34V38H42Z';
   var INSIDE = 'M42 38H90V42H98V46H104V52H108V88H104V96H98V102H38V98H32V92H28V52H32V44H38V42H42Z';
   var serial = 0;
@@ -84,7 +92,18 @@
         rect(92, 28, 4, 16, '#EDBF50') + rect(88, 44, 8, 8, '#EDBF50'),
       'hat-captain': path('M40 12H92V16H100V28H96V36H88V40H40V36H32V20H36V16H40Z', ink) +
         path('M40 20H44V16H88V20H96V26H40Z', cream) + rect(40, 28, 52, 8, ink) +
-        path('M60 20H72V24H68V28H64V24H60Z', '#E7BC4C')
+        path('M60 20H72V24H68V28H64V24H60Z', '#E7BC4C'),
+      'hat-wizard': path('M52 4H64V12H72V20H80V28H88V32H100V40H32V32H44V24H48V12H52Z', ink) +
+        path('M56 8H60V16H68V24H76V32H48V24H52V16H56Z', '#8B78D4') + rect(44, 32, 44, 4, '#E9C46C') +
+        '<g class="bipych-magic-star">' + path('M54 4H58V8H62V12H58V16H54V12H50V8H54Z', '#FFF0AD') + '</g>' + rect(60, 24, 4, 4, '#DDD0FF'),
+      'hat-mushroom': path('M48 8H84V12H96V20H104V36H32V20H40V12H48Z', ink) +
+        path('M48 12H84V16H96V24H100V32H36V24H44V16H48Z', '#E97E83') +
+        rect(48, 18, 8, 8, cream) + rect(76, 14, 8, 8, cream) + rect(88, 26, 8, 6, cream) + rect(52, 36, 32, 4, '#FFE5AC') +
+        '<g class="bipych-firefly">' + rect(30, 10, 4, 4, '#F2CD65') + rect(26, 10, 4, 2, '#B7E8D7') + '</g>',
+      'hat-arcade': path('M36 8H100V12H104V38H32V12H36Z', ink) + rect(36, 12, 64, 22, '#514D7E') + rect(40, 16, 56, 14, '#222C40') +
+        '<g class="bipych-equalizer">' + rect(44, 20, 8, 8, '#99EDC7', 'bipych-eq bipych-eq-0') +
+        rect(56, 18, 8, 10, '#F6A6CE', 'bipych-eq bipych-eq-1') + rect(68, 22, 8, 6, '#FFE59C', 'bipych-eq bipych-eq-2') +
+        rect(80, 18, 8, 10, '#A9DFF4', 'bipych-eq bipych-eq-3') + '</g>' + rect(40, 34, 8, 4, '#D2B8EE') + rect(88, 34, 8, 4, '#D2B8EE')
     };
     return hats[id] || '';
   }
@@ -98,6 +117,19 @@
     var netMesh = squareNet
       ? 'M112 40H113V64H112ZM119 40H120V64H119ZM108 46H124V47H108ZM108 57H124V58H108Z'
       : 'M112 38H113V62H112ZM119 38H120V62H119ZM108 44H124V45H108ZM108 55H124V56H108Z';
+    var netEffect = '';
+    if (map.net === 'net-orbit') {
+      netRim = 'M112 30H120V34H124V38H128V42H132V46H136V54H132V58H128V62H124V66H120V70H112V66H108V62H104V58H100V54H96V46H100V42H104V38H108V34H112ZM112 38H120V42H124V46H128V54H124V58H120V62H112V58H108V54H104V46H108V42H112Z';
+      netMesh = 'M112 42H113V58H112ZM119 42H120V58H119ZM108 46H124V47H108ZM108 54H124V55H108Z';
+      netEffect = '<g class="bipych-orbit-mote">' + rect(96, 38, 4, 4, '#FFE79C') + '</g>';
+    } else if (map.net === 'net-honey') {
+      netRim = 'M108 32H124V36H128V40H132V60H128V64H124V68H108V64H104V60H100V40H104V36H108ZM108 38H124V42H128V58H124V62H108V58H104V42H108Z';
+      netMesh = 'M112 38H113V42H119V38H120V43H124V44H120V50H124V51H120V57H124V58H120V62H119V58H113V62H112V57H108V56H112V50H108V49H112V43H108V42H112ZM113 44V49H119V44ZM113 51V56H119V51Z';
+    } else if (map.net === 'net-comet') {
+      netRim = 'M112 28H120V36H124V40H128V44H136V52H128V56H124V60H120V68H112V60H108V56H104V52H96V44H104V40H108V36H112ZM112 40H120V44H124V52H120V56H112V52H108V44H112Z';
+      netMesh = 'M114 42H115V54H114ZM119 42H120V54H119ZM110 46H122V47H110ZM110 50H122V51H110Z';
+      netEffect = '<g class="bipych-stardust">' + rect(100, 26, 4, 4, '#F4B5D4') + rect(92, 20, 3, 3, '#FFE59C') + rect(88, 12, 2, 2, '#B7EAF2') + '</g>';
+    }
     var satellite = map.antenna || (map.screen === 'screen-black' ? '' : 'pixel-sun');
     var limb = map.screen === 'screen-black' ? p[3] : p[4];
     var shyLimb = map.screen === 'screen-black' ? p[2] : limb;
@@ -132,12 +164,11 @@
       '<g class="bipych-net"' + (map.net ? ' data-equipped="true"' : '') + '>' +
       rect(114, 64, 4, 28, '#806247', 'bipych-net-handle') +
       '<path d="' + netRim + '" fill="' + netColor + '" fill-rule="evenodd" stroke="' + p[0] + '" stroke-width="1" class="bipych-net-rim"/>' +
-      '<path d="' + netMesh + '" fill="#6A9284" opacity=".65" class="bipych-net-mesh"/></g>' +
+      '<path d="' + netMesh + '" fill="#6A9284" opacity=".65" class="bipych-net-mesh"/>' + netEffect + '</g>' +
       rect(108, 82, 16, 16, p[0], 'bipych-grip') + rect(111, 84, 10, 10, limb) + rect(112, 84, 4, 4, p[2]) + '</g>' +
       '<g class="bipych-shy-hands"><g class="bipych-shy-hand-left">' + shyHand +
       '</g><g class="bipych-shy-hand-right"><g transform="translate(136 0) scale(-1 1)">' + shyHand + '</g></g></g>' +
       '<g class="bipych-question">' + path('M12 32H28V36H32V44H24V52H18V42H26V38H12ZM18 58H24V64H18Z', p[4]) + '</g>' +
-      '<g class="bipych-zzz">' + path('M100 16H116V20H112V24H108V28H116V32H100V28H104V24H108V20H100Z', p[4]) + '</g>' +
       '<g class="bipych-thought">' + rect(16, 28, 4, 4, p[0], 'bipych-thought-dot bipych-thought-dot-0') +
       rect(20, 20, 6, 6, p[4], 'bipych-thought-dot bipych-thought-dot-1') +
       rect(26, 10, 8, 8, p[0], 'bipych-thought-dot bipych-thought-dot-2') + '</g>' +
@@ -146,10 +177,17 @@
       path('M26 16H30V20H34V24H30V28H26V24H22V20H26Z', '#E6B74F', 'bipych-pride-star bipych-pride-star-1') + '</g>' +
       '</g>' +
       '<g class="bipych-satellite"' + (!satellite ? ' hidden="hidden"' : '') + '>' +
-      (satellite === 'pixel-star'
+      (satellite === 'pixel-comet'
+        ? '<g class="bipych-comet-tail">' + rect(132, 10, 6, 6, '#D4BAF3') + rect(138, 4, 4, 4, '#F4BDD8') + '</g>' + path('M124 16H132V20H136V28H132V32H124V28H120V20H124Z', '#FFE1A1') + rect(124, 20, 4, 4, '#FFF8E0')
+        : satellite === 'pixel-ufo'
+        ? '<g class="bipych-ufo-beam">' + path('M126 30H132V38H136V44H122V38H126Z', '#9CE8CB') + '</g>' + path('M124 12H132V16H136V20H140V28H118V20H122V16H124Z', p[0]) + rect(124, 16, 8, 6, '#AEDDF0') + rect(120, 24, 18, 4, '#B39AE1') + rect(126, 26, 4, 2, '#FFE79C')
+        : satellite === 'pixel-star'
         ? path('M124 12H128V16H134V20H130V26H122V20H118V16H124Z', satColor)
         : rect(122, 20, 14, 14, satColor) + rect(124, 22, 4, 4, '#FFF6DC')) +
       (satellite === 'pixel-double' ? rect(132, 10, 8, 8, p[2]) : '') + '</g>' +
+      '<g class="bipych-zzz" transform="translate(-8 0)">' + [0, 1, 2].map(function (i) {
+        return '<g class="bipych-sleep-z bipych-sleep-z-' + i + '">' + path('M102 34H114V37H111V40H108V43H114V46H102V43H105V40H108V37H102Z', map.screen === 'screen-black' ? p[5] : p[0]) + '</g>';
+      }).join('') + '</g>' +
       '<g class="bipych-confetti">' +
       [[18, 20], [44, 8], [90, 8], [132, 46], [12, 100], [126, 110]].map(function (xy, i) {
         return rect(xy[0], xy[1], 4, 6, i % 2 ? p[4] : p[2], 'bipych-spark bipych-spark-' + i);

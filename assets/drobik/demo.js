@@ -11,7 +11,7 @@
     'Эм… Немного смущён. Нерешительно тыкает пальчиками друг в друга.',
     'Заметил жучка и приготовил сачок.',
     'Вот это находка! Можно немного потанцевать.',
-    'Отдыхает и набирается сил.'
+    'Тихонько дышит. Сонные Z поднимаются и растворяются в воздухе.'
   ];
   var colors = ['screen-raspberry', 'screen-turquoise', 'screen-black'];
   var handles = [], main, cycle = null, index = 0, currentState = 'idle', palette = 'screen-turquoise';
@@ -133,6 +133,7 @@
     } catch (e) { notice(e.message); }
   });
   syncOutfit(); renderWardrobe();
+  if (new URLSearchParams(location.search).get('wardrobe') === 'special') byId('wardrobe').querySelector('[data-slot=special]').click();
   byId('senior').addEventListener('change', function (e) { age = e.target.checked ? 'senior' : 'junior'; resetMain(); });
   byId('done').addEventListener('input', function (e) { done = Number(e.target.value); main.setCharge(done, goal); });
   byId('goal').addEventListener('change', function (e) {

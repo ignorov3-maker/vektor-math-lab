@@ -58,6 +58,18 @@
 .bipych-spark-2,.bipych-spark-5{animation-delay:-1.3s}
 .bipych[data-state=sleep] .bipych-actor{transform:translateY(4px) rotate(5deg);animation:bipych-sleep 5s steps(3,end) infinite}
 .bipych[data-state=sleep] .bipych-zzz{display:block}
+.bipych-sleep-z{transform-box:view-box;transform-origin:108px 42px;animation:bipych-sleep-z 3.6s steps(8,end) infinite}
+.bipych-sleep-z-1{animation-delay:-1.2s;transform:translate(6px,-10px)}
+.bipych-sleep-z-2{animation-delay:-2.4s;transform:translate(12px,-20px)}
+.bipych-magic-star,.bipych-firefly,.bipych-orbit-mote,.bipych-stardust,.bipych-comet-tail,.bipych-ufo-beam,.bipych-eq{transform-box:fill-box;transform-origin:center}
+.bipych-magic-star{animation:bipych-magic 2.8s steps(3,end) infinite}
+.bipych-firefly{animation:bipych-firefly 3.6s steps(4,end) infinite}
+.bipych-eq{transform-origin:center bottom;animation:bipych-equalizer 1.6s steps(3,end) infinite}
+.bipych-eq-1{animation-delay:-.4s}.bipych-eq-2{animation-delay:-.8s}.bipych-eq-3{animation-delay:-1.2s}
+.bipych-orbit-mote{animation:bipych-orbit 4s steps(1,end) infinite}
+.bipych-stardust,.bipych-comet-tail{animation:bipych-stardust 2.4s steps(3,end) infinite}
+.bipych-ufo-beam{opacity:.4;animation:bipych-scan 3s steps(3,end) infinite;transform-origin:center top}
+.bipych[data-state=sleep] :is(.bipych-magic-star,.bipych-firefly,.bipych-orbit-mote,.bipych-stardust,.bipych-comet-tail,.bipych-ufo-beam,.bipych-eq){animation-play-state:paused}
 .bipych[data-state=sleep] .bipych-satellite{opacity:.35;animation:none}
 .bipych-satellite{animation:bipych-float 3s steps(4,end) infinite}
 .bipych[data-age=senior]{--bipych-hop:-3px;--bipych-think-speed:4s;--bipych-proud-speed:4s}
@@ -93,4 +105,11 @@
 @keyframes bipych-dance{0%,100%{transform:translateY(0) rotate(-3deg)}25%{transform:translateY(var(--bipych-hop)) rotate(3deg)}60%{transform:translateY(0) rotate(3deg)}80%{transform:translateY(var(--bipych-hop)) rotate(-3deg)}}
 @keyframes bipych-confetti{0%{transform:translateY(-3px);opacity:0}20%{opacity:1}85%{opacity:1}100%{transform:translateY(10px) rotate(90deg);opacity:0}}
 @keyframes bipych-sleep{0%,100%{transform:translateY(4px) rotate(5deg)}50%{transform:translateY(2px) rotate(5deg)}}
+@keyframes bipych-sleep-z{0%{transform:translate(0,2px) scale(.65);opacity:0}20%{opacity:.9}75%{opacity:.8}100%{transform:translate(18px,-30px) scale(1.1);opacity:0}}
+@keyframes bipych-magic{0%,100%{opacity:1;transform:translateY(0)}50%{opacity:.45;transform:translateY(-3px)}}
+@keyframes bipych-firefly{0%,100%{transform:translate(0,0);opacity:.6}35%{transform:translate(-4px,-4px);opacity:1}70%{transform:translate(2px,-2px);opacity:1}}
+@keyframes bipych-equalizer{0%,100%{transform:scaleY(.4)}50%{transform:scaleY(1)}}
+@keyframes bipych-orbit{0%,100%{transform:translate(0,0)}25%{transform:translate(20px,-12px)}50%{transform:translate(40px,12px)}75%{transform:translate(20px,32px)}}
+@keyframes bipych-stardust{0%,100%{opacity:.45;transform:translate(0,0)}50%{opacity:1;transform:translate(-2px,-2px)}}
+@keyframes bipych-scan{0%,100%{opacity:.2;transform:scaleY(.65)}50%{opacity:.6;transform:scaleY(1)}}
 @media(prefers-reduced-motion:reduce){.bipych *,.bipych *::before,.bipych *::after{animation:none!important;transition:none!important}.bipych-confetti,.bipych-spark,.bipych-thought-dot,.bipych-pride-star{opacity:1}}

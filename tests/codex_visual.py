@@ -44,10 +44,10 @@ async def main():
         page.on("request", lambda req: remote.append(req.url) if req.url.startswith(("https:", "http:")) else None)
         await page.goto(URL)
         await page.wait_for_function("window.VEKTOR_DROBIK && window.demoBipych")
-        check("9 states and 30 unique cosmetics", await page.evaluate("""() => {
+        check("9 states and 38 unique cosmetics", await page.evaluate("""() => {
             const d = VEKTOR_DROBIK;
             return JSON.stringify(d.STATES) === JSON.stringify(%s)
-              && d.COSMETICS.length === 30 && new Set(d.COSMETICS.map(c => c.id)).size === 30
+              && d.COSMETICS.length === 38 && new Set(d.COSMETICS.map(c => c.id)).size === 38
               && d.COSMETICS.every(c => ['screen','antenna','hat','net'].includes(c.slot)
                  && typeof c.price === 'number' && (c.unlock === null || typeof c.unlock === 'string'));
         }""" % json.dumps(STATES)))
@@ -72,6 +72,34 @@ async def main():
             check("state " + state, await page.locator("#contract-host .bipych").get_attribute("data-state") == state)
         check("invalid state falls back to idle", await page.evaluate("""() => {
             contractPet.setState('<script>'); return document.querySelector('#contract-host .bipych').dataset.state === 'idle';
+        }"""))
+        check("sleep has three staggered rising and fading Z glyphs on all colors", await page.evaluate("""() => {
+            for(const screen of ['screen-turquoise','screen-raspberry','screen-black']){
+                contractPet.setCosmetics({screen});contractPet.setState('sleep');
+                const root=document.querySelector('#contract-host .bipych');
+                const zs=[...root.querySelectorAll('.bipych-sleep-z')];
+                if(zs.length!==3 || root.querySelector('.bipych-actor .bipych-zzz')
+                    || new Set(zs.map(z=>getComputedStyle(z).animationDelay)).size!==3)return false;
+                const anim=zs[0].getAnimations()[0];anim.pause();
+                const sample=t=>{anim.currentTime=t;const s=getComputedStyle(zs[0]);return {y:new DOMMatrix(s.transform).m42,o:Number(s.opacity)};};
+                const a=sample(0),b=sample(1000),c=sample(3500);
+                if(!(c.y<a.y && a.o===0 && b.o>.5 && c.o<.4))return false;
+                contractPet.setState('idle');
+                if(getComputedStyle(root.querySelector('.bipych-zzz')).display!=='none')return false;
+            }return true;
+        }"""))
+        check("special cosmetics have distinct pixel shapes and local effects", await page.evaluate("""() => {
+            const specials=VEKTOR_DROBIK.COSMETICS.filter(c=>c.description);
+            const shapes=new Set();let effects=0;
+            for(const item of specials){
+                contractPet.setCosmetics({screen:'screen-black',[item.slot]:item.id});contractPet.setState('idle');
+                const root=document.querySelector('#contract-host');
+                if(item.slot==='net')shapes.add(root.querySelector('.bipych-net-rim').getAttribute('d'));
+                const effect=root.querySelector('.bipych-magic-star,.bipych-firefly,.bipych-equalizer,.bipych-orbit-mote,.bipych-stardust,.bipych-comet-tail,.bipych-ufo-beam');
+                if(effect)effects++;
+                if([...root.querySelectorAll('.bipych-hat path,.bipych-net path,.bipych-satellite path')].some(p=>/[CLQAST]/i.test(p.getAttribute('d'))))return false;
+            }
+            return specials.length===8 && effects===7 && shapes.size===3;
         }"""))
         check("thinking moves body, gaze and paw even without satellite", await page.evaluate("""() => {
             contractPet.setCosmetics({screen:'screen-black'}); contractPet.setState('thinking');
@@ -185,7 +213,7 @@ async def main():
         # Every cosmetic combination must produce valid nonempty local SVG.
         # All individual accessories, all pairs, and every 9-state combination are exercised
         # efficiently inside the browser rather than taking thousands of screenshots.
-        check("26136 cosmetic/state combinations render without NaN or unsafe markup", await page.evaluate("""() => {
+        check("52920 cosmetic/state combinations render without NaN or unsafe markup", await page.evaluate("""() => {
             const items = VEKTOR_DROBIK.COSMETICS;
             const slot = s => items.filter(c => c.slot === s).map(c => c.id);
             const xml = new DOMParser();
@@ -206,7 +234,7 @@ async def main():
                 }
             }
             window.cosmeticCombinationCount = total;
-            return total === 26136;
+            return total === 52920;
         }"""))
         check("all shop net previews match the equipped net geometry", await page.evaluate("""() => {
             if(!window.VEKTOR_COLLECTION)return true;
