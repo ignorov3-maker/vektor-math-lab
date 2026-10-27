@@ -585,12 +585,19 @@ function startTour(k = 0) {
     ];
     const o = opts.find(x => x.ok);
     if (o) Object.assign(tip.style, { left: o.x + 'px', top: o.y + 'px', bottom: 'auto' });
-    else { // места нет — шторка у того края, который дальше от подсветки
-      // обычный элемент один раз сдвигаем вверх, чтобы шторка снизу его не закрывала
-      if (!fixedEl && !shifted) { shifted = true; const need = hr.b - (H - th - 2 * gap); if (need > 0 && hr.t - need >= m) { scrollBy({ top: need, behavior: 'instant' }); return place(); } }
-      const topFree = hr.t > H - hr.b;
-      tip.classList.add(topFree ? 'sheet-top' : 'sheet-bottom');
-      Object.assign(tip.style, { width: '', left: '', top: topFree ? 'calc(env(safe-area-inset-top, 0px) + 8px)' : 'auto', bottom: topFree ? 'auto' : 'calc(env(safe-area-inset-bottom, 0px) + 8px)' });
+    else { // места нет — шторка у края; высоту меряем у самой шторки (у неё своя ширина)
+      tip.classList.add('sheet-bottom');
+      Object.assign(tip.style, { width: '', left: '', top: 'auto', bottom: 'calc(env(safe-area-inset-bottom, 0px) + 8px)' });
+      const sh = tip.offsetHeight + 8 + gap;
+      const fitsBottom = hr.b <= H - sh, fitsTop = hr.t >= sh;
+      // обычный элемент один раз сдвигаем так, чтобы он оказался над шторкой
+      if (!fitsBottom && !fitsTop && !fixedEl && !shifted) {
+        shifted = true; const need = hr.b - (H - sh), y0 = scrollY;
+        scrollBy({ top: need, behavior: 'instant' });
+        if (scrollY !== y0) return place();
+      }
+      const topFree = fitsTop && !fitsBottom || (!fitsTop && !fitsBottom && hr.t > H - hr.b);
+      if (topFree) { tip.classList.replace('sheet-bottom', 'sheet-top'); Object.assign(tip.style, { top: 'calc(env(safe-area-inset-top, 0px) + 8px)', bottom: 'auto' }); }
     }
   };
   let raf = 0; const onMove = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(place); };
