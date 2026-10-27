@@ -52,8 +52,8 @@ jobs:
       - name: Сценарии в браузере
         run: |
           # упавшие проверки — в аннотации, чтобы их было видно без скачивания лога
-          run() { python "tests/$1.py" > "$1.log" 2>&1; c=$?; cat "$1.log"
-            grep -vE '^(OK|ИТОГО|ВСЕГО|$)' "$1.log" | tail -15 | while IFS= read -r l; do [ $c -ne 0 ] && echo "::error title=$1::$l"; done; return $c; }
+          run() { c=0; python "tests/$1.py" > "$1.log" 2>&1 || c=$?; cat "$1.log"
+            grep -vE '^(OK|ИТОГО|ВСЕГО|$)' "$1.log" | tail -15 | while IFS= read -r l; do [ $c -eq 0 ] || echo "::error title=$1::$l"; done; return $c; }
           run xray_scenario
           run codex_visual
           run tour_scenario
