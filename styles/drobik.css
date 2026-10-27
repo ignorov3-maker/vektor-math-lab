@@ -8,7 +8,7 @@
 .bipych-shadow{opacity:.12}
 [data-skin=orbit] .bipych[data-color=black] .bipych-outline{stroke:#77909A;stroke-width:1}
 .bipych-blush,.bipych-question,.bipych-zzz,.bipych-confetti,.bipych-eyes-happy,.bipych-eyes-sleep,.bipych-net{display:none}
-.bipych-net{transform-origin:50% 95%}
+.bipych-hand-right{transform-box:view-box;transform-origin:116px 90px}
 .bipych-net[data-equipped=true]{display:block}
 .bipych[data-state=idle] .bipych-actor{animation:bipych-breathe 4s steps(3,end) infinite}
 .bipych[data-state=idle] .bipych-eyes-normal{animation:bipych-blink 6s steps(1,end) infinite}
@@ -30,13 +30,15 @@
 .bipych[data-state=shy] .bipych-actor{transform:rotate(4deg)}
 .bipych[data-state=shy] .bipych-hand-left{transform:translate(4px,0)}
 .bipych[data-state=shy] .bipych-hand-right{transform:translate(-4px,0)}
-.bipych[data-state=catching] .bipych-net{display:block;animation:bipych-catch 1.7s steps(5,end) infinite}
+.bipych[data-state=catching] .bipych-net{display:block}
+.bipych[data-state=catching] .bipych-hand-right{animation:bipych-catch 1.7s steps(5,end) infinite}
 .bipych[data-state=catching] .bipych-actor{transform:rotate(5deg)}
 .bipych[data-state=catching] .bipych-eyes-normal{transform:translate(4px,-2px)}
 .bipych[data-state=celebrate] .bipych-actor{animation:bipych-dance 1.3s steps(4,end) infinite}
 .bipych[data-state=celebrate] .bipych-hand-left{transform:translateY(-18px) rotate(25deg)}
 .bipych[data-state=celebrate] .bipych-hand-right{transform:translateY(-18px) rotate(-25deg)}
 .bipych[data-state=celebrate] .bipych-confetti{display:block}
+.bipych[data-net=true] .bipych-hand-right{transform:none}
 .bipych-spark{animation:bipych-confetti 2s steps(5,end) infinite;transform-box:fill-box;transform-origin:center}
 .bipych-spark-1,.bipych-spark-4{animation-delay:-.7s}
 .bipych-spark-2,.bipych-spark-5{animation-delay:-1.3s}
@@ -61,7 +63,7 @@
 @keyframes bipych-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
 @keyframes bipych-pixel-think{0%,100%{transform:translate(0,0);opacity:1}50%{transform:translate(-4px,-4px);opacity:.6}}
 @keyframes bipych-question{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
-@keyframes bipych-catch{0%,100%{transform:rotate(-8deg)}45%{transform:rotate(16deg)}}
+@keyframes bipych-catch{0%,100%{transform:translate(0,0)}45%{transform:translate(2px,-4px)}}
 @keyframes bipych-dance{0%,100%{transform:translateY(0) rotate(-3deg)}25%{transform:translateY(var(--bipych-hop)) rotate(3deg)}60%{transform:translateY(0) rotate(3deg)}80%{transform:translateY(var(--bipych-hop)) rotate(-3deg)}}
 @keyframes bipych-confetti{0%{transform:translateY(-3px);opacity:0}20%{opacity:1}85%{opacity:1}100%{transform:translateY(10px) rotate(90deg);opacity:0}}
 @keyframes bipych-sleep{0%,100%{transform:translateY(4px) rotate(5deg)}50%{transform:translateY(2px) rotate(5deg)}}

@@ -109,12 +109,13 @@
       '<g class="bipych-eyes bipych-eyes-sleep">' + sleeping + '</g>' +
       '<g class="bipych-blush">' + rect(36, 80, 10, 4, p[4]) + rect(88, 80, 10, 4, p[4]) + '</g>' +
       rect(98, 66, 6, 6, p[4]) + rect(98, 78, 6, 6, p[4]) +
-      '<g class="bipych-hand bipych-hand-right">' + rect(108, 82, 12, 16, p[0]) + rect(108, 84, 8, 10, limb) + rect(108, 84, 4, 4, p[2]) + '</g>' +
+      '<g class="bipych-hand bipych-hand-right">' +
       '<g class="bipych-net"' + (map.net ? ' data-equipped="true"' : '') + '>' +
-      path('M114 84V58H118V84Z', netColor) +
-      path('M106 36H126V40H130V56H126V60H106V56H102V40H106Z', netColor) +
-      path('M108 40H124V44H126V52H122V56H108V52H106V44H108Z', p[2]) +
-      path('M112 42H114V54H112ZM120 42H122V54H120ZM108 46H124V48H108ZM108 50H124V52H108Z', netColor) + '</g>' +
+      rect(114, 62, 4, 30, netColor, 'bipych-net-handle') +
+      path('M108 36H124V40H128V44H132V60H128V64H124V68H108V64H104V60H100V44H104V40H108Z', netColor, 'bipych-net-rim') +
+      path('M108 40H124V44H128V60H124V64H108V60H104V44H108Z', p[2]) +
+      path('M110 42H112V62H110ZM120 42H122V62H120ZM106 46H126V48H106ZM106 56H126V58H106Z', netColor, 'bipych-net-mesh') + '</g>' +
+      rect(108, 82, 16, 16, p[0], 'bipych-grip') + rect(111, 84, 10, 10, limb) + rect(112, 84, 4, 4, p[2]) + '</g>' +
       '<g class="bipych-hat">' + hat(map.hat, p) + '</g>' +
       '<g class="bipych-question">' + path('M12 32H28V36H32V44H24V52H18V42H26V38H12ZM18 58H24V64H18Z', p[4]) + '</g>' +
       '<g class="bipych-zzz">' + path('M100 16H116V20H112V24H108V28H116V32H100V28H104V24H108V20H100Z', p[4]) + '</g>' +
@@ -174,6 +175,7 @@
       if (celebrateTimer !== null) { clearTimeout(celebrateTimer); celebrateTimer = null; }
       state = STATES.indexOf(name) >= 0 ? name : 'idle';
       root.dataset.state = state;
+      root.dataset.net = String(!!map.net || state === 'catching');
       picture.setAttribute('aria-label', 'Бипыч — ' + LABELS[STATES.indexOf(state)]);
     }
     function setCharge(value, target) {

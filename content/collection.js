@@ -1,6 +1,7 @@
 (function () {
   'use strict';
   var disposers = new WeakMap();
+  var workshopViews = new WeakMap();
   var RANKS = { novice: 'Новичок', tracker: 'Следопыт', catcher: 'Ловец', master: 'Мастер жучков' };
   var STATUSES = { caught: 'Пойман', healing: 'Лечится', beaten: 'Побеждён' };
   var ACHIEVEMENTS = { 'bug-master': 'Мастер жучков', 'topic-master': 'Знаток темы', 'ten-bugs': '10 побеждённых жучков' };
@@ -101,7 +102,7 @@
     items.forEach(function (item) { if (data.equipped && data.equipped[item.slot] === item.id && owned.has(item.id)) equipped[item.slot] = item.id; });
     var stars = Number.isFinite(Number(data.stars)) ? Math.max(0, Math.floor(Number(data.stars))) : 0;
     var head = node('header', 'vc-head'), copy = node('div');
-    copy.append(node('p', 'vc-eyebrow', 'Твой напарник — твой стиль'), node('h2', 'vc-title', 'Мастерская Бипыча'), node('p', 'vc-subtitle', 'Примеряй, сочетай и выбирай то, что нравится.'));
+    copy.append(node('p', 'vc-eyebrow', 'Твой напарник — твой стиль'), node('h2', 'vc-title', 'Гардеробная Бипыча'), node('p', 'vc-subtitle', 'Примерь. Выбери. Забери в свои вещи.'));
     var balance = node('div', 'vc-balance', '★ ' + stars); balance.setAttribute('aria-label', stars + ' звёзд');
     head.append(copy, balance); root.appendChild(head);
     var layout = node('div', 'vc-shop-layout'), aside = node('aside', 'vc-preview');
@@ -112,20 +113,31 @@
     aside.append(stage, previewTitle, reset, node('p', 'vc-hint', 'Аксессуары меняют только внешний вид. Каждый предмет можно сначала примерить.'));
     var store = node('div', 'vc-store'), filters = node('div', 'vc-filters'), grid = node('div', 'vc-item-grid');
     var message = node('p', 'vc-message'); message.setAttribute('role', 'status'); message.setAttribute('aria-live', 'polite');
-    var shownSlot = 'screen', cardPets = [];
+    var view = workshopViews.get(el) || { slot: 'hat', ownedOnly: false };
+    workshopViews.set(el, view);
+    var shownSlot = view.slot, cardPets = [];
+    var viewButtons = node('div', 'vc-shop-views');
     var fullDispose = disposers.get(el);
     disposers.set(el, function () { cardPets.forEach(function (p) { p.destroy(); }); fullDispose(); });
     async function act(b, callback, args) {
       if (b.disabled || typeof callback !== 'function') return;
+      var itemId = b.closest('[data-item]').dataset.item;
       b.disabled = true; message.textContent = '';
       try { await callback.apply(null, args); }
-      catch (_) { if (b.isConnected) message.textContent = 'Не получилось сохранить. Попробуй ещё раз.'; }
-      finally { if (b.isConnected) b.disabled = false; }
+      catch (error) { if (b.isConnected) message.textContent = error && error.message ? String(error.message).slice(0, 180) : 'Не получилось сохранить. Попробуй ещё раз.'; }
+      finally {
+        if (b.isConnected) b.disabled = false;
+        else {
+          var card = Array.from(el.querySelectorAll('[data-item]')).find(function (c) { return c.dataset.item === itemId; });
+          var action = card && (card.querySelector('[data-equip]:not(:disabled)') || card.querySelector('[data-buy]:not(:disabled)') || card.querySelector('[data-try]'));
+          if (action) action.focus({ preventScroll: true });
+        }
+      }
     }
     function draw() {
       cardPets.forEach(function (p) { p.destroy(); }); cardPets = [];
       grid.replaceChildren();
-      items.filter(function (c) { return c.slot === shownSlot; }).forEach(function (item) {
+      items.filter(function (c) { return c.slot === shownSlot && (!view.ownedOnly || owned.has(c.id)); }).forEach(function (item) {
         var mine = owned.has(item.id), active = equipped[item.slot] === item.id;
         var card = node('article', 'vc-shop-item'); card.dataset.item = item.id;
         var art = node('div', 'vc-item-art');
@@ -139,19 +151,30 @@
         } else if (item.unlock) {
           card.appendChild(node('p', 'vc-unlock', 'За достижение «' + (ACHIEVEMENTS[item.unlock] || 'Новая находка') + '»'));
         } else {
-          var buy = button(item.price > stars ? 'Не хватает ' + (item.price - stars) + ' ★' : item.price ? 'Получить за ' + item.price + ' ★' : 'Получить', function () { act(buy, data.onBuy, [item.id]); });
+          var buy = button(item.price > stars ? 'Не хватает ' + (item.price - stars) + ' ★' : item.price ? 'Купить за ' + item.price + ' ★' : 'Получить', function () { act(buy, data.onBuy, [item.id]); });
           buy.dataset.buy = item.id; buy.disabled = item.price > stars || typeof data.onBuy !== 'function'; card.appendChild(buy);
         }
         grid.appendChild(card);
       });
+      if (!grid.children.length) grid.appendChild(node('p', 'vc-empty-filter', 'Пока здесь нет твоих вещей. Загляни в магазин и выбери что-нибудь по душе.'));
     }
+    [[false, 'Магазин'], [true, 'Мои вещи']].forEach(function (pair) {
+      var b = button(pair[1], function () {
+        view.ownedOnly = pair[0];
+        viewButtons.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+        draw();
+      });
+      b.dataset.shopView = pair[0] ? 'owned' : 'store';
+      b.setAttribute('aria-pressed', String(view.ownedOnly === pair[0]));
+      viewButtons.appendChild(b);
+    });
     [['screen', 'Цвета'], ['antenna', 'Пиксели'], ['hat', 'Шапки'], ['net', 'Сачки']].forEach(function (pair) {
       var b = button(pair[1], function () {
-        shownSlot = pair[0]; filters.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); draw();
+        shownSlot = pair[0]; view.slot = pair[0]; filters.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); draw();
       });
       b.dataset.slot = pair[0]; b.setAttribute('aria-pressed', String(shownSlot === pair[0])); filters.appendChild(b);
     });
-    store.append(filters, message, grid); layout.append(aside, store); root.appendChild(layout); draw();
+    store.append(viewButtons, filters, message, grid); layout.append(aside, store); root.appendChild(layout); draw();
   }
   window.VEKTOR_COLLECTION = Object.freeze({ renderBugs: renderBugs, renderWorkshop: renderWorkshop });
 }());

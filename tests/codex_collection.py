@@ -30,15 +30,18 @@ async def main():
         check("empty collection", await page.locator(".vc-empty").count() == 1 and await page.locator(".vc-bug-card").count() == 0)
         await page.locator("#restore").click()
         await page.locator("#tab-shop").click()
+        await page.locator('[data-slot="screen"]').click()
         check("three approved colors", await page.locator(".vc-shop-item").count() == 3)
         await page.locator('[data-slot="hat"]').click()
         check("ten hats", await page.locator(".vc-shop-item").count() == 10)
         await page.locator('[data-try="hat-cap"]').click()
         check("trying does not spend or equip", await page.evaluate("collectionDemoState.stars === 90 && !collectionDemoState.equipped.hat"))
         await page.locator('[data-buy="hat-cap"]').click()
+        await page.wait_for_function("collectionDemoState.owned.includes('hat-cap') && collectionDemoCalls.length === 1")
         check("buy callback updates ownership and stars once", await page.evaluate("collectionDemoState.stars === 55 && collectionDemoState.owned.includes('hat-cap') && collectionDemoCalls.filter(x=>x[0]==='buy').length===1"))
         await page.locator('[data-slot="hat"]').click()
         await page.locator('[data-equip="hat-cap"]').click()
+        await page.wait_for_function("collectionDemoState.equipped.hat === 'hat-cap'")
         check("equip callback uses correct slot", await page.evaluate("collectionDemoState.equipped.hat === 'hat-cap'"))
         await page.locator('[data-slot="hat"]').click()
         check("achievement hat cannot be bought", await page.locator('[data-item="hat-crown"] [data-buy]').count() == 0)
@@ -73,7 +76,7 @@ async def main():
         check("rerender removes old mascot DOM", await page.evaluate("""() => {
             const el=document.createElement('div');document.body.append(el);
             for(let i=0;i<20;i++)VEKTOR_COLLECTION.renderWorkshop(el,{stars:0,owned:[],equipped:{}});
-            const ok=el.querySelectorAll('.bipych').length===4;
+            const ok=el.querySelectorAll('.bipych').length===11;
             VEKTOR_COLLECTION.renderBugs(el,{bugs:[]});el.remove();return ok;
         }"""))
         check("absent callbacks do not offer active transactions", await page.evaluate("""() => {

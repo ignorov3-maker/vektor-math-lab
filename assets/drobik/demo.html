@@ -7,13 +7,16 @@
   <link rel="stylesheet" href="../../style.css">
   <link rel="stylesheet" href="../../skins.css">
   <link rel="stylesheet" href="../../styles/drobik.css">
+  <link rel="stylesheet" href="../collection/collection.css">
   <link rel="stylesheet" href="demo.css">
   <script src="../../content/drobik.js" defer></script>
+  <script src="../../content/collection.js" defer></script>
+  <script src="wardrobe.js" defer></script>
   <script src="demo.js" defer></script>
 </head>
 <body>
 <div class="demo-shell">
-  <header class="demo-header"><a href="../../index.html" class="demo-brand">↗ Вектор</a><span>Лаборатория персонажа</span>
+  <header class="demo-header"><a href="../../index.html" class="demo-brand">↗ Вектор</a><span>Лаборатория персонажа</span><a class="demo-wardrobe-link" href="#wardrobe-section">Гардеробная ↓</a>
     <label class="demo-skin">Оформление <select id="skin"><option value="notebook">Тетрадь</option><option value="orbit">Орбита</option><option value="pop">Стикеры</option><option value="pixel">Пиксель</option></select></label>
   </header>
   <main class="demo-main">
@@ -42,10 +45,13 @@
         </div>
       </div>
     </section>
-    <section class="demo-section" aria-labelledby="dress-title">
-      <p class="demo-eyebrow">Немного индивидуальности</p><h2 id="dress-title">Примерочная</h2><p>30 предметов: три цвета, семь пикселей-спутников, десять головных уборов и десять сачков.</p>
+    <section class="demo-section" id="wardrobe-section" aria-label="Гардеробная">
+      <div class="demo-wallet-tools"><p>Пробные звёзды. Покупки и твой образ сохраняются в этом браузере.</p><button type="button" id="demo-stars">+50 пробных звёзд</button><button type="button" id="undress">Снять аксессуары</button></div>
+      <p id="wardrobe-notice" role="status" aria-live="polite"></p>
+      <div id="wardrobe"></div>
+      <details id="quick-dress" class="demo-quick-dress"><summary>Свободная примерка всех аксессуаров</summary><p class="demo-hint">Здесь можно посмотреть сочетания. Чтобы сохранить вещь в своём образе, купи её и нажми «Надеть» в гардеробной.</p>
       <div class="demo-dress"><label>Пиксель-спутник<select id="antenna"></select></label><label>Головной убор<select id="hat"></select></label><label>Сачок<select id="net"></select></label><button type="button" id="reset">Снять аксессуары</button></div>
-      <p class="demo-hint">Здесь можно примерить всё. Покупки и награды передаёт приложение.</p>
+      </details>
     </section>
     <section class="demo-section" aria-labelledby="states-title">
       <p class="demo-eyebrow">Один характер — девять состояний</p><h2 id="states-title">Бипыч в деле</h2><div class="demo-matrix" id="matrix"></div>

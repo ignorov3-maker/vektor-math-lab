@@ -7,19 +7,16 @@
     {key:'compare:compare-numerators-only',kidName:'Одноглазик',title:'Смотрел только на числители',status:'beaten',found:'2026-10-23',beaten:'2026-10-27',howBeaten:'Заметил: 3/8 меньше половины, а 2/3 больше половины.'},
     {key:'part-of:only-one-step',kidName:'Полдороги',title:'Останавливался после первого действия',status:'healing',found:'2026-10-25'}
   ];
-  var state = {stars:90,owned:['screen-turquoise','screen-raspberry','screen-black','net-classic'],equipped:{screen:'screen-turquoise'}};
+  var wallet = window.VEKTOR_WARDROBE, state = wallet.getState();
   window.collectionDemoState = state; window.collectionDemoCalls = [];
   function renderBugs(list) { VEKTOR_COLLECTION.renderBugs(document.getElementById('bugs'),{bugs:list,rank:'tracker'}); }
   function renderShop() {
     VEKTOR_COLLECTION.renderWorkshop(document.getElementById('shop'),Object.assign({},state,{
-      onBuy:function(id){
-        var item=VEKTOR_DROBIK.COSMETICS.find(function(c){return c.id===id;});
-        if(!item || item.unlock || state.owned.indexOf(id)>=0 || item.price>state.stars)return;
-        state.stars-=item.price; state.owned.push(id); window.collectionDemoCalls.push(['buy',id]); renderShop();
+      onBuy:async function(id){
+        await wallet.buy(id); window.collectionDemoCalls.push(['buy',id]);
       },
-      onEquip:function(slot,id){
-        if(state.owned.indexOf(id)<0)return;
-        state.equipped[slot]=id; window.collectionDemoCalls.push(['equip',slot,id]); renderShop();
+      onEquip:async function(slot,id){
+        await wallet.equip(slot,id); window.collectionDemoCalls.push(['equip',slot,id]);
       }
     }));
   }
@@ -32,7 +29,11 @@
   document.getElementById('tab-shop').addEventListener('click',function(){show(true);});
   document.getElementById('empty').addEventListener('click',function(){renderBugs([]);show(false);});
   document.getElementById('restore').addEventListener('click',function(){renderBugs(bugs);show(false);});
-  document.getElementById('reset-stars').addEventListener('click',function(){state.stars=90;renderShop();});
+  document.getElementById('reset-stars').addEventListener('click',async function(){
+    try{await wallet.addDemoStars(50);}catch(e){document.querySelector('.cd-note').textContent=e.message;}
+  });
   document.getElementById('skin').addEventListener('change',function(e){document.documentElement.dataset.skin=e.target.value;});
+  var unsubscribe=wallet.subscribe(function(){state=wallet.getState();window.collectionDemoState=state;renderShop();});
+  window.addEventListener('pagehide',unsubscribe,{once:true});
   renderBugs(bugs);renderShop();
 }());

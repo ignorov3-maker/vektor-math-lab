@@ -143,11 +143,22 @@ async def main():
             document.querySelector('#contract-host').remove(); return ok;
         }"""))
         # Check real UI controls and both age modes.
+        await page.locator("#quick-dress summary").click()
         await page.select_option("#hat", "hat-cap")
         await page.select_option("#antenna", "pixel-double")
         await page.select_option("#net", "net-gold")
         await page.locator('[data-state-button="catching"]').click()
         check("demo accessories actually mount", await page.locator("#main-bipych .bipych-net[data-equipped=true]").count() == 1)
+        check("net rim, mesh, handle and grip share one axis", await page.evaluate("""() => {
+            const root=document.querySelector('#main-bipych');
+            const box=cls=>root.querySelector(cls).getBBox();
+            const rim=box('.bipych-net-rim'),mesh=box('.bipych-net-mesh');
+            const handle=box('.bipych-net-handle'),grip=box('.bipych-grip');
+            const centers=[rim,mesh,handle,grip].map(b=>b.x+b.width/2);
+            return centers.every(x=>x===116) && rim.width===rim.height
+                && mesh.y+mesh.height/2===rim.y+rim.height/2
+                && root.querySelector('.bipych-net').parentElement.classList.contains('bipych-hand-right');
+        }"""))
         await page.check("#senior")
         check("senior age mode", await page.locator("#main-bipych .bipych").get_attribute("data-age") == "senior")
         await page.uncheck("#senior")
@@ -200,7 +211,7 @@ if __name__ == "__main__":
     total = len(RESULTS)
     environment = dict(os.environ, PYTHONIOENCODING="utf-8")
     # Isolated feature branches may contain only the mascot suite.
-    for name in ["codex_art.py", "codex_collection.py", "codex_board.py", "codex_landing.py", "codex_print.py"]:
+    for name in ["codex_art.py", "codex_collection.py", "codex_wardrobe.py", "codex_board.py", "codex_landing.py", "codex_print.py"]:
         path = ROOT / "tests" / name
         if not path.exists():
             continue
