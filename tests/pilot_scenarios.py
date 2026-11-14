@@ -1,5 +1,43 @@
 """Проверки новых RPC пилота на изолированной БД из supabase_scenarios.py."""
 def run(psql, rep):
+    rep('CX-18: регистрация, подтверждение, одноразовость, срок и сброс', psql(r"""
+begin;
+create temporary table cx_mail(data jsonb);
+create or replace function vk_mail(p_action text,p_data jsonb) returns jsonb language plpgsql security definer set search_path=public,extensions as $$ begin
+ if p_action='captcha' then return jsonb_build_object('ok',p_data->>'token'='test-captcha'); end if;
+ insert into pg_temp.cx_mail values(p_data); return '{"ok":true}'::jsonb;
+end $$;
+do $$
+declare r jsonb; tok text; session text;
+begin
+  r:=vektor_adult_register('test@example.invalid','testpass123','parent','v1','test-captcha');
+  if r->>'error'<>'soon' then raise exception 'signup not closed'; end if;
+  update vk_settings set value='true' where key='signup_open';
+  update vk_settings set value=jsonb_build_object('version','v1','sha256',repeat('a',64)) where key='consent';
+  update vk_settings set value='{"url":"https://vektor.example"}' where key='site';
+  r:=vektor_adult_register('test@example.invalid','testpass123','parent','old','test-captcha');
+  if r->>'error'<>'consent' then raise exception 'old consent'; end if;
+  r:=vektor_adult_register('test@example.invalid','testpass123','parent','v1','bad');
+  if r->>'error'<>'captcha' then raise exception 'captcha'; end if;
+  perform vektor_adult_register('TEST@example.invalid','testpass123','parent','v1','test-captcha');
+  if vektor_adult_login('test@example.invalid','testpass123','cx18')->>'error'<>'unverified' then raise exception 'unverified login'; end if;
+  select split_part(data->>'url','#adult_confirm=',2) into tok from cx_mail limit 1;
+  if tok is null or not (vektor_adult_confirm(tok)->>'ok')::boolean then raise exception 'confirmation'; end if;
+  if vektor_adult_confirm(tok)->>'error'<>'token' then raise exception 'reuse'; end if;
+  r:=vektor_adult_login('test@example.invalid','testpass123','cx18');session:=r->>'token';
+  if session is null then raise exception 'login %',r; end if;
+  if vektor_adult_reset_request('none@example.invalid','test-captcha') is distinct from vektor_adult_reset_request('test@example.invalid','test-captcha') then raise exception 'enumeration'; end if;
+  select split_part(data->>'url','#adult_reset=',2) into tok from cx_mail where data->>'kind'='reset' limit 1;
+  update vk_mail_tokens set expires=now()-interval '1 second' where purpose='adult_reset';
+  if vektor_adult_reset(tok,'newpassword')->>'error'<>'token' then raise exception 'expired token'; end if;
+  perform vektor_adult_reset_request('test@example.invalid','test-captcha');
+  select split_part(data->>'url','#adult_reset=',2) into tok from cx_mail where data->>'kind'='reset' order by ctid desc limit 1;
+  if not (vektor_adult_reset(tok,'newpassword')->>'ok')::boolean then raise exception 'reset'; end if;
+  begin perform vk_adult_auth(session);raise exception 'old session';exception when sqlstate 'P0401' then null;end;
+  if has_table_privilege('anon','vk_mail_tokens','select') or has_table_privilege('anon','vk_consents','select') then raise exception 'tokens open'; end if;
+end $$;
+rollback;select 'OK';
+""").endswith('OK'))
     rep('CX-17: pilot, истёкшая подписка и лимит тарифа', psql(r"""
 begin;
 do $$

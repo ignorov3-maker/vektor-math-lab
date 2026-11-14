@@ -85,7 +85,7 @@
         <p class="feedback ${msg ? 'bad' : ''}" id="login-msg" role="alert">${msg ? esc(msg) : ''}</p>
         <button class="btn btn-primary btn-big" type="submit">Войти</button>
       </form>
-      <div class="role-switch"><span>Я учитель</span><a class="btn btn-ghost btn-sm" href="teacher.html">Вход для учителя</a></div></section>`;
+      <div class="role-switch"><a class="btn btn-ghost btn-sm" href="teacher.html">Я учитель</a><a class="btn btn-ghost btn-sm" href="parent.html">Я родитель</a><a class="btn btn-ghost btn-sm" href="parent.html?role=tutor">Я репетитор</a></div></section>`;
     // Первая страница — лендинг, форма входа внутри него
     if (L) { document.body.classList.add('landing'); app.innerHTML = L.render(loginHtml); L.mount(app); }
     else app.innerHTML = loginHtml;
