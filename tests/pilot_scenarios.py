@@ -1,5 +1,31 @@
 """Проверки новых RPC пилота на изолированной БД из supabase_scenarios.py."""
 def run(psql, rep):
+    rep('CX-20: карточка по событиям, чужой ребёнок, сброс и отвязка', psql(r"""
+begin;
+do $$
+declare a int;b int;s int;t text;bt text;r jsonb;
+begin
+ insert into vk_adults(role,email,pass_hash) values('parent','cx20a@example.invalid','test') returning id into a;
+ insert into vk_adults(role,email,pass_hash) values('parent','cx20b@example.invalid','test') returning id into b;
+ t:=vk_new_session('parent',a);bt:=vk_new_session('parent',b);
+ r:=vektor_adult_create_student(t,'Ребёнок');s:=(r->>'student_id')::int;
+ if not vektor_login(r->>'login',r->>'password') ? 'token' then raise exception 'printed password';end if;
+ insert into vk_events(event_id,student_id,type,data,ts_server) values
+ ('cx20-attempt1',s,'attempt','{"topic":"add-diff","question":"same","ok":false,"sec":60}',now()-interval '2 minutes'),
+ ('cx20-attempt2',s,'attempt','{"topic":"add-diff","question":"same","ok":true,"sec":120}',now()-interval '1 minute'),
+ ('cx20-found',s,'bug_found','{"bug":"add-diff:add-denominators"}',now()),
+ ('cx20-beaten',s,'bug_beaten','{"bug":"add-diff:add-denominators"}',now());
+ r:=vektor_parent_child(t,s);
+ if r->>'attempts'<>'2' or r->>'solved'<>'1' or r->>'seconds'<>'120' or jsonb_array_length(r->'rules')<>1 then raise exception 'wrong metrics %',r;end if;
+ begin perform vektor_parent_child(bt,s);raise exception 'foreign child';exception when sqlstate 'P0403' then null;end;
+ r:=vektor_adult_reset_student(t,s);
+ if not vektor_login(r->>'login',r->>'password') ? 'token' then raise exception 'reset password';end if;
+ perform vektor_adult_unlink(t,s);
+ begin perform vektor_parent_child(t,s);raise exception 'unlink access';exception when sqlstate 'P0403' then null;end;
+ if not exists(select 1 from vk_students where id=s) then raise exception 'deleted student';end if;
+end $$;
+rollback;select 'OK';
+""").endswith('OK'))
     rep('CX-19: старый вход, смена логина и пароля, код и защита перебора', psql(r"""
 begin;
 do $$

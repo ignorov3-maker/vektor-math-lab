@@ -82,7 +82,7 @@ async def main():
         psql("do $$ begin create role anon nologin; exception when duplicate_object then null; end $$;"
              "do $$ begin create role authenticated nologin; exception when duplicate_object then null; end $$;")
         subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase/schema.sql')], check=True, capture_output=True)
-        for f in ('test.sql', 'admin.sql', 'teacher.sql', 'pulse.sql', 'ai.sql', 'guard.sql', 'accounts.sql', 'plans.sql'):
+        for f in ('test.sql', 'admin.sql', 'teacher.sql', 'pulse.sql', 'ai.sql', 'guard.sql', 'accounts.sql', 'plans.sql', 'parent.sql'):
             subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase' / f)], check=True, capture_output=True)
         rep('схема накатывается повторно', True)
         rep('vk_seed: 80 профилей с паролями', psql("select count(*) from vk_seed(80, '5А:1-28,5Б:29-56,5В:57-80') where password ~ '^[а-я]+[0-9]{4}$'") == '80')
@@ -161,7 +161,7 @@ async def main():
             rep('имя из состояния на сервер не пишется', psql("select coalesce(state->'settings'->>'name', 'нет') from vk_students where login='ученик1'") == 'нет')
             psql("update vk_settings set value = '{\"enabled\": true, \"per_student_day\": 30, \"total_day\": 100}' where key = 'ai'")
             st, j = rpc(base, 'vektor_login', p_login='ученик2', p_password='компас1234')
-            r = urllib.request.Request(base + '/functions/v1/tutor', data=json.dumps({'token': 'x' * 64, 'messages': [{'role': 'user', 'content': 'hi'}]}).encode(), headers={'Content-Type': 'application/json'})
+            r = urllib.request.Request(base + '/functions/v1/tutor', data=json.dumps({'token': 'x' * 64, 'messages': [{'role': 'user', 'content': 'hi'}]}).encode(), headers={'Content-Type': 'application/json', 'Origin': base})
             try: urllib.request.urlopen(r); code = 200
             except urllib.error.HTTPError as e: code = e.code
             rep('без входа наставник не отвечает (401)', code == 401, code)
