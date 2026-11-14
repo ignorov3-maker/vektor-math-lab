@@ -48,3 +48,21 @@ end $$;
 rollback;
 select 'OK';
 """).endswith('OK'))
+    rep('CX-16: роли изолированы, чужие дети и таблицы закрыты', psql(r"""
+begin;
+do $$
+declare a int; b int; s int; t text;
+begin
+  insert into vk_adults(role,email,pass_hash) values('parent','a@example.invalid','test') returning id into a;
+  insert into vk_adults(role,email,pass_hash) values('parent','b@example.invalid','test') returning id into b;
+  insert into vk_students(login,pass_hash) values('cx16','test') returning id into s;
+  insert into vk_links values(s,a,'parent',now());
+  if not vk_can_see(a,s) or vk_can_see(b,s) then raise exception 'foreign child'; end if;
+  t := vk_new_session('parent',a);
+  if vk_adult_auth(t) <> a then raise exception 'adult session'; end if;
+  begin perform vk_auth(t,'student'); raise exception 'role leak'; exception when sqlstate 'P0403' then null; end;
+  begin perform vk_adult_auth(vk_new_session('student',s)); raise exception 'role leak'; exception when sqlstate 'P0403' then null; end;
+  if has_table_privilege('anon','vk_links','select') or has_table_privilege('anon','vk_adults','select') then raise exception 'table access'; end if;
+end $$;
+rollback; select 'OK';
+""").endswith('OK'))
