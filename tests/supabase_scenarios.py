@@ -92,6 +92,8 @@ async def main():
              "update vk_students set pass_hash = extensions.crypt('компас1111', extensions.gen_salt('bf', 8)) where login = 'ученик40';"
              "select vk_teacher('uchitel', 'учитель-1', 'Учитель', '5А')")
         # anon не читает таблицы и не вызывает служебные функции
+        from pilot_scenarios import run as pilot_scenarios
+        pilot_scenarios(psql, rep)
         try: psql('set role anon; select count(*) from vk_students'); rep('anon не читает таблицы', False)
         except RuntimeError: rep('anon не читает таблицы', True)
         try: psql("set role anon; select * from vk_seed(1)"); rep('anon не создаёт профили', False)

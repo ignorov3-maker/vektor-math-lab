@@ -15,15 +15,22 @@ revoke all on vk_ai_cache from anon, authenticated;
 -- Списать одно обращение: сессия, выключатель, лимит ученика, общий лимит и бюджет в долларах на день
 create or replace function vk_ai_take(p_token text) returns jsonb
 language plpgsql security definer set search_path = public, extensions as $$
-declare uid int; cfg jsonb; mine int; total int; spent numeric;
+declare uid int; cfg jsonb; mine int; total int; spent numeric; student_spent numeric; rate numeric; student_cap numeric; day_cap numeric;
 begin
   begin uid := vk_auth(p_token, 'student');
   exception when others then return jsonb_build_object('ok', false, 'reason', 'no_session'); end;
-  select value into cfg from vk_settings where key = 'ai';
+  -- Сериализуем проверку глобального бюджета и счётчиков.
+  select value into cfg from vk_settings where key = 'ai' for update;
   if not coalesce((cfg->>'enabled')::boolean, false) then return jsonb_build_object('ok', false, 'reason', 'disabled'); end if;
   select coalesce(sum(n), 0), coalesce(sum(usd), 0) into total, spent from vk_ai_usage where day = current_date;
   if total >= coalesce((cfg->>'total_day')::int, 3000) then return jsonb_build_object('ok', false, 'reason', 'total_limit'); end if;
   if spent >= coalesce((cfg->>'usd_day')::numeric, 3) then return jsonb_build_object('ok', false, 'reason', 'budget'); end if;
+  rate := (cfg->>'rub_per_usd')::numeric;
+  student_cap := coalesce((cfg->>'rub_student_day')::numeric, (cfg->>'usd_day')::numeric * rate);
+  day_cap := coalesce((cfg->>'rub_day')::numeric, (cfg->>'usd_day')::numeric * rate);
+  select coalesce(sum(usd), 0) into student_spent from vk_ai_usage where day = current_date and student_id = uid;
+  if rate > 0 and student_spent * rate >= student_cap then return jsonb_build_object('ok', false, 'reason', 'student_budget'); end if;
+  if rate > 0 and spent * rate >= day_cap then return jsonb_build_object('ok', false, 'reason', 'budget'); end if;
   insert into vk_ai_usage (student_id) values (uid) on conflict (student_id, day) do nothing;
   update vk_ai_usage set n = n + 1 where student_id = uid and day = current_date
     and n < coalesce((cfg->>'per_student_day')::int, 30) returning n into mine;

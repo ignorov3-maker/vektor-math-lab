@@ -42,7 +42,8 @@ const LIMIT_SAY: Record<string, [number, string]> = {
   disabled: [503, 'Наставник с ИИ сейчас выключен — продолжим по конспекту.'],
   total_limit: [429, 'На сегодня вопросы к ИИ закончились — продолжим по конспекту.'],
   student_limit: [429, 'На сегодня твои 30 вопросов к ИИ закончились. Завтра будут новые — а пока продолжим по конспекту.'],
-  budget: [503, 'Наставник с ИИ сегодня отдыхает — продолжим по конспекту.'],
+  student_budget: [429, 'Я на сегодня выдохся, давай завтра. А пока попробуй сам — подсказки работают'],
+  budget: [429, 'Я на сегодня выдохся, давай завтра. А пока попробуй сам — подсказки работают'],
 };
 
 /* ---------- Режимы CL-8: клиент присылает данные, промпт собирает сервер ---------- */
@@ -186,16 +187,36 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify(out), { headers: { ...cors, 'Content-Type': 'application/json' } });
   }
 
-  // поток идёт ребёнку как есть, а из последнего куска берём usage — фактические токены и стоимость
-  let tail = '';
-  const tap = new TransformStream({
-    transform(chunk, ctrl) { ctrl.enqueue(chunk); tail = (tail + new TextDecoder().decode(chunk)).slice(-4000); },
-    async flush() {
-      const m = tail.match(/data:\s*(\{[^\n]*"usage"[^\n]*\})\s*$/m) || tail.match(/data:\s*(\{[^\n]*"usage"[^\n]*\})/);
-      if (m) { try { const o = JSON.parse(m[1]); await spend(o.usage, o.model || model); } catch {} }
+  // finally выполняется и при обрыве провайдера/отмене потока после частичного ответа.
+  const reader = up.ok ? up.body?.getReader() : null;
+  let cancelled = false;
+  const stream = reader && up.ok ? new ReadableStream({
+    async start(ctrl) {
+      let buffer = '', usage: any = null, usedModel = model, chars = 0;
+      const decoder = new TextDecoder();
+      const inspect = (line: string) => {
+        try { const j = JSON.parse(line.replace(/^data:\s*/, '')); if (j.usage) usage = j.usage;
+          if (j.model) usedModel = j.model; chars += String(j.choices?.[0]?.delta?.content || '').length; } catch {}
+      };
+      try {
+        while (true) {
+          const { done, value } = await reader.read(); if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n'); buffer = lines.pop() || ''; lines.forEach(inspect);
+          if (!cancelled) ctrl.enqueue(value);
+        }
+        if (!cancelled) ctrl.close();
+      } catch (e) { if (!cancelled) ctrl.error(e); }
+      finally {
+        inspect(buffer + decoder.decode());
+        // Без usage после обрыва — консервативная оценка вместо нулевого расхода.
+        await spend(usage || (chars ? { prompt_tokens: Math.ceil(JSON.stringify(messages).length / 3), completion_tokens: Math.ceil(chars / 3) } : null), usedModel);
+        reader.releaseLock();
+      }
     },
-  });
-  return new Response(up.ok && up.body ? up.body.pipeThrough(tap) : up.body, {
+    async cancel(reason) { cancelled = true; await reader.cancel(reason); }
+  }) : null;
+  return new Response(stream || up.body, {
     status: up.status,
     headers: { ...cors, 'Content-Type': up.headers.get('Content-Type') || 'text/event-stream', 'Cache-Control': 'no-cache' },
   });

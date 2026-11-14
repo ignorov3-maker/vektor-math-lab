@@ -23,10 +23,24 @@ begin
 end $$;
 
 -- ИИ: выключатель и лимиты (Ф-16, Ф-33). select vk_ai_set(false); select vk_ai_set(true, 30, 3000);
-create or replace function vk_ai_set(p_enabled boolean, p_per_student int default 30, p_total int default 3000) returns jsonb
-language sql security definer set search_path = public as $$
-  insert into vk_settings values ('ai', jsonb_build_object('enabled', p_enabled, 'per_student_day', p_per_student, 'total_day', p_total))
-  on conflict (key) do update set value = excluded.value returning value $$;
+drop function if exists vk_ai_set(boolean, int, int);
+create or replace function vk_ai_set(p_enabled boolean, p_per_student int default 30, p_total int default 3000,
+  p_rub_per_usd numeric default null, p_rub_student_day numeric default null, p_rub_day numeric default null) returns jsonb
+language plpgsql security definer set search_path = public, extensions as $$
+declare cfg jsonb; rate numeric;
+begin
+  if p_per_student < 0 or p_total < 0 or p_rub_per_usd <= 0 or p_rub_student_day < 0 or p_rub_day < 0 then raise exception 'invalid_limits'; end if;
+  insert into vk_settings values ('ai', '{"usd_day":3}') on conflict (key) do nothing;
+  select value into cfg from vk_settings where key = 'ai' for update;
+  rate := coalesce(p_rub_per_usd, (cfg->>'rub_per_usd')::numeric);
+  -- Курс не угадываем. До его настройки остаётся прежняя защита в USD.
+  cfg := cfg || jsonb_build_object('enabled', p_enabled, 'per_student_day', p_per_student, 'total_day', p_total,
+    'rub_per_usd', rate,
+    'rub_student_day', coalesce(p_rub_student_day, (cfg->>'rub_student_day')::numeric, coalesce((cfg->>'usd_day')::numeric, 3) * rate),
+    'rub_day', coalesce(p_rub_day, (cfg->>'rub_day')::numeric, coalesce((cfg->>'usd_day')::numeric, 3) * rate));
+  update vk_settings set value = cfg where key = 'ai';
+  return cfg;
+end $$;
 
 -- Расход ИИ по дням: select * from vk_ai_report;
 create or replace view vk_ai_report with (security_invoker = true) as
@@ -60,5 +74,5 @@ begin
   update vk_students set state = null, state_rev = 0, label = null, last_seen = null where id = uid;
   return 'стёрто: ' || p_login;
 end $$;
-revoke execute on function vk_class_group(text, text), vk_assign(text, int, int), vk_ai_set(boolean, int, int), vk_wipe_student(text)
+revoke execute on function vk_class_group(text, text), vk_assign(text, int, int), vk_ai_set(boolean, int, int, numeric, numeric, numeric), vk_wipe_student(text)
   from public, anon, authenticated;

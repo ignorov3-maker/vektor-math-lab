@@ -502,6 +502,11 @@ async function aiReply(i, kind, hiddenUser) {
     // ИИ недоступен — урок не стопорится: продолжаем по конспекту
     c.busy = false;
     const idx = c.msgs.indexOf(msg); if (idx >= 0) c.msgs.splice(idx, 1);
+    if (/Я на сегодня выдохся/.test(e.message || '')) {
+      c.forceOffline = true;
+      c.msgs.push({ role: 'assistant', html: `<p>${esc(e.message)}</p>` });
+      offlineFallback(i, kind); return;
+    }
     if (e.quiet) { aiPaused = true; offlineFallback(i, kind); return; }
     c.forceOffline = true;
     if (SERVER) c.msgs.push({ role: 'assistant', error: true, html: `<p class="small">${/вопрос/.test(e.message || '') ? esc(e.message) : 'Наставник сейчас не на связи — продолжаем по конспекту.'} <button type="button" class="link" data-retry-ai>Спросить ещё раз</button></p>` });
