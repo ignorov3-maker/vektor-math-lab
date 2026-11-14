@@ -1,5 +1,35 @@
 """Проверки новых RPC пилота на изолированной БД из supabase_scenarios.py."""
 def run(psql, rep):
+    rep('CX-19: старый вход, смена логина и пароля, код и защита перебора', psql(r"""
+begin;
+do $$
+declare a int; s int; t text; oldt text; atok text; code text; r jsonb; i int;
+begin
+ insert into vk_students(login,pass_hash,state) values('тестученик',extensions.crypt('пароль123',extensions.gen_salt('bf',4)),'{"answers":7}') returning id into s;
+ insert into vk_adults(role,email,pass_hash) values('parent','cx19@example.invalid','test') returning id into a;
+ t:=vektor_login('тестученик','ПАРОЛЬ123')->>'token';if t is null then raise exception 'legacy login';end if;
+ oldt:=vk_new_session('student',s);atok:=vk_new_session('parent',a);
+ perform vektor_student_password_offered(t);
+ if not (vektor_student_profile(t)->>'password_offered')::boolean then raise exception 'offer flag';end if;
+ if not (vektor_student_set_login(t,'newlogin19')->>'ok')::boolean then raise exception 'set login';end if;
+ if vektor_login('тестученик','пароль123') ? 'token' then raise exception 'old login';end if;
+ r:=vektor_login('newlogin19','пароль123');if r->'state'->>'answers'<>'7' then raise exception 'lost progress';end if;
+ if vektor_student_set_password(t,null,'Newpass19')->>'error'<>'password' then raise exception 'null password';end if;
+ if not (vektor_student_set_password(t,'пароль123','Newpass19')->>'ok')::boolean then raise exception 'set password';end if;
+ begin perform vk_auth(oldt,'student');raise exception 'other session';exception when sqlstate 'P0401' then null;end;
+ if not vektor_login('newlogin19','Newpass19') ? 'token' then raise exception 'new password';end if;
+ code:=vektor_link_code(t)->>'code';
+ if not (vektor_adult_link(atok,code)->>'ok')::boolean or not vk_can_see(a,s) then raise exception 'link';end if;
+ if vektor_adult_link(atok,code)->>'error'<>'code' then raise exception 'code reuse';end if;
+ code:=vektor_link_code(t)->>'code';update vk_link_codes set expires=now()-interval '1 second' where student_id=s;
+ if vektor_adult_link(atok,code)->>'error'<>'code' then raise exception 'expired code';end if;
+ for i in 1..3 loop perform vektor_adult_link(atok,'bad');end loop;
+ if vektor_adult_link(atok,'bad')->>'error'<>'locked' then raise exception 'brute force';end if;
+ if has_table_privilege('anon','vk_link_codes','select') then raise exception 'codes exposed';end if;
+ begin perform vektor_student_profile(atok);raise exception 'adult can edit student';exception when sqlstate 'P0403' then null;end;
+end $$;
+rollback;select 'OK';
+""").endswith('OK'))
     rep('CX-18: регистрация, подтверждение, одноразовость, срок и сброс', psql(r"""
 begin;
 create temporary table cx_mail(data jsonb);

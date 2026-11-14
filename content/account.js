@@ -68,7 +68,7 @@
     catch { return false; } finally { clearTimeout(t); }
   }
 
-  function loadApp() { const s = document.createElement('script'); s.src = 'app.js'; document.body.appendChild(s); }
+  function loadApp() { const s = document.createElement('script'); s.src = 'app.js'; s.onload=()=>{if(SB&&window.VEKTOR_PROFILE)window.VEKTOR_PROFILE.offer();}; document.body.appendChild(s); }
 
   /* ---------- Экран входа ---------- */
   function loginScreen(msg) {
@@ -85,7 +85,7 @@
         <p class="feedback ${msg ? 'bad' : ''}" id="login-msg" role="alert">${msg ? esc(msg) : ''}</p>
         <button class="btn btn-primary btn-big" type="submit">Войти</button>
       </form>
-      <div class="role-switch"><a class="btn btn-ghost btn-sm" href="teacher.html">Я учитель</a><a class="btn btn-ghost btn-sm" href="parent.html">Я родитель</a><a class="btn btn-ghost btn-sm" href="parent.html?role=tutor">Я репетитор</a></div></section>`;
+      <p><a href="parent.html?student=1">Забыли пароль? Восстановить по почте</a></p><div class="role-switch"><a class="btn btn-ghost btn-sm" href="teacher.html">Я учитель</a><a class="btn btn-ghost btn-sm" href="parent.html">Я родитель</a><a class="btn btn-ghost btn-sm" href="parent.html?role=tutor">Я репетитор</a></div></section>`;
     // Первая страница — лендинг, форма входа внутри него
     if (L) { document.body.classList.add('landing'); app.innerHTML = L.render(loginHtml); L.mount(app); }
     else app.innerHTML = loginHtml;
@@ -203,6 +203,7 @@
   }
 
   async function boot() {
+    if (/^#student_(email|reset)=/.test(location.hash)) {location.replace('parent.html?student=1'+location.hash);return;}
     if (!(await hasServer())) { window.VEKTOR_SYNC = null; loadApp(); return; }
     const sess = ls.get(SESS);
     if (!sess || !sess.token) { ls.del(KEY); loginScreen(); return; }
@@ -356,6 +357,10 @@
     scrollTo(0, 0);
   }
   let exitHook = null;
-  window.VEKTOR_ACCOUNT = { boot, logout: () => exitHook && exitHook() };
+  window.VEKTOR_ACCOUNT = { boot, logout: () => exitHook && exitHook(), rpc: async (fn,args={}) => {
+    const session=ls.get(SESS); if(!SB||!session)throw Error('Войди заново');
+    const r=await fetch(SB+'/rest/v1/rpc/'+fn,{method:'POST',headers:{'Content-Type':'application/json',apikey:CFG.supabaseKey,Authorization:'Bearer '+CFG.supabaseKey},body:JSON.stringify({...args,p_token:session.token})});
+    const j=await r.json();if(!r.ok||j?.error)throw Error(j?.message||'Не получилось выполнить запрос');return j;
+  } };
   boot();
 })();

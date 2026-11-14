@@ -11,6 +11,7 @@ create table if not exists vk_students (
   id serial primary key, login text not null unique, pass_hash text not null,
   class_id int references vk_classes(id), label text, state jsonb, state_rev int not null default 0,
   fails int not null default 0, locked_until timestamptz, last_seen timestamptz);
+alter table vk_students add column if not exists password_custom boolean not null default false;
 create table if not exists vk_teachers (
   id serial primary key, login text not null unique, pass_hash text not null, name text not null default '',
   class_ids int[] not null default '{}', is_admin boolean not null default false,
@@ -70,14 +71,14 @@ create or replace function vektor_login(p_login text, p_password text) returns j
 language plpgsql security definer set search_path = public, extensions as $$
 declare st vk_students; l text := vk_norm(p_login);
 begin
-  if l = '' or l ~ '[a-z]' then return jsonb_build_object('error', 'layout', 'message', 'Логин пишется русскими буквами — смени язык клавиатуры'); end if;
+  if l = '' or (l ~ '[a-z]' and not exists(select 1 from vk_students where login=l)) then return jsonb_build_object('error', 'layout', 'message', 'Проверь язык клавиатуры и логин'); end if;
   select * into st from vk_students where login = l;
   if st is null then perform pg_sleep(0.3); return jsonb_build_object('error', 'bad_login', 'message', 'Неверный логин или пароль'); end if;
   if st.locked_until > now() then
     return jsonb_build_object('error', 'locked', 'message', 'Слишком много ошибок. Попробуй через '
       || ceil(extract(epoch from st.locked_until - now()) / 60)::int || ' мин. или попроси учителя сбросить пароль');
   end if;
-  if st.pass_hash <> crypt(vk_norm(p_password), st.pass_hash) then
+  if octet_length(p_password)>72 or st.pass_hash is distinct from crypt(case when st.password_custom then p_password else vk_norm(p_password) end, st.pass_hash) then
     update vk_students set fails = case when fails + 1 >= 5 then 0 else fails + 1 end,
       locked_until = case when fails + 1 >= 5 then now() + interval '5 minutes' else null end where id = st.id;
     return jsonb_build_object('error', 'bad_login', 'message', 'Неверный логин или пароль');
@@ -155,7 +156,7 @@ begin
   select * into t from vk_teachers where login = lower(btrim(p_login));
   if t is null then perform pg_sleep(0.3); return jsonb_build_object('error', 'bad_login', 'message', 'Неверный логин или пароль'); end if;
   if t.locked_until > now() then return jsonb_build_object('error', 'locked', 'message', 'Слишком много ошибок, попробуйте через 5 минут'); end if;
-  if t.pass_hash <> crypt(p_password, t.pass_hash) then
+  if octet_length(p_password)>72 or t.pass_hash is distinct from crypt(p_password, t.pass_hash) then
     update vk_teachers set fails = case when fails + 1 >= 5 then 0 else fails + 1 end,
       locked_until = case when fails + 1 >= 5 then now() + interval '5 minutes' else null end where id = t.id;
     return jsonb_build_object('error', 'bad_login', 'message', 'Неверный логин или пароль');

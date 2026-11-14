@@ -38,12 +38,14 @@ set search_path = public, extensions as $$
 
 -- Сохраняем проверенное старое поведение и закрываем обход защиты через старую сигнатуру.
 do $$ begin
-  if to_regprocedure('vk_login_legacy(text,text)') is null then
+  if to_regprocedure('vektor_login(text,text)') is not null then
+    drop function if exists vk_login_legacy(text,text);
     alter function vektor_login(text,text) rename to vk_login_legacy;
-  else drop function if exists vektor_login(text,text); end if;
-  if to_regprocedure('vk_teacher_login_legacy(text,text)') is null then
+  end if;
+  if to_regprocedure('vektor_teacher_login(text,text)') is not null then
+    drop function if exists vk_teacher_login_legacy(text,text);
     alter function vektor_teacher_login(text,text) rename to vk_teacher_login_legacy;
-  else drop function if exists vektor_teacher_login(text,text); end if;
+  end if;
 end $$;
 create or replace function vektor_login(p_login text,p_password text,p_device text default null) returns jsonb
 language plpgsql security definer set search_path = public, extensions as $$

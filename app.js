@@ -1094,6 +1094,7 @@ function settingsServer() {
         <button class="btn btn-primary" type="submit">Сохранить</button>
         <div class="feedback" id="feedback" role="status" aria-live="polite"></div>
       </form>
+      ${window.VEKTOR_PROFILE ? window.VEKTOR_PROFILE.html() : ''}
       ${skinPicker()}
     </div>
     <div class="stack side">
@@ -1122,6 +1123,7 @@ function render() {
   document.querySelector('#avatar').textContent = (state.settings.name[0] || 'А').toUpperCase();
   app.innerHTML = ({ home, map: () => mapPage(filterState.map), diagnostic, library: () => library(filterState.library), awards, teacher, settings, lesson: () => lessonPage(i, lessonStage), warmup: warmupPage })[page]();
   bind(page, i, lessonStage);
+  if(page==='settings'&&SERVER&&window.VEKTOR_PROFILE)window.VEKTOR_PROFILE.mount();
   bindInterests(app);
   mountPetsAndCollection(page, lessonStage);
   if (page === 'warmup') runWarmup();

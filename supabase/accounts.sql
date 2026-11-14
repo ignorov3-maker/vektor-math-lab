@@ -14,7 +14,7 @@ alter table vk_adults enable row level security;
 alter table vk_links enable row level security;
 revoke all on vk_adults,vk_links from public,anon,authenticated;
 
-create or replace function vk_adult_auth(p_token text) returns int language plpgsql stable security definer
+create or replace function vk_adult_auth(p_token text) returns int language plpgsql security definer
 set search_path = public, extensions as $$
 declare uid int; r text;
 begin
@@ -25,7 +25,7 @@ begin
   if not exists(select 1 from vk_adults where id=uid and role=r) then raise exception 'no_session' using errcode='P0401'; end if;
   return uid;
 end $$;
-create or replace function vk_can_see(p_adult int,p_student int) returns boolean language sql stable security definer
+create or replace function vk_can_see(p_adult int,p_student int) returns boolean language sql security definer
 set search_path = public, extensions as $$
  select exists(select 1 from vk_links l join vk_adults a on a.id=l.adult_id
    where l.adult_id=p_adult and l.student_id=p_student and l.kind=a.role) $$;
@@ -111,7 +111,7 @@ language plpgsql security definer set search_path=public,extensions as $$ declar
   if not vk_guard_start(p_device) then return jsonb_build_object('error','too_many','message','Слишком много попыток. Попробуйте через 10 минут'); end if;
   select * into a from vk_adults where email=v_email for update;
   if a.id is not null and a.locked_until>now() then return jsonb_build_object('error','locked','message','Попробуйте через 5 минут'); end if;
-  if a.id is null or a.pass_hash<>crypt(coalesce(p_password,''),a.pass_hash) then
+  if a.id is null or octet_length(p_password)>72 or a.pass_hash is distinct from crypt(coalesce(p_password,''),a.pass_hash) then
     update vk_adults set fails=case when fails+1>=5 then 0 else fails+1 end,
       locked_until=case when fails+1>=5 then now()+interval '5 minutes' else null end where id=a.id;
     perform vk_guard_log(v_email,p_device,false);
@@ -144,3 +144,117 @@ revoke execute on function vk_secret(text),vk_mail(text,jsonb),vk_issue_mail(int
  vektor_adult_reset_request(text,text),vektor_adult_reset(text,text) from public,anon,authenticated;
 grant execute on function vektor_public_config(),vektor_adult_register(text,text,text,text,text),vektor_adult_confirm(text),
  vektor_adult_login(text,text,text),vektor_adult_reset_request(text,text),vektor_adult_reset(text,text) to anon,authenticated;
+
+-- CX-19. Прежние хеши паролей и прогресс не меняются.
+alter table vk_students add column if not exists password_offered boolean not null default false;
+alter table vk_students add column if not exists email text;
+alter table vk_students add column if not exists email_verified_at timestamptz;
+create unique index if not exists vk_student_email on vk_students(lower(email)) where email is not null;
+alter table vk_adults add column if not exists link_fails int not null default 0;
+alter table vk_adults add column if not exists link_locked_until timestamptz;
+create table if not exists vk_link_codes(code_hash text primary key,student_id int not null unique references vk_students(id) on delete cascade,expires timestamptz not null);
+alter table vk_link_codes enable row level security;
+revoke all on vk_link_codes from public,anon,authenticated;
+
+create or replace function vektor_student_profile(p_token text) returns jsonb language plpgsql security definer
+set search_path=public,extensions as $$ declare uid int:=vk_auth(p_token,'student'); r jsonb; begin
+  select jsonb_build_object('login',s.login,'email',s.email,'password_offered',s.password_offered,
+    'viewers',coalesce((select jsonb_agg(jsonb_build_object('name',a.name,'role',a.role)) from vk_links l join vk_adults a on a.id=l.adult_id where l.student_id=uid),'[]')) into r from vk_students s where s.id=uid;
+  return r;
+end $$;
+create or replace function vektor_student_password_offered(p_token text) returns jsonb language plpgsql security definer
+set search_path=public,extensions as $$ begin
+ update vk_students set password_offered=true where id=vk_auth(p_token,'student');return '{"ok":true}'::jsonb;
+end $$;
+create or replace function vektor_student_set_password(p_token text,p_old text,p_password text) returns jsonb language plpgsql security definer
+set search_path=public,extensions as $$ declare uid int:=vk_auth(p_token,'student'); s vk_students; begin
+  select * into s from vk_students where id=uid for update;
+  if s.pass_hash is distinct from crypt(case when s.password_custom then p_old else vk_norm(p_old) end,s.pass_hash) then return jsonb_build_object('error','password','message','Старый пароль не подошёл'); end if;
+  if length(coalesce(p_password,''))<6 or octet_length(p_password)>72 then return jsonb_build_object('error','password','message','Новый пароль: от 6 символов'); end if;
+  update vk_students set pass_hash=crypt(p_password,gen_salt('bf',10)),password_custom=true,password_offered=true where id=uid;
+  delete from vk_sessions where role='student' and user_id=uid and token_hash<>encode(digest(p_token,'sha256'),'hex');
+  return '{"ok":true}'::jsonb;
+end $$;
+create or replace function vektor_student_set_login(p_token text,p_login text) returns jsonb language plpgsql security definer
+set search_path=public,extensions as $$ declare uid int:=vk_auth(p_token,'student'); l text:=lower(btrim(p_login)); begin
+  if l !~ '^[a-zа-яё0-9]{3,24}$' then return jsonb_build_object('error','login','message','Логин: 3–24 буквы или цифры'); end if;
+  l:=vk_norm(l);update vk_students set login=l where id=uid;
+  return jsonb_build_object('ok',true,'login',l);
+exception when unique_violation then return jsonb_build_object('error','login','message','Этот логин уже занят'); end $$;
+create or replace function vektor_student_email(p_token text,p_email text) returns jsonb language plpgsql security definer
+set search_path=public,extensions as $$ declare uid int:=vk_auth(p_token,'student'); e text:=lower(btrim(p_email)); begin
+  if e !~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' or length(e)>254 then return jsonb_build_object('error','email','message','Проверь почту'); end if;
+  perform vk_issue_mail(null,uid,'student_email',e,24);return jsonb_build_object('ok',true,'message','Письмо отправлено');
+end $$;
+create or replace function vektor_student_email_confirm(p_token text) returns jsonb language plpgsql security definer
+set search_path=public,extensions as $$ declare t vk_mail_tokens; begin
+  update vk_mail_tokens set used_at=now() where token_hash=encode(digest(coalesce(p_token,''),'sha256'),'hex') and purpose='student_email'
+    and used_at is null and expires>now() returning * into t;
+  if t.student_id is null then return jsonb_build_object('error','token','message','Ссылка недействительна или устарела'); end if;
+  update vk_students set email=t.email,email_verified_at=now() where id=t.student_id;
+  update vk_mail_tokens set used_at=now() where student_id=t.student_id and purpose='student_reset' and used_at is null;
+  return '{"ok":true}'::jsonb;
+exception when unique_violation then return jsonb_build_object('error','email','message','Эта почта уже привязана к другому ученику'); end $$;
+create or replace function vektor_student_reset_request(p_email text,p_captcha text) returns jsonb language plpgsql security definer
+set search_path=public,extensions as $$ declare s vk_students; begin
+  if not coalesce((vk_mail('captcha',jsonb_build_object('token',p_captcha))->>'ok')::boolean,false) then return jsonb_build_object('error','captcha','message','Пройди проверку капчи'); end if;
+  select * into s from vk_students where email=lower(btrim(p_email)) and email_verified_at is not null;
+  if s.id is not null then perform vk_issue_mail(null,s.id,'student_reset',s.email,1); end if;
+  return jsonb_build_object('ok',true,'message','Если такая почта есть, письмо отправлено');
+end $$;
+create or replace function vektor_student_reset(p_token text,p_password text) returns jsonb language plpgsql security definer
+set search_path=public,extensions as $$ declare uid int; begin
+  if length(coalesce(p_password,''))<6 or octet_length(p_password)>72 then return jsonb_build_object('error','password','message','Пароль от 6 символов'); end if;
+  update vk_mail_tokens set used_at=now() where token_hash=encode(digest(coalesce(p_token,''),'sha256'),'hex') and purpose='student_reset'
+    and used_at is null and expires>now() returning student_id into uid;
+  if uid is null then return jsonb_build_object('error','token','message','Ссылка недействительна или устарела'); end if;
+  update vk_students set pass_hash=crypt(p_password,gen_salt('bf',10)),password_custom=true,password_offered=true,fails=0,locked_until=null where id=uid;
+  delete from vk_sessions where role='student' and user_id=uid;return '{"ok":true}'::jsonb;
+end $$;
+create or replace function vektor_link_code(p_token text) returns jsonb language plpgsql security definer
+set search_path=public,extensions as $$ declare uid int:=vk_auth(p_token,'student'); b bytea; n int; code text; begin
+  perform 1 from vk_students where id=uid for update;
+  delete from vk_link_codes where student_id=uid or expires<=now();
+  loop
+    b:=gen_random_bytes(3);n:=get_byte(b,0)*65536+get_byte(b,1)*256+get_byte(b,2);continue when n>=16000000;
+    code:=lpad((n%1000000)::text,6,'0');
+    begin insert into vk_link_codes values(vk_device_hash('link:'||code),uid,now()+interval '24 hours');exit;
+    exception when unique_violation then null;end;
+  end loop;
+  return jsonb_build_object('code',code,'expires',now()+interval '24 hours');
+end $$;
+create or replace function vk_adult_capacity(p_adult int) returns boolean language plpgsql security definer
+set search_path=public,extensions as $$ declare cap int; r text; begin
+  select role into r from vk_adults where id=p_adult for update;
+  cap:=(vk_limits('adult',p_adult)->>case when r='tutor' then 'max_students' else 'max_children' end)::int;
+  return cap is null or (select count(*) from vk_links where adult_id=p_adult)<cap;
+end $$;
+create or replace function vektor_adult_link(p_token text,p_code text) returns jsonb language plpgsql security definer
+set search_path=public,extensions as $$ declare uid int:=vk_adult_auth(p_token); a vk_adults; sid int; begin
+  select * into a from vk_adults where id=uid for update;
+  if a.link_locked_until>now() then return jsonb_build_object('error','locked','message','Попробуйте через 15 минут'); end if;
+  if not vk_adult_capacity(uid) then return jsonb_build_object('error','limit','message','Достигнут лимит учеников'); end if;
+  delete from vk_link_codes where code_hash=vk_device_hash('link:'||p_code) and expires>now() returning student_id into sid;
+  if sid is null then
+    update vk_adults set link_fails=link_fails+1,link_locked_until=case when link_fails+1>=5 then now()+interval '15 minutes' else null end where id=uid;
+    return jsonb_build_object('error','code','message','Код неверный или устарел');
+  end if;
+  insert into vk_links values(sid,uid,a.role,now()) on conflict do nothing;
+  update vk_adults set link_fails=0,link_locked_until=null where id=uid;
+  return jsonb_build_object('ok',true,'student_id',sid);
+end $$;
+create or replace function vektor_adult_create_student(p_token text,p_label text) returns jsonb language plpgsql security definer
+set search_path=public,extensions as $$ declare uid int:=vk_adult_auth(p_token); sid int; l text; pass text:=vk_password(); r text; begin
+  if not vk_adult_capacity(uid) then return jsonb_build_object('error','limit','message','Достигнут лимит учеников'); end if;
+  select role into r from vk_adults where id=uid;
+  l:='ученик'||encode(gen_random_bytes(6),'hex');
+  insert into vk_students(login,pass_hash,label) values(l,crypt(pass,gen_salt('bf',8)),left(btrim(p_label),60)) returning id into sid;
+  insert into vk_links values(sid,uid,r,now());
+  return jsonb_build_object('ok',true,'student_id',sid,'login',l,'password',pass);
+end $$;
+revoke execute on function vektor_student_profile(text),vektor_student_password_offered(text),vektor_student_set_password(text,text,text),
+ vektor_student_set_login(text,text),vektor_student_email(text,text),vektor_student_email_confirm(text),vektor_student_reset_request(text,text),
+ vektor_student_reset(text,text),vektor_link_code(text),vk_adult_capacity(int),vektor_adult_link(text,text),vektor_adult_create_student(text,text) from public,anon,authenticated;
+grant execute on function vektor_student_profile(text),vektor_student_password_offered(text),vektor_student_set_password(text,text,text),
+ vektor_student_set_login(text,text),vektor_student_email(text,text),vektor_student_email_confirm(text),vektor_student_reset_request(text,text),
+ vektor_student_reset(text,text),vektor_link_code(text),vektor_adult_link(text,text),vektor_adult_create_student(text,text) to anon,authenticated;

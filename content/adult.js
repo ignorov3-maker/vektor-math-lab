@@ -2,8 +2,10 @@
 (() => {
   'use strict';
   const host = document.getElementById('adult-app'), cfg = window.VEKTOR_CONFIG || {};
+  const studentRecovery=new URLSearchParams(location.search).get('student')==='1';
   const role = new URLSearchParams(location.search).get('role') === 'tutor' || /tutor\.html$/.test(location.pathname) ? 'tutor' : 'parent';
   document.getElementById('adult-title').textContent = role === 'tutor' ? 'Кабинет репетитора' : 'Кабинет родителя';
+  if(studentRecovery)document.getElementById('adult-title').textContent='Доступ ученика';
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   let sess, publicCfg = {}, mode = 'login', mailToken = '', captchaToken = '';
   try { sess = JSON.parse(localStorage.getItem('vektor-adult')); } catch {}
@@ -19,10 +21,10 @@
   function loginForm() {
     captchaToken='';
     const registering=mode==='register', reset=mode==='request', change=mode==='reset';
-    host.innerHTML=`<nav><button class="secondary" data-mode="login">Войти</button><button class="secondary" data-mode="register">Создать аккаунт</button><button class="secondary" data-mode="request">Забыли пароль?</button></nav>
+    host.innerHTML=`${studentRecovery?'<p><a href="index.html">Войти в Вектор</a></p>':'<nav><button class="secondary" data-mode="login">Войти</button><button class="secondary" data-mode="register">Создать аккаунт</button><button class="secondary" data-mode="request">Забыли пароль?</button></nav>'}
       <form id="adult-form"><h2>${registering?'Создать аккаунт':reset?'Восстановить пароль':change?'Новый пароль':'Войти'}</h2>
       ${!change?'<label>Почта<input type="email" name="email" autocomplete="email" required maxlength="254"></label>':''}
-      ${!reset?`<label>Пароль<input type="password" name="password" autocomplete="${registering||change?'new-password':'current-password'}" required minlength="8" maxlength="72"></label>`:''}
+      ${!reset?`<label>Пароль<input type="password" name="password" autocomplete="${registering||change?'new-password':'current-password'}" required minlength="${studentRecovery?6:8}" maxlength="72"></label>`:''}
       ${registering?'<label><input type="checkbox" name="consent" required> Я принимаю согласие на обработку данных</label><button type="button" class="secondary" data-legal="consent">Прочитать согласие</button><button type="button" class="secondary" data-legal="privacy">Политика данных</button><div id="legal-text"></div>':''}
       ${registering||reset?'<div id="adult-captcha"></div>':''}<p id="adult-message" role="status"></p><button type="submit">${registering?'Зарегистрироваться':reset?'Отправить ссылку':change?'Сохранить пароль':'Войти'}</button></form>`;
     if (registering && !publicCfg.signup_open) {message('Регистрация скоро откроется');host.querySelector('[type=submit]').disabled=true;}
@@ -53,8 +55,8 @@
       let r;
       if(mode==='login'){r=await rpc('vektor_adult_login',{p_email:f.email.value,p_password:f.password.value,p_device:device()});sess=r;localStorage.setItem('vektor-adult',JSON.stringify(r));await cabinet();return;}
       if(mode==='register'){if(!f.consent.checked)throw Error('Примите согласие');r=await rpc('vektor_adult_register',{p_email:f.email.value,p_password:f.password.value,p_role:role,p_consent_version:publicCfg.consent_version,p_captcha:captchaToken});}
-      if(mode==='request')r=await rpc('vektor_adult_reset_request',{p_email:f.email.value,p_captcha:captchaToken});
-      if(mode==='reset'){r=await rpc('vektor_adult_reset',{p_token:mailToken,p_password:f.password.value});mailToken='';mode='login';loginForm();}
+      if(mode==='request')r=await rpc(studentRecovery?'vektor_student_reset_request':'vektor_adult_reset_request',{p_email:f.email.value,p_captcha:captchaToken});
+      if(mode==='reset'){r=await rpc(studentRecovery?'vektor_student_reset':'vektor_adult_reset',{p_token:mailToken,p_password:f.password.value});mailToken='';mode=studentRecovery?'request':'login';loginForm();}
       message(r.message||'Готово. Теперь можно войти.');
     }catch(err){message(err.message,true);if(window.smartCaptcha)window.smartCaptcha.reset();captchaToken='';}finally{b.disabled=false;}
   });
@@ -62,6 +64,12 @@
   async function init(){
     try{publicCfg=await rpc('vektor_public_config');}catch{}
     const params=new URLSearchParams(location.hash.slice(1));
+    if(studentRecovery){
+      mode='request';
+      if(params.has('student_email')){const token=params.get('student_email');history.replaceState(null,'',location.pathname+location.search);loginForm();try{await rpc('vektor_student_email_confirm',{p_token:token});message('Почта подтверждена. Можно вернуться в Вектор.');}catch(e){message(e.message,true);}return;}
+      if(params.has('student_reset')){mailToken=params.get('student_reset');history.replaceState(null,'',location.pathname+location.search);mode='reset';loginForm();return;}
+      loginForm();return;
+    }
     if(params.has('adult_confirm')){const token=params.get('adult_confirm');history.replaceState(null,'',location.pathname+location.search);loginForm();try{await rpc('vektor_adult_confirm',{p_token:token});message('Почта подтверждена. Войдите.');}catch(e){message(e.message,true);}return;}
     if(params.has('adult_reset')){mailToken=params.get('adult_reset');history.replaceState(null,'',location.pathname+location.search);mode='reset';loginForm();return;}
     if(sess?.token)await cabinet();else loginForm();
