@@ -108,6 +108,7 @@ ${methodText(topic)}`;
 
 Сейчас ученик решает задачу в тренировке:
 ${plain(task.story)} ${plain(task.question)}
+${task.figure ? 'Описание рисунка: ' + window.VEKTOR_VISUALS.describe(task.figure) : ''}
 Правильный ответ (ученику его НЕ называй): ${task.answer}. Решение: ${plain(task.solution)}
 ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake.title}.` : ''}
 
@@ -126,7 +127,7 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
     return `Ошибка подключения (${status}). ${body ? String(body).slice(0, 120) : ''}`;
   }
 
-  async function stream(cfg, messages, onText, { maxTokens = 600, signal, onFinish, mode, data } = {}) {
+  async function stream(cfg, messages, onText, { maxTokens = 600, signal, onFinish, mode, data, topic } = {}) {
     const own = cfg.mode === 'vektor', proxy = cfg.mode === 'proxy';
     const SBC = window.VEKTOR_CONFIG || {};
     const url = own ? SBC.supabaseUrl.replace(/\/+$/, '') + '/functions/v1/tutor' : proxy ? cfg.proxy.trim() : OPENROUTER_URL;
@@ -143,7 +144,7 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
     // Рассуждения модели выключаем: наставнику нужен быстрый короткий ответ.
     // Если модель не умеет выключать рассуждения (400), повторяем запрос без этого параметра.
     const send = async withReasoningOff => {
-      const body = { model: cfg.model || DEFAULT_CFG.model, messages, stream: true, ...(token ? { token } : {}), ...(mode ? { mode, data } : {}), max_tokens: withReasoningOff ? maxTokens : maxTokens + 600, temperature: 0.4 };
+      const body = { model: cfg.model || DEFAULT_CFG.model, messages, stream: true, ...(token ? { token } : {}), ...(topic ? {topic} : {}), ...(mode ? { mode, data } : {}), max_tokens: withReasoningOff ? maxTokens : maxTokens + 600, temperature: 0.4 };
       if (withReasoningOff) body.reasoning = { enabled: false }; else body.reasoning = { exclude: true };
       try { return await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal }); }
       catch (e) { if (e.name === 'AbortError') throw e; throw new TutorError('Нет связи с сервером ИИ. Мешать может слабый интернет, VPN или блокировщик рекламы.'); }

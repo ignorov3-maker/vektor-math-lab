@@ -144,7 +144,9 @@ export async function handle(req: Request): Promise<Response> {
     if (!u) return;
     const pin = Number(u.prompt_tokens) || 0, pout = Number(u.completion_tokens) || 0, [a, b] = priceOf(model);
     const usd = Number.isFinite(Number(u.cost)) && u.cost != null ? Number(u.cost) : (pin * a + pout * b) / 1e6;
-    return db('vk_ai_spend', { p_student: t.student_id, p_in: pin, p_out: pout, p_usd: usd }).catch(() => {});
+    const topic = String(body.data?.topic || body.topic || 'unknown');
+    return db('vk_ai_spend', { p_student: t.student_id, p_in: pin, p_out: pout, p_usd: usd,
+      p_topic: /^[a-z0-9_-]{1,80}$/.test(topic) ? topic : 'unknown', p_estimated: !!u.estimated }).catch(() => {});
   };
   const lastUser = mode === 'chat' ? [...body.messages].reverse().find((m: any) => m.role === 'user')
     : { content: [body.data?.kid, body.data?.task].filter(Boolean).join(' ') };
@@ -222,7 +224,7 @@ export async function handle(req: Request): Promise<Response> {
       finally {
         inspect(buffer + decoder.decode());
         // Без usage после обрыва — консервативная оценка вместо нулевого расхода.
-        await spend(usage || (chars ? { prompt_tokens: Math.ceil(JSON.stringify(messages).length / 3), completion_tokens: Math.ceil(chars / 3) } : null), usedModel);
+        await spend(usage || (chars ? { prompt_tokens: Math.ceil(JSON.stringify(messages).length / 3), completion_tokens: Math.ceil(chars / 3), estimated: true } : null), usedModel);
         reader.releaseLock();
       }
     },

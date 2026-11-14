@@ -488,7 +488,7 @@ async function aiReply(i, kind, hiddenUser) {
   c.msgs.push(msg); c.busy = true; refreshChat(i, kind);
   const call = () => T.stream(ai, [{ role: 'system', content: sys }, ...history], txt => {
     msg.html = T.render(txt, { streaming: true }).html || '<p class="typing">…</p>'; updateLastMsg(i, kind, msg);
-  }, { maxTokens: kind === 'lesson' ? 700 : 550, onFinish: r => { c.truncated = r === 'length'; } });
+  }, { maxTokens: kind === 'lesson' ? 700 : 550, topic: topics[i].id, onFinish: r => { c.truncated = r === 'length'; } });
   try {
     let text;
     try { text = await call(); }

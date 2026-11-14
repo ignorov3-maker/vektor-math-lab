@@ -56,11 +56,26 @@ language sql security definer set search_path = public as $$
   insert into vk_ai_cache (key, value) values (p_key, p_value) on conflict (key) do update set value = excluded.value, created = now() $$;
 
 -- Учёт фактических токенов и стоимости
-create or replace function vk_ai_spend(p_student int, p_in int, p_out int, p_usd numeric) returns void
-language sql security definer set search_path = public as $$
+create table if not exists vk_ai_questions(id bigserial primary key,student_id int not null references vk_students(id) on delete cascade,
+  topic text not null,tokens_in bigint not null,tokens_out bigint not null,usd numeric not null,rub_per_usd numeric,estimated boolean not null default false,created timestamptz not null default now());
+create index if not exists vk_ai_questions_topic on vk_ai_questions(created,topic);
+alter table vk_ai_questions enable row level security;
+revoke all on vk_ai_questions from public,anon,authenticated;
+drop function if exists vk_ai_spend(int,int,int,numeric);
+create or replace function vk_ai_spend(p_student int, p_in int, p_out int, p_usd numeric,p_topic text default 'unknown',p_estimated boolean default false) returns void
+language plpgsql security definer set search_path = public, extensions as $$ begin
   insert into vk_ai_usage (student_id, n, tokens_in, tokens_out, usd) values (p_student, 0, greatest(p_in, 0), greatest(p_out, 0), greatest(p_usd, 0))
   on conflict (student_id, day) do update set tokens_in = vk_ai_usage.tokens_in + excluded.tokens_in,
-    tokens_out = vk_ai_usage.tokens_out + excluded.tokens_out, usd = vk_ai_usage.usd + excluded.usd $$;
+    tokens_out = vk_ai_usage.tokens_out + excluded.tokens_out, usd = vk_ai_usage.usd + excluded.usd;
+  insert into vk_ai_questions(student_id,topic,tokens_in,tokens_out,usd,rub_per_usd,estimated)
+    values(p_student,case when p_topic ~ '^[a-z0-9_-]{1,80}$' then p_topic else 'unknown' end,greatest(p_in,0),greatest(p_out,0),greatest(p_usd,0),
+      (select (value->>'rub_per_usd')::numeric from vk_settings where key='ai'),p_estimated);
+end $$;
+create or replace function vk_ai_cost_by_topic(p_days int default 30) returns jsonb language sql security definer
+set search_path=public,extensions as $$
+ select coalesce(jsonb_agg(to_jsonb(x)),'[]') from(select topic,count(*) questions,avg(tokens_in) tokens_in,avg(tokens_out) tokens_out,
+   avg(usd*rub_per_usd) rub_per_question,count(*) filter(where rub_per_usd is null) without_exchange_rate,count(*) filter(where estimated) estimated_questions
+ from vk_ai_questions where created>=now()-make_interval(days=>least(greatest(p_days,1),365)) group by topic order by topic)x $$;
 
 -- Расход ИИ по дням в долларах: select * from vk_ai_cost;
 create or replace view vk_ai_cost with (security_invoker = true) as
@@ -68,7 +83,7 @@ create or replace view vk_ai_cost with (security_invoker = true) as
     round(sum(usd), 4) usd, round(sum(usd) / nullif(count(*), 0), 5) usd_per_student
   from vk_ai_usage group by day order by day desc;
 
-revoke execute on function vk_ai_take(text), vk_ai_cache_get(text, text), vk_ai_cache_put(text, jsonb), vk_ai_spend(int, int, int, numeric) from public, anon, authenticated;
+revoke execute on function vk_ai_take(text), vk_ai_cache_get(text, text), vk_ai_cache_put(text, jsonb), vk_ai_spend(int, int, int, numeric,text,boolean),vk_ai_cost_by_topic(int) from public, anon, authenticated;
 revoke all on vk_ai_cost from anon, authenticated;
-do $$ begin grant execute on function vk_ai_take(text), vk_ai_cache_get(text, text), vk_ai_cache_put(text, jsonb), vk_ai_spend(int, int, int, numeric) to service_role;
+do $$ begin grant execute on function vk_ai_take(text), vk_ai_cache_get(text, text), vk_ai_cache_put(text, jsonb), vk_ai_spend(int, int, int, numeric,text,boolean) to service_role;
 exception when undefined_object then null; end $$;

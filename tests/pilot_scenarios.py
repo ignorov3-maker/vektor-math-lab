@@ -1,5 +1,18 @@
 """Проверки новых RPC пилота на изолированной БД из supabase_scenarios.py."""
 def run(psql, rep):
+    rep('CX-22: стоимость по темам и исторический курс', psql(r"""
+begin;
+do $$declare s int;r jsonb;begin
+ insert into vk_students(login,pass_hash) values('cx22','test') returning id into s;
+ perform vk_ai_set(true,100,1000,100,100,100);
+ perform vk_ai_spend(s,100,50,0.01,'angle');
+ perform vk_ai_set(true,100,1000,200,100,100);
+ perform vk_ai_spend(s,200,100,0.01,'angle');
+ select v into r from jsonb_array_elements(vk_ai_cost_by_topic(7))v where v->>'topic'='angle';
+ if (r->>'rub_per_question')::numeric<>1.5 or (r->>'tokens_in')::numeric<>150 then raise exception 'topic cost %',r;end if;
+ if has_function_privilege('anon','vk_ai_cost_by_topic(integer)','execute') then raise exception 'cost report open';end if;
+end $$;rollback;select 'OK';
+""").endswith('OK'))
     rep('CX-21: группы до шести, свои ученики, задание и отзыв отчёта', psql(r"""
 begin;
 do $$
@@ -156,7 +169,7 @@ begin
   if vk_ai_take(ta)->>'reason' <> 'budget' then raise exception 'global did not stop everyone'; end if;
   if vk_ai_take(vk_new_session('teacher', a))->>'reason' <> 'no_session' then raise exception 'role leak'; end if;
   if has_function_privilege('anon', 'vk_ai_set(boolean,integer,integer,numeric,numeric,numeric)', 'execute') then raise exception 'admin privilege'; end if;
-  if has_function_privilege('anon', 'vk_ai_spend(integer,integer,integer,numeric)', 'execute') then raise exception 'spend privilege'; end if;
+  if has_function_privilege('anon', 'vk_ai_spend(integer,integer,integer,numeric,text,boolean)', 'execute') then raise exception 'spend privilege'; end if;
 end $$;
 rollback;
 select 'OK';

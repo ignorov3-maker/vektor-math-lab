@@ -48,7 +48,7 @@ class H(http.server.SimpleHTTPRequestHandler):
             fn = self.path.rsplit('/', 1)[1]
             if not re.fullmatch(r'vk_ai_(take|cache_get|cache_put|spend)', fn): self.send_response(404); self.end_headers(); return
             args = json.loads(self.rfile.read(int(self.headers['Content-Length'] or 0)) or b'{}')
-            casts = {'p_in': 'int', 'p_out': 'int', 'p_student': 'int', 'p_usd': 'numeric'}
+            casts = {'p_in': 'int', 'p_out': 'int', 'p_student': 'int', 'p_usd': 'numeric', 'p_estimated': 'boolean'}
             call = f"{fn}(" + ', '.join(f"{k} => {lit(v)}" + (f'::{casts[k]}' if k in casts else '') for k, v in args.items()) + ")"
             out = 'null' if fn in ('vk_ai_cache_put', 'vk_ai_spend') and psql(f"select {call}") is not None else psql(f"select {call}::text")
             self.send_response(200); self.send_header('Content-Type', 'application/json'); self.end_headers(); self.wfile.write(out.encode()); return

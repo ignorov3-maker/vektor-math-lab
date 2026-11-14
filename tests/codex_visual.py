@@ -337,7 +337,7 @@ if __name__ == "__main__":
     total = len(RESULTS)
     environment = dict(os.environ, PYTHONIOENCODING="utf-8")
     # Isolated feature branches may contain only the mascot suite.
-    for name in ["codex_art.py", "codex_collection.py", "codex_wardrobe.py", "codex_board.py", "codex_landing.py", "codex_print.py"]:
+    for name in ["codex_art.py", "codex_collection.py", "codex_wardrobe.py", "codex_board.py", "codex_landing.py", "codex_print.py", "codex_geometry.py"]:
         path = ROOT / "tests" / name
         if not path.exists():
             continue

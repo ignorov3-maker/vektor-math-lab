@@ -8,6 +8,64 @@
 
   const f = (a, b) => `<span class="frac"><span>${a}</span><span>${b}</span></span>`;
   const W = 300;
+  const esc = s => String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const positive=n=>Number.isFinite(n)&&n>0&&n<=1000000;
+  const num=n=>Number.isFinite(n)?String(Math.round(n*1000)/1000):'?';
+
+  function describe(fig) {
+    if(!fig)return '';
+    switch(fig.type){
+      case 'triangle': return `треугольник, стороны ${fig.a}, ${fig.b}, ${fig.c}`;
+      case 'right_triangle': return `прямоугольный треугольник, катеты ${fig.a} и ${fig.b}, гипотенуза ${fig.c==null?'неизвестна':fig.c}`;
+      case 'circle_geo': return `окружность, радиус ${fig.r}, диаметр ${num(2*fig.r)}${fig.chord===false?'':', показана хорда'}`;
+      case 'angle': return `угол ${fig.degrees} градусов`;
+      case 'coord': return 'координатная плоскость: '+(fig.points||[]).map((p,i)=>`${p.label||String.fromCharCode(65+i)}(${p.x}; ${p.y})`).join(', ');
+      case 'graph': return `график функции y = ${fig.kind==='quadratic'?`${fig.a}x² + ${fig.b}x + ${fig.c}`:`${fig.a}x + ${fig.b}`}`;
+      case 'bar': return `полоска из ${fig.parts} частей, закрашено ${fig.shaded}`;
+      case 'circle': return `круг из ${fig.parts} частей, ${fig.empty==null?`закрашено ${fig.shaded}`:`пустых ${fig.empty}`}`;
+      case 'pair': return `две полоски: ${fig.a[0]}/${fig.a[1]} и ${fig.b[0]}/${fig.b[1]}`;
+      case 'line': return `числовая прямая, точка ${fig.n}/${fig.d}`;
+      case 'mixed': return `${fig.whole} целых и ${fig.n}/${fig.d}`;
+      case 'grid': return `сетка ${fig.rows} на ${fig.cols}, закрашено ${fig.r*fig.c} клеток`;
+      case 'labeled': return `дробь ${fig.n}/${fig.d}, числитель ${fig.n}, знаменатель ${fig.d}`;
+      default:return '';
+    }
+  }
+  function geometry(fig) {
+    const text=(x,y,s)=>`<text x="${x}" y="${y}" text-anchor="middle" fill="currentColor" stroke="none" font-size="13">${esc(s)}</text>`;
+    const line=(x,y,u,v)=>`<line x1="${x}" y1="${y}" x2="${u}" y2="${v}"/>`;
+    let body='';
+    if(fig.type==='triangle'||fig.type==='right_triangle'){
+      const a=fig.a,b=fig.b,c=fig.type==='right_triangle'?Math.hypot(a,b):fig.c;
+      if(![a,b,c].every(positive)||a+b<=c||a+c<=b||b+c<=a)return '';
+      if(fig.type==='right_triangle'&&fig.c!=null&&Math.abs(fig.c-c)>c*0.000001)return '';
+      const x=fig.type==='right_triangle'?0:(a*a+b*b-c*c)/(2*a),y=Math.sqrt(Math.max(0,b*b-x*x));
+      const min=Math.min(0,x),max=Math.max(a,x),scale=Math.min(220/(max-min),190/y),X=v=>40+(v-min)*scale,Y=v=>240-v*scale;
+      const p=[[X(0),Y(0)],[X(a),Y(0)],[X(x),Y(y)]];
+      body=`<path d="M${p[0]}L${p[1]}L${p[2]}Z"/>`+text((p[0][0]+p[1][0])/2,260,num(a))+text((p[0][0]+p[2][0])/2-15,(p[0][1]+p[2][1])/2,num(b))+text((p[1][0]+p[2][0])/2+15,(p[1][1]+p[2][1])/2,fig.type==='right_triangle'&&fig.c==null?'?':num(c));
+      p.forEach((v,i)=>body+=text(v[0]+(i===2?0:i===0?-12:12),v[1]+(i===2?-12:15),['A','B','C'][i]));
+      if(fig.type==='right_triangle')body+=`<path d="M${X(0)+14} ${Y(0)}v-14h-14"/>`;
+      else if(fig.showAngles){const angles=[Math.acos(x/b)*180/Math.PI,Math.acos((a-x)/c)*180/Math.PI];angles.push(180-angles[0]-angles[1]);p.forEach((v,i)=>body+=text(v[0]+(i===0?32:i===1?-32:0),v[1]+(i===2?30:-12),num(angles[i])+'°'));}
+    }else if(fig.type==='circle_geo'){
+      if(!positive(fig.r))return '';
+      body='<circle cx="150" cy="150" r="90"/>'+line(150,150,240,150)+text(195,143,'r = '+fig.r)+line(60,150,240,150)+text(150,258,'d = '+num(2*fig.r))+'<circle cx="150" cy="150" r="3" fill="currentColor"/>';
+      if(fig.chord!==false)body+=line(72.058,195,227.942,195)+text(150,216,'хорда');
+    }else if(fig.type==='angle'){
+      const d=fig.degrees;if(!positive(d)||d>=360)return '';const a=d*Math.PI/180,cx=150,cy=150;
+      body=line(cx,cy,260,cy)+line(cx,cy,cx+110*Math.cos(a),cy-110*Math.sin(a))+`<path d="M190 150A40 40 0 ${d>180?1:0} 0 ${cx+40*Math.cos(a)} ${cy-40*Math.sin(a)}"/>`+text(cx+65*Math.cos(a/2),cy-65*Math.sin(a/2),d+'°');
+    }else if(fig.type==='coord'||fig.type==='graph'){
+      const points=fig.points||[];if(!Array.isArray(points)||points.length>20||points.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)||Math.abs(p.x)>100||Math.abs(p.y)>100))return '';
+      const range=fig.type==='coord'?Math.max(5,...points.flatMap(p=>[Math.abs(p.x)+1,Math.abs(p.y)+1])):5;
+      const S=v=>150+v*120/range,Y=v=>150-v*120/range,step=Math.ceil(range/5);
+      for(let k=-Math.floor(range/step)*step;k<=range;k+=step){body+=`<g opacity=".18">${line(S(k),30,S(k),270)+line(30,Y(k),270,Y(k))}</g>`;if(k)body+=text(S(k),166,k)+text(137,Y(k)+4,k);}
+      body+=line(24,150,276,150)+line(150,276,150,24)+text(282,145,'x')+text(160,20,'y')+text(140,166,'0');
+      if(fig.type==='coord')points.forEach((p,i)=>body+=`<circle cx="${S(p.x)}" cy="${Y(p.y)}" r="4" fill="currentColor"/>`+text(S(p.x),Y(p.y)-10,p.label||String.fromCharCode(65+i)));
+      else{if(!['linear','quadratic'].includes(fig.kind)||![fig.a,fig.b,...(fig.kind==='quadratic'?[fig.c]:[])].every(n=>Number.isFinite(n)&&Math.abs(n)<=1000))return '';
+        if(fig.kind==='quadratic'&&fig.a===0)return '';const pts=[];for(let k=0;k<=200;k++){const x=-5+k/20,y=fig.kind==='quadratic'?fig.a*x*x+fig.b*x+fig.c:fig.a*x+fig.b;pts.push(`${x},${-y}`);}
+        body+=`<svg x="30" y="30" width="240" height="240" viewBox="-5 -5 10 10" overflow="hidden"><polyline points="${pts.join(' ')}" fill="none" stroke="var(--green,currentColor)" stroke-width="2.5" vector-effect="non-scaling-stroke"/></svg>`;}
+    }else return '';
+    const label=esc(describe(fig));return `<div class="figure"><svg viewBox="0 0 300 300" width="300" height="300" role="img" aria-label="${label}" style="max-width:100%;height:auto"><title>${label}</title><g fill="none" stroke="currentColor" stroke-width="2">${body}</g></svg></div>`;
+  }
 
   function barSvg(parts, shaded, { split = null, crossed = 0, y = 0, h = 44, label = null, width = W } = {}) {
     const w = width / parts;
@@ -47,6 +105,7 @@
   // Рисунок по описанию { type, ... } → HTML
   function figure(fig) {
     if (!fig) return '';
+    if(['triangle','right_triangle','circle_geo','angle','coord','graph'].includes(fig.type))return geometry(fig);
     const wrap = (vw, vh, label, inner) => `<div class="figure"><svg viewBox="0 0 ${vw} ${vh}" width="${vw}" height="${vh}" role="img" aria-label="${label}">${inner}</svg></div>`;
     switch (fig.type) {
       case 'labeled': return labeled(fig.n, fig.d);
@@ -98,6 +157,14 @@
     // синонимы, которые модель иногда пишет вместо названий из списка
     t = t.replace(/^(дробь|доля|полоса)\s/, 'полоска ').replace(/^(торт|пирог)\s/, 'круг ').replace(/^(отрезок|луч|числовая прямая)\s/, 'прямая ').replace(/^(сравни|сравнение)\s/, 'сравнить ');
     let m;
+    const tokens=t.split(/\s+/),kind=tokens.shift(),numbers=tokens.map(v=>v==='?'?null:Number(v));let geo=null;
+    if(['triangle','треугольник'].includes(kind)&&numbers.length===3)geo={type:'triangle',a:numbers[0],b:numbers[1],c:numbers[2],showAngles:true};
+    if(['right_triangle','прямоугольный_треугольник'].includes(kind)&&[2,3].includes(numbers.length))geo={type:'right_triangle',a:numbers[0],b:numbers[1],c:numbers[2]??null};
+    if(['circle_geo','окружность'].includes(kind)&&numbers.length===1)geo={type:'circle_geo',r:numbers[0]};
+    if(['angle','угол'].includes(kind)&&numbers.length===1)geo={type:'angle',degrees:numbers[0]};
+    if(['coord','координаты'].includes(kind)&&numbers.length>=2&&numbers.length<=40&&numbers.length%2===0)geo={type:'coord',points:numbers.filter((_,i)=>i%2===0).map((x,i)=>({x,y:numbers[i*2+1]}))};
+    if(['graph','график'].includes(kind)&&['linear','quadratic'].includes(tokens[0]))geo={type:'graph',kind:tokens[0],a:Number(tokens[1]),b:Number(tokens[2]),c:tokens[3]==null?0:Number(tokens[3])};
+    if(geo)return geometry(geo)?geo:null;
     if ((m = t.match(new RegExp(`^(подпиши|подписи|подписанная|части)\\s+${FR}$`))) && ok(+m[2], +m[3]) && +m[3] > 0) return { type: 'labeled', n: +m[2], d: +m[3] };
     if ((m = t.match(new RegExp(`^(полоска|bar)\\s+${FR}$`))) && ok(+m[2], +m[3]) && +m[2] <= +m[3]) return { type: 'bar', parts: +m[3], shaded: +m[2] };
     if ((m = t.match(new RegExp(`^(круг|пицца|circle)\\s+${FR}$`))) && ok(+m[2], +m[3], 16) && +m[2] <= +m[3]) return { type: 'circle', parts: +m[3], shaded: +m[2] };
@@ -150,5 +217,5 @@
     });
   }
 
-  window.VEKTOR_VISUALS = { f, figure, figureFromTag, labHtml, labBind, labeled };
+  window.VEKTOR_VISUALS = { f, figure, figureFromTag, describe, labHtml, labBind, labeled };
 })();
