@@ -36,7 +36,7 @@ class H(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         if self.path.startswith('/functions/v1/tutor'):
             data = self.rfile.read(int(self.headers['Content-Length'] or 0))
-            req = urllib.request.Request(f'http://127.0.0.1:{FN_PORT}/', data=data, headers={'Content-Type': 'application/json'})
+            req = urllib.request.Request(f'http://127.0.0.1:{FN_PORT}/', data=data, headers={'Content-Type': 'application/json', 'Origin': self.headers.get('Origin', '')})
             try: res = urllib.request.urlopen(req); code, out, ct = res.status, res.read(), res.headers.get('Content-Type')
             except urllib.error.HTTPError as e: code, out, ct = e.code, e.read(), 'application/json'
             self.send_response(code); self.send_header('Content-Type', ct); self.end_headers(); self.wfile.write(out); return
@@ -168,7 +168,7 @@ async def main():
             # ---------- ИИ-режимы (CL-8) ----------
             tok2 = j['token']
             def fn_call(payload):
-                r = urllib.request.Request(base + '/functions/v1/tutor', data=json.dumps(payload).encode(), headers={'Content-Type': 'application/json'})
+                r = urllib.request.Request(base + '/functions/v1/tutor', data=json.dumps(payload).encode(), headers={'Content-Type': 'application/json', 'Origin': base})
                 try:
                     with urllib.request.urlopen(r) as x: return x.status, x.read().decode()
                 except urllib.error.HTTPError as e: return e.code, e.read().decode()
@@ -196,7 +196,7 @@ async def main():
             rep('поток: расход из usage записан', await_spend >= 0.00014 * 3 - 1e-9, str(await_spend))
             psql("update vk_settings set value = value || '{\"usd_day\": 0}' where key = 'ai'")
             code, out = fn_call({'token': tok2, 'messages': [{'role': 'user', 'content': 'помоги'}]})
-            rep('дневной бюджет в $ исчерпан → тихий режим (503)', code == 503 and 'budget' in out, out[:100])
+            rep('дневной бюджет исчерпан → спокойное сообщение (429)', code == 429 and 'budget' in out, out[:100])
             psql("update vk_settings set value = value || '{\"usd_day\": 3}' where key = 'ai'")
             try: psql("set role anon; select vk_ai_cache_put('k', '{}')"); rep('служебные ИИ-функции закрыты', False)
             except RuntimeError: rep('служебные ИИ-функции закрыты', True)

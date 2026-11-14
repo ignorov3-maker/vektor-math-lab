@@ -14,14 +14,21 @@ const PRICE: Record<string, [number, number]> = { [FALLBACK]: [0.10, 0.40] };
 const priceOf = (m: string) => PRICE[m] || [0.10, 0.30];
 const CEIL: Record<string, number> = { classify: 120, explain_more: 300 };
 
-const cors = {
-  'Access-Control-Allow-Origin': '*',
+const CORS = {
+  'Vary': 'Origin',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info',
   'Access-Control-Max-Age': '86400',
 };
-const json = (status: number, code: string, message: string) =>
-  new Response(JSON.stringify({ error: { code: status, type: code, message } }), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
+export function allowedOrigin(origin: string | null): boolean {
+  if (!origin || origin === 'null') return false;
+  try { if (new URL(origin).origin !== origin) return false; } catch { return false; }
+  const origins = (Deno.env.get('ALLOWED_ORIGINS') || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (origins.includes(origin)) return true;
+  const pattern = Deno.env.get('PREVIEW_ORIGIN_RE');
+  try { return origin.startsWith('https://') && !!pattern && new RegExp(`^(?:${pattern})$`).test(origin); }
+  catch { return false; }
+}
 
 // И-02: личные данные из текста ребёнка
 export function scrub(s: string): string {
@@ -94,7 +101,12 @@ async function sha256(s: string) {
   return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-Deno.serve(async (req) => {
+export async function handle(req: Request): Promise<Response> {
+  const origin = req.headers.get('Origin');
+  if (!allowedOrigin(origin)) return new Response('Forbidden origin', { status: 403, headers: { Vary: 'Origin' } });
+  const cors = { ...CORS, 'Access-Control-Allow-Origin': origin! };
+  const json = (status: number, code: string, message: string) =>
+    new Response(JSON.stringify({ error: { code: status, type: code, message } }), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
   if (req.method !== 'POST') return json(405, 'method', 'Only POST');
 
@@ -220,4 +232,5 @@ Deno.serve(async (req) => {
     status: up.status,
     headers: { ...cors, 'Content-Type': up.headers.get('Content-Type') || 'text/event-stream', 'Cache-Control': 'no-cache' },
   });
-});
+}
+Deno.serve(handle);
