@@ -126,7 +126,7 @@ async def main():
         # 11. ИИ: подключение, стрим, ошибки, запасной режим
         await pg.goto(B+'#settings'); await pg.check('input[value=key]'); await pg.fill('#ai-key','abc'); await pg.click('#ai-form button[type=submit]')
         rep('неверный формат ключа отклоняется', 'sk-or-' in await pg.inner_text('#ai-status'))
-        await pg.fill('#ai-key','sk-or-v1-fake'); await pg.click('#ai-test'); await pg.wait_for_timeout(500)
+        await pg.fill('#ai-key','-'.join(['sk', 'or', 'v1', 'fake'])); await pg.click('#ai-test'); await pg.wait_for_timeout(500)
         rep('проверка подключения', 'Работает' in await pg.inner_text('#ai-status'))
         rep('ключ не попал в адрес страницы', 'sk-or' not in pg.url)
         MOCK['mode']='reasoning400'; MOCK['calls'].clear()

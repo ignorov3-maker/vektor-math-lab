@@ -1046,7 +1046,7 @@ function settings() {
           <label><input type="radio" name="mode" value="key"${ai.mode === 'key' ? ' checked' : ''}> Мой ключ OpenRouter в этом браузере</label>
           <label><input type="radio" name="mode" value="proxy"${ai.mode === 'proxy' ? ' checked' : ''}> Свой сервер-прокси (ключ хранится на сервере)</label>
         </fieldset>
-        <label class="field" data-show="key">Ключ OpenRouter<input type="password" name="key" id="ai-key" value="${esc(ai.key)}" placeholder="sk-or-v1-…" spellcheck="false"></label>
+        <label class="field" data-show="key">Ключ OpenRouter<input type="password" name="key" id="ai-key" value="${esc(ai.key)}" placeholder="Ключ из настроек OpenRouter" spellcheck="false"></label>
         <label class="field" data-show="proxy">Адрес прокси<input type="url" name="proxy" id="ai-proxy" value="${esc(ai.proxy)}" placeholder="https://vektor-tutor.имя.workers.dev"></label>
         <label class="field" data-show="key proxy">Модель<select name="model" id="ai-model">${T.MODELS.map(m => `<option value="${m.id}"${ai.model === m.id ? ' selected' : ''}>${m.name}</option>`).join('')}</select></label>
         <div class="row-actions">

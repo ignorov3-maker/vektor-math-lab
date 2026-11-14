@@ -18,6 +18,7 @@ jobs:
 
       - name: Юнит-тесты
         run: |
+          node tests/secrets.test.js
           node tests/generators.test.js
           node tests/tutor.test.js
           node tests/game.test.js
