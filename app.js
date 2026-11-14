@@ -1124,6 +1124,7 @@ function render() {
   app.innerHTML = ({ home, map: () => mapPage(filterState.map), diagnostic, library: () => library(filterState.library), awards, teacher, settings, lesson: () => lessonPage(i, lessonStage), warmup: warmupPage })[page]();
   bind(page, i, lessonStage);
   if(page==='settings'&&SERVER&&window.VEKTOR_PROFILE)window.VEKTOR_PROFILE.mount();
+  if(page==='home'&&SERVER&&window.VEKTOR_ASSIGNMENTS)window.VEKTOR_ASSIGNMENTS.mount(topics);
   bindInterests(app);
   mountPetsAndCollection(page, lessonStage);
   if (page === 'warmup') runWarmup();

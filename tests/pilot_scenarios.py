@@ -1,5 +1,29 @@
 """Проверки новых RPC пилота на изолированной БД из supabase_scenarios.py."""
 def run(psql, rep):
+    rep('CX-21: группы до шести, свои ученики, задание и отзыв отчёта', psql(r"""
+begin;
+do $$
+declare a int;b int;s int;t text;bt text;st text;ids jsonb:='[]';gid int;i int;r jsonb;report jsonb;
+begin
+ insert into vk_adults(role,email,pass_hash) values('tutor','cx21@example.invalid','test') returning id into a;
+ insert into vk_adults(role,email,pass_hash) values('tutor','cx21b@example.invalid','test') returning id into b;
+ t:=vk_new_session('tutor',a);bt:=vk_new_session('tutor',b);
+ for i in 1..7 loop r:=vektor_adult_create_student(t,'Ученик '||i);s:=(r->>'student_id')::int;ids:=ids||to_jsonb(s);end loop;
+ if vektor_tutor_group(t,'Семь',ids)->>'error'<>'group' then raise exception 'seventh member';end if;
+ ids:=ids-6;r:=vektor_tutor_group(t,'Шесть',ids);gid:=(r->>'id')::int;
+ begin perform vektor_tutor_child(bt,s);raise exception 'foreign child';exception when sqlstate 'P0403' then null;end;
+ begin perform vektor_tutor_pulse(bt,gid);raise exception 'foreign group';exception when sqlstate 'P0403' then null;end;
+ r:=vektor_tutor_assign(t,'concept',now()+interval '1 day','[]',gid);
+ st:=vk_new_session('student',(ids->>0)::int);
+ if jsonb_array_length(vektor_student_assignments(st))<>1 then raise exception 'assignment absent';end if;
+ report:=vektor_tutor_report(t,s);
+ r:=vektor_shared_report(report->>'token');if r ? 'student_id' or r ? 'label' then raise exception 'share identity';end if;
+ perform vektor_tutor_revoke_report(t,(report->>'id')::int);
+ begin perform vektor_shared_report(report->>'token');raise exception 'revoked report';exception when sqlstate 'P0403' then null;end;
+ if has_table_privilege('anon','vk_shared_reports','select') then raise exception 'report tokens';end if;
+end $$;
+rollback;select 'OK';
+""").endswith('OK'))
     rep('CX-20: карточка по событиям, чужой ребёнок, сброс и отвязка', psql(r"""
 begin;
 do $$

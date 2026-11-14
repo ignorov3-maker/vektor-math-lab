@@ -75,5 +75,5 @@
     if(sess?.token)await cabinet();else loginForm();
   }
   // Следующий локальный модуль успевает подключить кабинет до первого рендера.
-  setTimeout(init,0);
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();

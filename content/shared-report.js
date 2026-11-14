@@ -1,0 +1,5 @@
+(async()=>{
+ const params=new URLSearchParams(location.hash.slice(1)),token=params.get('share');if(!token){document.getElementById('report-app').textContent='Для просмотра откройте ссылку, которую вам передал репетитор.';return;}
+ history.replaceState(null,'',location.pathname);const cfg=window.VEKTOR_CONFIG,root=document.getElementById('report-app');
+ try{const r=await fetch(cfg.supabaseUrl.replace(/\/+$/,'')+'/rest/v1/rpc/vektor_shared_report',{method:'POST',headers:{'Content-Type':'application/json',apikey:cfg.supabaseKey,Authorization:'Bearer '+cfg.supabaseKey},body:JSON.stringify({p_token:token})});const j=await r.json();if(!r.ok||j.error)throw Error('Ссылка устарела, отозвана или недоступна');root.innerHTML='<h2>Последние 7 дней</h2>';for(const [label,value] of [['Дней занятий',j.days.length],['Верных ответов',j.solved],['Время решения, секунд',j.seconds],['Правил разбирали',j.rules.length]]){const p=document.createElement('p');p.textContent=label+': '+value;root.append(p);}const b=document.createElement('button');b.textContent='Печать / PDF';b.onclick=()=>window.print();root.append(b);}catch(e){root.textContent=e.message;}
+})();
