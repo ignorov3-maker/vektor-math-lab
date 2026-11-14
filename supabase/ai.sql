@@ -27,6 +27,9 @@ begin
   if spent >= coalesce((cfg->>'usd_day')::numeric, 3) then return jsonb_build_object('ok', false, 'reason', 'budget'); end if;
   rate := (cfg->>'rub_per_usd')::numeric;
   student_cap := coalesce((cfg->>'rub_student_day')::numeric, (cfg->>'usd_day')::numeric * rate);
+  if to_regprocedure('vk_limits(text,integer)') is not null then
+    student_cap := coalesce((vk_limits('student', uid)->>'rub_student_day')::numeric, student_cap);
+  end if;
   day_cap := coalesce((cfg->>'rub_day')::numeric, (cfg->>'usd_day')::numeric * rate);
   select coalesce(sum(usd), 0) into student_spent from vk_ai_usage where day = current_date and student_id = uid;
   if rate > 0 and student_spent * rate >= student_cap then return jsonb_build_object('ok', false, 'reason', 'student_budget'); end if;

@@ -1,5 +1,24 @@
 """Проверки новых RPC пилота на изолированной БД из supabase_scenarios.py."""
 def run(psql, rep):
+    rep('CX-17: pilot, истёкшая подписка и лимит тарифа', psql(r"""
+begin;
+do $$
+declare s int; t text;
+begin
+  insert into vk_students(login,pass_hash) values('cx17','test') returning id into s;
+  update vk_plans set limits='{"rub_student_day":5}' where code='pilot';
+  if vk_limits('student',s)->>'rub_student_day'<>'5' then raise exception 'pilot fallback'; end if;
+  insert into vk_plans values('test-plan','test','{"rub_student_day":1}');
+  insert into vk_subscriptions(owner_kind,owner_id,plan,starts,ends,source) values('student',s,'test-plan',now()-interval '2 days',now()-interval '1 day','manual');
+  if vk_limits('student',s)->>'rub_student_day'<>'5' then raise exception 'expired plan'; end if;
+  insert into vk_subscriptions(owner_kind,owner_id,plan,source) values('student',s,'test-plan','manual');
+  perform vk_ai_set(true,100,1000,100,100,100);
+  perform vk_ai_spend(s,1,1,0.01); t:=vk_new_session('student',s);
+  if vk_ai_take(t)->>'reason'<>'student_budget' then raise exception 'plan ignored'; end if;
+  if has_function_privilege('anon','vk_limits(text,integer)','execute') then raise exception 'foreign limits'; end if;
+end $$;
+rollback;select 'OK';
+""").endswith('OK'))
     sql = r"""
 begin;
 do $$
