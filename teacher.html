@@ -183,6 +183,7 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
   <span class="live" id="live" hidden><i></i><span></span></span>
   <span class="who" id="who"></span>
   <button class="btn btn-sm" id="logout" hidden>Выйти</button>
+  <button class="btn btn-sm" id="logout-all" hidden>Выйти со всех устройств</button>
 </header>
 <main id="root"></main>
 <script src="config.js"></script>
@@ -234,7 +235,7 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
   /* ---------- вход (К-12) ---------- */
   function loginView(msg) {
     clearInterval(timer); clearInterval(ticker);
-    ['logout', 'tabs', 'cls', 'live'].forEach(id => $(id).hidden = true); $('who').textContent = '';
+    ['logout', 'logout-all', 'tabs', 'cls', 'live'].forEach(id => $(id).hidden = true); $('who').textContent = '';
     if (!SB) { root.innerHTML = '<div class="login"><h1>Сервер не подключён</h1><p class="muted">Кабинет работает с сервером Supabase. Заполните config.js.</p></div>'; return; }
     root.innerHTML = `<div class="login"><h1>Вход для учителя</h1><p class="muted" style="margin:0">Логин и пароль выдал администратор пилота.</p>
       <form id="f"><label>Логин<input name="login" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
@@ -633,6 +634,8 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
     labels = ls.get(LKEY()) || {};
     $('who').textContent = sess.name || ''; $('logout').hidden = false; $('tabs').hidden = false;
     $('logout').onclick = async () => { try { await rpc('vektor_logout', { p_token: sess.token }); } catch {} sessionStorage.removeItem(KEY); sess = null; loginView(); };
+    $('logout-all').hidden=false;
+    $('logout-all').onclick=async()=>{try{await rpc('vektor_logout_all',{p_token:sess.token});sessionStorage.removeItem(KEY);sess=null;loginView();}catch(e){$('who').textContent=e.message;}};
     $('cls').onchange = () => { ui.cls = $('cls').value; ls.set('vektor-teacher-cls', ui.cls); ui.only = ''; $('tests')._h = null; $('logins')._h = null; paint(); };
     document.querySelectorAll('#tabs [data-tab]').forEach(b => b.onclick = () => tab(b.dataset.tab));
     shell(); root.querySelector('[data-pane=class]').insertAdjacentHTML('afterbegin', '');

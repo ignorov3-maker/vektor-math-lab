@@ -48,6 +48,7 @@
     if (b.dataset.mode) {mode=b.dataset.mode;loginForm();}
     if (b.dataset.legal) {try{const r=await fetch('legal/'+b.dataset.legal+'.md');if(!r.ok)throw Error(); const el=document.getElementById('legal-text');el.innerHTML='<pre></pre>';el.firstChild.textContent=await r.text();}catch{message('Текст пока недоступен',true);}}
     if (b.hasAttribute('data-logout')) {try{await rpc('vektor_logout',{p_token:sess.token});}catch{} localStorage.removeItem('vektor-adult');sess=null;mode='login';loginForm();}
+    if (b.hasAttribute('data-logout-all')) {b.disabled=true;try{await rpc('vektor_logout_all',{p_token:sess.token});localStorage.removeItem('vektor-adult');sess=null;mode='login';loginForm();}catch(e){message(e.message,true);b.disabled=false;}}
   });
   host.addEventListener('submit',async e=>{
     if(e.target.id!=='adult-form')return;e.preventDefault();const f=e.target, b=f.querySelector('[type=submit]');b.disabled=true;

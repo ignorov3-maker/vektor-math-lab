@@ -35,7 +35,9 @@ end $$;
 create or replace function vektor_adult_reset_student(p_token text,p_student int) returns jsonb language plpgsql security definer
 set search_path=public,extensions as $$ declare uid int:=vk_adult_auth(p_token);pass text:=vk_password();l text;begin
  if not vk_can_see(uid,p_student) then raise exception 'forbidden' using errcode='P0403';end if;
+ perform set_config('vektor.password_action','password_reset',true);
  update vk_students set pass_hash=crypt(pass,gen_salt('bf',8)),password_custom=false,fails=0,locked_until=null where id=p_student returning login into l;
+ perform set_config('vektor.password_action','',true);
  delete from vk_sessions where role='student' and user_id=p_student;
  return jsonb_build_object('ok',true,'login',l,'password',pass);
 end $$;

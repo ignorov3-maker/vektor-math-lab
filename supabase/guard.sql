@@ -62,7 +62,7 @@ declare r jsonb;
 begin
   if not vk_guard_start(p_device) then return jsonb_build_object('error','too_many','message','Слишком много попыток. Попробуйте через 10 минут'); end if;
   r := vk_teacher_login_legacy(p_login,p_password);
-  perform vk_guard_log(lower(btrim(p_login)),p_device,r ? 'token');
+  perform vk_guard_log(lower(btrim(p_login)),p_device,r ? 'token','teacher');
   return r;
 end $$;
 create or replace function vk_cleanup() returns void language plpgsql security definer

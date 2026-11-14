@@ -9,6 +9,16 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ['127.0.0.1:5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      VEKTOR_PG: host=127.0.0.1 port=5432 user=postgres
     steps:
       - uses: actions/checkout@v4
 
@@ -31,10 +41,13 @@ jobs:
           node tests/tone.test.js
           node tests/stories.test.js
           node tests/program.test.js
+          node tests/geometry.test.js
 
       - uses: oven-sh/setup-bun@v2
       - name: ИИ-режимы серверной функции
-        run: bun tests/ai_modes.test.ts
+        run: |
+          bun tests/ai_modes.test.ts
+          bun tests/mail.test.ts
 
       - uses: actions/setup-python@v5
         with:
@@ -47,7 +60,7 @@ jobs:
 
       - name: Сервер (PHP + SQLite)
         run: |
-          sudo apt-get install -y php-cli php-sqlite3 php-mbstring >/dev/null
+          sudo apt-get install -y php-cli php-sqlite3 php-mbstring postgresql-client >/dev/null
           python tests/server_scenarios.py
 
       - name: Сценарии в браузере
@@ -59,3 +72,4 @@ jobs:
           run codex_visual
           run tour_scenario
           run e2e_scenarios && grep -q "ИТОГО: \([0-9]*\) из \1$" e2e_scenarios.log
+          run supabase_scenarios

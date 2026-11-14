@@ -114,10 +114,10 @@ language plpgsql security definer set search_path=public,extensions as $$ declar
   if a.id is null or octet_length(p_password)>72 or a.pass_hash is distinct from crypt(coalesce(p_password,''),a.pass_hash) then
     update vk_adults set fails=case when fails+1>=5 then 0 else fails+1 end,
       locked_until=case when fails+1>=5 then now()+interval '5 minutes' else null end where id=a.id;
-    perform vk_guard_log(v_email,p_device,false);
+    perform vk_guard_log(v_email,p_device,false,coalesce(a.role,'adult'));
     return jsonb_build_object('error','bad_login','message','Неверная почта или пароль');
   end if;
-  perform vk_guard_log(v_email,p_device,true);
+  perform vk_guard_log(v_email,p_device,true,a.role);
   if a.email_verified_at is null then return jsonb_build_object('error','unverified','message','Сначала подтвердите почту'); end if;
   update vk_adults set fails=0,locked_until=null where id=a.id;
   return jsonb_build_object('token',vk_new_session(a.role,a.id),'role',a.role,'name',a.name);
@@ -135,7 +135,9 @@ set search_path=public,extensions as $$ declare a int; begin
   update vk_mail_tokens set used_at=now() where token_hash=encode(digest(coalesce(p_token,''),'sha256'),'hex')
     and purpose='adult_reset' and used_at is null and expires>now() returning adult_id into a;
   if a is null then return jsonb_build_object('error','token','message','Ссылка недействительна или устарела'); end if;
+  perform set_config('vektor.password_action','password_reset',true);
   update vk_adults set pass_hash=crypt(p_password,gen_salt('bf',10)),fails=0,locked_until=null where id=a;
+  perform set_config('vektor.password_action','',true);
   delete from vk_sessions where role in ('parent','tutor') and user_id=a;
   return jsonb_build_object('ok',true);
 end $$;
@@ -208,7 +210,9 @@ set search_path=public,extensions as $$ declare uid int; begin
   update vk_mail_tokens set used_at=now() where token_hash=encode(digest(coalesce(p_token,''),'sha256'),'hex') and purpose='student_reset'
     and used_at is null and expires>now() returning student_id into uid;
   if uid is null then return jsonb_build_object('error','token','message','Ссылка недействительна или устарела'); end if;
+  perform set_config('vektor.password_action','password_reset',true);
   update vk_students set pass_hash=crypt(p_password,gen_salt('bf',10)),password_custom=true,password_offered=true,fails=0,locked_until=null where id=uid;
+  perform set_config('vektor.password_action','',true);
   delete from vk_sessions where role='student' and user_id=uid;return '{"ok":true}'::jsonb;
 end $$;
 create or replace function vektor_link_code(p_token text) returns jsonb language plpgsql security definer

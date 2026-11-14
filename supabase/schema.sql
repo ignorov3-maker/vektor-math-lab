@@ -41,7 +41,9 @@ language plpgsql security definer set search_path = public, extensions as $$
 declare t text := encode(gen_random_bytes(32), 'hex');
 begin
   delete from vk_sessions where expires < now();
-  insert into vk_sessions values (encode(digest(t, 'sha256'), 'hex'), p_role, p_uid, now() + interval '12 hours');
+  if p_role not in ('student','parent','tutor','teacher') then raise exception 'invalid_role'; end if;
+  insert into vk_sessions values (encode(digest(t, 'sha256'), 'hex'), p_role, p_uid, now() + make_interval(days=>coalesce(
+    (select (value->>case when p_role='student' then 'student_days' when p_role='teacher' then 'teacher_days' else 'adult_days' end)::int from vk_settings where key='sessions'),case when p_role='student' then 30 else 14 end)));
   return t;
 end $$;
 
@@ -52,6 +54,8 @@ begin
   select * into s from vk_sessions where token_hash = encode(digest(coalesce(p_token, ''), 'sha256'), 'hex');
   if s is null or s.expires < now() then raise exception 'no_session' using errcode = 'P0401'; end if;
   if s.role <> p_role then raise exception 'forbidden' using errcode = 'P0403'; end if;
+  perform set_config('vektor.actor_role',s.role,true);
+  perform set_config('vektor.actor_id',s.user_id::text,true);
   return s.user_id;
 end $$;
 

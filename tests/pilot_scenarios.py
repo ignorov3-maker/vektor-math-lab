@@ -1,5 +1,31 @@
 """Проверки новых RPC пилота на изолированной БД из supabase_scenarios.py."""
 def run(psql, rep):
+    rep('CX-23: срок сессий, общий выход, журнал действий без секретов', psql(r"""
+begin;
+do $$
+declare a int;s int;t text;at text;other text;roles text[];r text;
+begin
+ insert into vk_adults(role,email,pass_hash) values('parent','cx23@example.invalid','test') returning id into a;
+ insert into vk_students(login,pass_hash) values('cx23',extensions.crypt('oldpass',extensions.gen_salt('bf',4))) returning id into s;
+ t:=vk_new_session('student',s);other:=vk_new_session('student',s);at:=vk_new_session('parent',a);
+ if not exists(select 1 from vk_sessions where token_hash=encode(extensions.digest(t,'sha256'),'hex') and expires between now()+interval '29 days' and now()+interval '31 days') then raise exception 'student TTL';end if;
+ if not exists(select 1 from vk_sessions where token_hash=encode(extensions.digest(at,'sha256'),'hex') and expires between now()+interval '13 days' and now()+interval '15 days') then raise exception 'adult TTL';end if;
+ perform vektor_student_set_login(t,'cx23new');perform vektor_student_set_password(t,'oldpass','newpass');
+ perform vektor_login('cx23new','wrong','audit-device');
+ insert into vk_links values(s,a,'parent',now());
+ perform vektor_adult_reset_student(at,s);perform vektor_adult_unlink(at,s);perform vk_ai_set(false);
+ t:=vk_new_session('student',s);other:=vk_new_session('student',s);perform vektor_logout_all(t);
+ begin perform vk_auth(other,'student');raise exception 'logout all';exception when sqlstate 'P0401' then null;end;
+ update vk_sessions set expires=now()-interval '1 second' where token_hash=encode(extensions.digest(at,'sha256'),'hex');
+ begin perform vk_adult_auth(at);raise exception 'expired session';exception when sqlstate 'P0401' then null;end;
+ foreach r in array array['login','login_failed','password_change','login_change','link_child','unlink_child','password_reset','limits_change','logout_all'] loop
+   if not exists(select 1 from vk_audit where action=r) then raise exception 'missing audit %',r;end if;
+ end loop;
+ if exists(select 1 from vk_audit where target like '%oldpass%' or target like '%newpass%' or target=t) then raise exception 'secret in audit';end if;
+ if has_table_privilege('anon','vk_audit','select') then raise exception 'audit open';end if;
+end $$;
+rollback;select 'OK';
+""").endswith('OK'))
     rep('CX-22: стоимость по темам и исторический курс', psql(r"""
 begin;
 do $$declare s int;r jsonb;begin

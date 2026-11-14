@@ -82,7 +82,7 @@ async def main():
         psql("do $$ begin create role anon nologin; exception when duplicate_object then null; end $$;"
              "do $$ begin create role authenticated nologin; exception when duplicate_object then null; end $$;")
         subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase/schema.sql')], check=True, capture_output=True)
-        for f in ('test.sql', 'admin.sql', 'teacher.sql', 'pulse.sql', 'ai.sql', 'guard.sql', 'accounts.sql', 'plans.sql', 'parent.sql', 'tutor_cabinet.sql'):
+        for f in ('test.sql', 'admin.sql', 'teacher.sql', 'pulse.sql', 'ai.sql', 'guard.sql', 'accounts.sql', 'plans.sql', 'parent.sql', 'tutor_cabinet.sql', 'audit.sql'):
             subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase' / f)], check=True, capture_output=True)
         rep('схема накатывается повторно', True)
         rep('vk_seed: 80 профилей с паролями', psql("select count(*) from vk_seed(80, '5А:1-28,5Б:29-56,5В:57-80') where password ~ '^[а-я]+[0-9]{4}$'") == '80')
@@ -141,7 +141,7 @@ async def main():
             user_txt = ' '.join(m['content'] for m in last['body']['messages'] if m['role'] == 'user')
             sys_txt = ' '.join(m['content'] for m in last['body']['messages'] if m['role'] == 'system')
             rep('ключ модели — только на сервере', last['auth'] == 'Bearer sk-test' and 'token' not in last['body'])
-            rep('телефон вырезан из текста ребёнка', '916' not in user_txt and 'номер скрыт' in user_txt, user_txt[:80])
+            rep('телефон вырезан из текста ребёнка', '916' not in user_txt and '[скрыто]' in user_txt, user_txt[:80])
             rep('имя ученика не уходит в модель', 'Ученик 1' not in sys_txt and 'зовут' not in sys_txt)
             await pg.fill('#chat-in-task', 'ты сука тупая'); await pg.click('.chat-task .chat-form button[type=submit]'); await pg.wait_for_timeout(1500)
             _log = await pg.inner_text('.chat-task .chat-log'); rep('модерация: мягкий ответ ребёнку', 'вернёмся к математике' in _log, _log[-200:])
