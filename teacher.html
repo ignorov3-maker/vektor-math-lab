@@ -247,7 +247,9 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
       e.preventDefault(); $('m').textContent = '';
       const b = f.querySelector('button'); b.disabled = true;
       try {
-        const r = await rpc('vektor_teacher_login', { p_login: f.login.value, p_password: f.password.value });
+        let device;
+        try { device = JSON.parse(localStorage.getItem('vektor-device')); if (!device) { device = crypto.randomUUID(); localStorage.setItem('vektor-device', JSON.stringify(device)); } } catch { device = crypto.randomUUID(); }
+        const r = await rpc('vektor_teacher_login', { p_login: f.login.value, p_password: f.password.value, p_device: device });
         sess = { token: r.token, name: r.name || f.login.value, login: f.login.value.trim().toLowerCase() }; sessionStorage.setItem(KEY, JSON.stringify(sess)); start();
       } catch (err) { $('m').textContent = err.message; b.disabled = false; }
     };

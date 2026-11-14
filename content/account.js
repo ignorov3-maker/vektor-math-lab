@@ -16,7 +16,7 @@
   const CFG = window.VEKTOR_CONFIG || {};
   const SB = CFG.supabaseUrl && CFG.supabaseKey ? CFG.supabaseUrl.replace(/\/+$/, '') : '';
   const RPC = {
-    login: b => ['vektor_login', { p_login: b.login, p_password: b.password }],
+    login: b => ['vektor_login', { p_login: b.login, p_password: b.password, p_device: deviceId() }],
     logout: (b, t) => ['vektor_logout', { p_token: t }],
     state: (b, t) => ['vektor_state', { p_token: t }],
     sync: (b, t) => ['vektor_sync', { p_token: t, p_state: b.state ?? null, p_events: b.events || [] }],
@@ -25,7 +25,12 @@
     test_finish: (b, t) => ['vektor_test_finish', { p_token: t }],
     push_get: (b, t) => ['vektor_push_get', { p_token: t }],
   };
-  const STATUS = { bad_login: 401, no_session: 401, locked: 429, layout: 400, forbidden: 403, too_large: 413 };
+  function deviceId() {
+    let id = ls.get('vektor-device');
+    if (!id) { id = crypto.randomUUID(); ls.set('vektor-device', id); }
+    return id;
+  }
+  const STATUS = { bad_login: 401, no_session: 401, locked: 429, too_many: 429, layout: 400, forbidden: 403, too_large: 413 };
 
   async function call(r, body, token) {
     if (SB) {

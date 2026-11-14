@@ -25,3 +25,26 @@ rollback;
 select 'OK';
 """
     rep('CX-13: рублёвые лимиты, отдельный ученик, общий бюджет и права', psql(sql).endswith('OK'))
+    rep('CX-14: перебор по устройству, школьный IP, старые логины и очистка', psql(r"""
+begin;
+do $$
+declare r jsonb; i int;
+begin
+  perform set_config('request.headers','{"x-forwarded-for":"192.0.2.10, 10.0.0.1"}',true);
+  for i in 1..10 loop r := vektor_login('нет'||i,'wrong','probe-device'); end loop;
+  if vektor_login('нет11','wrong','probe-device')->>'error' <> 'too_many' then raise exception 'device guard'; end if;
+  insert into vk_students(login,pass_hash) values('тестзащиты',extensions.crypt('пароль123',extensions.gen_salt('bf',4)));
+  for i in 1..30 loop
+    r := vektor_login('тестзащиты','пароль123','valid-device');
+    if not r ? 'token' then raise exception 'valid login %: %',i,r; end if;
+  end loop;
+  if vk_ip_hash() is null or vk_ip_hash() = '192.0.2.10' then raise exception 'raw IP'; end if;
+  if has_function_privilege('anon','vk_login_legacy(text,text)','execute') then raise exception 'guard bypass'; end if;
+  if has_function_privilege('anon','vk_cleanup()','execute') then raise exception 'cleanup open'; end if;
+  insert into vk_login_attempts(ts,ok) values(now()-interval '31 days',false);
+  perform vk_cleanup();
+  if exists(select 1 from vk_login_attempts where ts<now()-interval '30 days') then raise exception 'cleanup'; end if;
+end $$;
+rollback;
+select 'OK';
+""").endswith('OK'))
