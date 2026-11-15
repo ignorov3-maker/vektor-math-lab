@@ -13,7 +13,8 @@
     if (!cfg.supabaseUrl || !cfg.supabaseKey) throw Error('Сервер пока не подключён');
     const r = await fetch(cfg.supabaseUrl.replace(/\/+$/,'')+'/rest/v1/rpc/'+fn,{method:'POST',headers:{'Content-Type':'application/json',apikey:cfg.supabaseKey,Authorization:'Bearer '+cfg.supabaseKey},body:JSON.stringify(args)});
     const j = await r.json();
-    if (!r.ok || j?.error) throw Error(j?.message || (/no_session/.test(j?.message||'') ? 'Войдите заново' : 'Не удалось выполнить запрос'));
+    if(!r.ok)throw Error(/no_session/.test(j?.message||'')?'Войдите заново':/maintenance/.test(j?.message||'')?'Технические работы. Попробуйте немного позже':/forbidden/.test(j?.message||'')?'Нет доступа к этому ученику':'Сервис временно недоступен. Попробуйте позже');
+    if(j?.error)throw Error(j.message||'Не удалось выполнить запрос');
     return j;
   }
   function device() { let id; try { id=JSON.parse(localStorage.getItem('vektor-device')); if (!id) {id=crypto.randomUUID();localStorage.setItem('vektor-device',JSON.stringify(id));} } catch {id=crypto.randomUUID();} return id; }
@@ -31,8 +32,9 @@
     if ((registering && publicCfg.signup_open)||reset) mountCaptcha();
   }
   function mountCaptcha() {
-    if (!cfg.smartCaptchaSiteKey) {message('Проверка капчи пока не подключена');host.querySelector('[type=submit]').disabled=true;return;}
-    const render=()=>window.smartCaptcha.render('adult-captcha',{sitekey:cfg.smartCaptchaSiteKey,callback:t=>{captchaToken=t;}});
+    const sitekey=publicCfg.captcha_site_key;
+    if (!sitekey) {message('Проверка капчи пока не подключена');host.querySelector('[type=submit]').disabled=true;return;}
+    const render=()=>window.smartCaptcha.render('adult-captcha',{sitekey,callback:t=>{captchaToken=t;}});
     if (window.smartCaptcha) {render();return;}
     window.vektorCaptchaReady=render;
     let script=document.createElement('script');script.src='https://smartcaptcha.cloud.yandex.ru/captcha.js?render=onload&onload=vektorCaptchaReady';script.async=true;script.onerror=()=>message('Не удалось загрузить капчу',true);document.head.append(script);

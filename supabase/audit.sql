@@ -61,3 +61,17 @@ create or replace function vk_cleanup() returns void language plpgsql security d
 end $$;
 revoke execute on function vk_audit_log(text,int,text,text),vk_audit_session(),vk_guard_log(text,text,boolean,text),vk_audit_account(),vk_audit_link(),vk_audit_limits(),vektor_logout_all(text),vk_cleanup() from public,anon,authenticated;
 grant execute on function vektor_logout_all(text) to anon,authenticated;
+
+-- При финальном dump замораживаются также изменения аккаунтов и связей из старых вкладок.
+create or replace function vk_maintenance_guard() returns trigger language plpgsql security definer set search_path=public,extensions as $$begin
+ if current_setting('role',true) in('anon','authenticated') and coalesce((select value='true'::jsonb from vk_settings where key='maintenance'),false)
+ then raise exception 'maintenance' using errcode='P0503';end if;
+ if tg_op='DELETE' then return old;else return new;end if;
+end $$;
+revoke execute on function vk_maintenance_guard() from public,anon,authenticated;
+do $$declare t text;begin
+ for t in select c.relname from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and c.relname like 'vk_%' loop
+  execute format('drop trigger if exists vk_maintenance_before_write on public.%I',t);
+  execute format('create trigger vk_maintenance_before_write before insert or update or delete on public.%I for each row execute function vk_maintenance_guard()',t);
+ end loop;
+end $$;

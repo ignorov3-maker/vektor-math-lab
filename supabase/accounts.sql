@@ -78,7 +78,8 @@ end $$;
 create or replace function vektor_public_config() returns jsonb language sql stable security definer
 set search_path=public,extensions as $$
  select jsonb_build_object('signup_open',coalesce((select value='true'::jsonb from vk_settings where key='signup_open'),false),
-   'consent_version',(select value->>'version' from vk_settings where key='consent')) $$;
+   'consent_version',(select value->>'version' from vk_settings where key='consent'),
+   'captcha_site_key',(select value->>'captcha_site_key' from vk_settings where key='site')) $$;
 create or replace function vektor_adult_register(p_email text,p_password text,p_role text,p_consent_version text,p_captcha text) returns jsonb
 language plpgsql security definer set search_path=public,extensions as $$
 declare a int; cfg jsonb; v_email text:=lower(btrim(p_email));
@@ -126,7 +127,8 @@ create or replace function vektor_adult_reset_request(p_email text,p_captcha tex
 set search_path=public,extensions as $$ declare a vk_adults; begin
   if not coalesce((vk_mail('captcha',jsonb_build_object('token',p_captcha))->>'ok')::boolean,false) then return jsonb_build_object('error','captcha','message','Пройдите проверку капчи'); end if;
   select * into a from vk_adults where email=lower(btrim(p_email)) and email_verified_at is not null;
-  if a.id is not null then perform vk_issue_mail(a.id,null,'adult_reset',a.email,1); end if;
+  if a.id is not null then begin perform vk_issue_mail(a.id,null,'adult_reset',a.email,1);
+    exception when others then raise log 'Adult password reset mail unavailable';end;end if;
   return jsonb_build_object('ok',true,'message','Если такая почта есть, письмо отправлено');
 end $$;
 create or replace function vektor_adult_reset(p_token text,p_password text) returns jsonb language plpgsql security definer
@@ -201,7 +203,8 @@ create or replace function vektor_student_reset_request(p_email text,p_captcha t
 set search_path=public,extensions as $$ declare s vk_students; begin
   if not coalesce((vk_mail('captcha',jsonb_build_object('token',p_captcha))->>'ok')::boolean,false) then return jsonb_build_object('error','captcha','message','Пройди проверку капчи'); end if;
   select * into s from vk_students where email=lower(btrim(p_email)) and email_verified_at is not null;
-  if s.id is not null then perform vk_issue_mail(null,s.id,'student_reset',s.email,1); end if;
+  if s.id is not null then begin perform vk_issue_mail(null,s.id,'student_reset',s.email,1);
+    exception when others then raise log 'Student password reset mail unavailable';end;end if;
   return jsonb_build_object('ok',true,'message','Если такая почта есть, письмо отправлено');
 end $$;
 create or replace function vektor_student_reset(p_token text,p_password text) returns jsonb language plpgsql security definer

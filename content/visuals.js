@@ -64,7 +64,7 @@
         if(fig.kind==='quadratic'&&fig.a===0)return '';const pts=[];for(let k=0;k<=200;k++){const x=-5+k/20,y=fig.kind==='quadratic'?fig.a*x*x+fig.b*x+fig.c:fig.a*x+fig.b;pts.push(`${x},${-y}`);}
         body+=`<svg x="30" y="30" width="240" height="240" viewBox="-5 -5 10 10" overflow="hidden"><polyline points="${pts.join(' ')}" fill="none" stroke="var(--green,currentColor)" stroke-width="2.5" vector-effect="non-scaling-stroke"/></svg>`;}
     }else return '';
-    const label=esc(describe(fig));return `<div class="figure"><svg viewBox="0 0 300 300" width="300" height="300" role="img" aria-label="${label}" style="max-width:100%;height:auto"><title>${label}</title><g fill="none" stroke="currentColor" stroke-width="2">${body}</g></svg></div>`;
+    const label=esc(describe(fig));return `<div class="figure"><svg viewBox="0 0 300 300" width="300" height="300" role="img" aria-label="${label}" style="width:300px;max-width:100%;height:auto"><title>${label}</title><g fill="none" stroke="currentColor" stroke-width="2">${body}</g></svg></div>`;
   }
 
   function barSvg(parts, shaded, { split = null, crossed = 0, y = 0, h = 44, label = null, width = W } = {}) {

@@ -42,6 +42,7 @@ jobs:
           node tests/stories.test.js
           node tests/program.test.js
           node tests/geometry.test.js
+          node tests/report-export.test.js
 
       - uses: oven-sh/setup-bun@v2
       - name: ИИ-режимы серверной функции
@@ -73,6 +74,7 @@ jobs:
           run tour_scenario
           run e2e_scenarios && grep -q "ИТОГО: \([0-9]*\) из \1$" e2e_scenarios.log
           run supabase_scenarios
+          run codex_pilot
 
       - name: Нагрузка на изолированной БД и заглушке модели
         run: python tests/load_test.py --local --report load-report.json

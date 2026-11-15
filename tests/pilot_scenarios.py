@@ -1,5 +1,26 @@
 """Проверки новых RPC пилота на изолированной БД из supabase_scenarios.py."""
 def run(psql, rep):
+    rep('CX-26: только админ, тот же базовый отчёт, класс и обезличенные расходы', psql(r"""
+begin;
+do $$declare cid int;othercid int;s int;other int;a int;tid int;t text;nt text;st text;r jsonb;b jsonb;k text;v jsonb;begin
+ insert into vk_classes(name) values('cx26-a') returning id into cid;insert into vk_classes(name) values('cx26-b') returning id into othercid;
+ insert into vk_students(login,label,pass_hash,class_id) values('private26login','Private Child',extensions.crypt('password',extensions.gen_salt('bf',4)),cid) returning id into s;
+ insert into vk_students(login,pass_hash,class_id) values('private26other','test',othercid) returning id into other;
+ insert into vk_teachers(login,pass_hash,is_admin) values('cx26-admin','test',true) returning id into tid;t:=vk_new_session('teacher',tid);
+ insert into vk_teachers(login,pass_hash) values('cx26-teacher','test') returning id into tid;nt:=vk_new_session('teacher',tid);
+ begin perform vektor_admin_report(nt,'cx26-a',7);raise exception 'nonadmin report';exception when sqlstate 'P0403' then null;end;
+ begin perform vektor_admin_classes(nt);raise exception 'nonadmin classes';exception when sqlstate 'P0403' then null;end;
+ st:=vk_new_session('student',s);perform vektor_student_set_password(st,'password','newpass26');
+ insert into vk_adults(role,email,pass_hash) values('parent','private26mail@example.invalid','test') returning id into a;insert into vk_links values(s,a,'parent',now());
+ insert into vk_events(event_id,student_id,type,data) values('cx26-event',s,'attempt','{"ok":true,"sec":30}'),('cx26-rule',s,'bug_found','{"bug":"add-diff:add-denominators"}');
+ perform vk_ai_set(true,100,1000,100,100,100);perform vk_ai_spend(s,10,5,0.05,'concept');perform vk_ai_spend(other,10,5,0.09,'concept');
+ r:=vektor_admin_report(t,'cx26-a',7);b:=vk_pilot_report('cx26-a',7);
+ for k,v in select key,value from jsonb_each(b) loop if r->k is distinct from v then raise exception 'metric mismatch %',k;end if;end loop;
+ if (r->>'ai_rub_total')::numeric<>5 or r->>'parents_registered'<>'1' or r->>'parents_linked'<>'1' or r->>'students_password_changed'<>'1' then raise exception 'extended metrics %',r;end if;
+ if r::text like '%private26%' or r::text like '%Private Child%' or r::text like '%@example%' then raise exception 'personal data in report';end if;
+ if jsonb_array_length(vektor_admin_classes(t))<2 then raise exception 'class list';end if;
+end $$;rollback;select 'OK';
+""").endswith('OK'))
     rep('CX-24: обслуживание сохраняет очередь и запрещает запись', psql(r"""
 begin;
 do $$declare s int;t text;r jsonb;begin
@@ -8,6 +29,9 @@ do $$declare s int;t text;r jsonb;begin
  insert into vk_settings values('maintenance','true') on conflict(key) do update set value='true';
  r:=vektor_sync(t,'{"answers":2}');if r->>'error'<>'maintenance' then raise exception 'maintenance writes';end if;
  if (select state->>'answers' from vk_students where id=s)<>'1' then raise exception 'state changed';end if;
+ perform set_config('role','anon',true);
+ begin perform vektor_student_set_login(t,'shouldnotchange');raise exception 'account write in maintenance';exception when sqlstate 'P0503' then null;end;
+ perform set_config('role','none',true);
  update vk_settings set value='false' where key='maintenance';
  perform vektor_sync(t,'{"answers":2}');if (select state->>'answers' from vk_students where id=s)<>'2' then raise exception 'queue not accepted';end if;
 end $$;rollback;select 'OK';
@@ -48,6 +72,9 @@ do $$declare s int;r jsonb;begin
  perform vk_ai_spend(s,200,100,0.01,'angle');
  select v into r from jsonb_array_elements(vk_ai_cost_by_topic(7))v where v->>'topic'='angle';
  if (r->>'rub_per_question')::numeric<>1.5 or (r->>'tokens_in')::numeric<>150 then raise exception 'topic cost %',r;end if;
+ perform vk_ai_spend(s,1,1,0.02,'angle',false,'00000000-0000-4000-8000-000000000001');
+ perform vk_ai_spend(s,1,1,0.02,'angle',false,'00000000-0000-4000-8000-000000000001');
+ if (select usd from vk_ai_usage where student_id=s and day=current_date)<>0.04 then raise exception 'duplicate spend';end if;
  if has_function_privilege('anon','vk_ai_cost_by_topic(integer)','execute') then raise exception 'cost report open';end if;
 end $$;rollback;select 'OK';
 """).endswith('OK'))
@@ -62,6 +89,7 @@ begin
  for i in 1..7 loop r:=vektor_adult_create_student(t,'Ученик '||i);s:=(r->>'student_id')::int;ids:=ids||to_jsonb(s);end loop;
  if vektor_tutor_group(t,'Семь',ids)->>'error'<>'group' then raise exception 'seventh member';end if;
  ids:=ids-6;r:=vektor_tutor_group(t,'Шесть',ids);gid:=(r->>'id')::int;
+ if jsonb_array_length(vektor_tutor_pulse(t,gid)->'students')<>6 then raise exception 'pulse students';end if;
  begin perform vektor_tutor_child(bt,s);raise exception 'foreign child';exception when sqlstate 'P0403' then null;end;
  begin perform vektor_tutor_pulse(bt,gid);raise exception 'foreign group';exception when sqlstate 'P0403' then null;end;
  r:=vektor_tutor_assign(t,'concept',now()+interval '1 day','[]',gid);
@@ -167,6 +195,11 @@ begin
   begin perform vk_adult_auth(session);raise exception 'old session';exception when sqlstate 'P0401' then null;end;
   if has_table_privilege('anon','vk_mail_tokens','select') or has_table_privilege('anon','vk_consents','select') then raise exception 'tokens open'; end if;
 end $$;
+create or replace function vk_mail(p_action text,p_data jsonb) returns jsonb language plpgsql security definer set search_path=public,extensions as $$ begin
+ if p_action='captcha' then return '{"ok":true}'::jsonb;end if;raise exception 'test delivery failure';end $$;
+do $$begin
+ if vektor_adult_reset_request('none@example.invalid','test-captcha') is distinct from vektor_adult_reset_request('test@example.invalid','test-captcha') then raise exception 'mail outage reveals account';end if;
+end $$;
 rollback;select 'OK';
 """).endswith('OK'))
     rep('CX-17: pilot, истёкшая подписка и лимит тарифа', psql(r"""
@@ -205,9 +238,11 @@ begin
   if vk_ai_take(tb)->>'reason' not in ('student_budget', 'budget') then raise exception 'global budget'; end if;
   perform vk_ai_set(true, 100, 10000, 100, 100, 3);
   if vk_ai_take(ta)->>'reason' <> 'budget' then raise exception 'global did not stop everyone'; end if;
+  perform vk_ai_set(true,100,10000,100,1000,1000);perform vk_ai_spend(b,1,1,4);
+  if not (vk_ai_take(tb)->>'ok')::boolean then raise exception 'obsolete USD cap overrides configured RUB budget';end if;
   if vk_ai_take(vk_new_session('teacher', a))->>'reason' <> 'no_session' then raise exception 'role leak'; end if;
   if has_function_privilege('anon', 'vk_ai_set(boolean,integer,integer,numeric,numeric,numeric)', 'execute') then raise exception 'admin privilege'; end if;
-  if has_function_privilege('anon', 'vk_ai_spend(integer,integer,integer,numeric,text,boolean)', 'execute') then raise exception 'spend privilege'; end if;
+  if has_function_privilege('anon', 'vk_ai_spend(integer,integer,integer,numeric,text,boolean,text)', 'execute') then raise exception 'spend privilege'; end if;
 end $$;
 rollback;
 select 'OK';

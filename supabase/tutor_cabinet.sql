@@ -62,7 +62,7 @@ set search_path=public,extensions as $$ declare uid int:=vk_auth(p_token,'tutor'
  with sids as(select student_id id from vk_tutor_group_members where group_id=p_group and vk_can_see(uid,student_id)),
  ev as(select * from vk_events where student_id in(select id from sids) and ts_server>=now()-make_interval(mins=>least(greatest(p_minutes,5),240))),
  found as(select data->>'bug' bug,count(distinct student_id) n from ev where type='bug_found' group by 1)
- select jsonb_build_object('bugs',coalesce((select jsonb_agg(to_jsonb(found) order by n desc) from found),'[]'),
+ select jsonb_build_object('bugs',coalesce((select jsonb_agg(to_jsonb(f) order by f.n desc) from found f),'[]'),
  'solved',(select count(*) from ev where type='attempt' and (data->>'ok')::boolean),
  'beaten',(select count(distinct(student_id,data->>'bug')) from ev where type='bug_beaten'),
  'students',coalesce((select jsonb_agg(jsonb_build_object('id',s.id,'label',s.label,'cur',vk_cur(s.id))) from vk_students s where s.id in(select id from sids)),'[]')) into r;return r;

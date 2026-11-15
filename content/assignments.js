@@ -1,6 +1,7 @@
 (() => {
- let serial=0;
+ let serial=0,currentTopics=null;
  async function mount(topics){
+  currentTopics=topics;
   const root=document.getElementById('app'),ticket=++serial;
   try{const rows=await window.VEKTOR_ACCOUNT.rpc('vektor_student_assignments');if(ticket!==serial||location.hash&&!/^#home$/.test(location.hash))return;
    document.getElementById('tutor-assignments')?.remove();if(!rows.length)return;
@@ -9,4 +10,5 @@
   }catch{}
  }
  window.VEKTOR_ASSIGNMENTS={mount};
+ setInterval(()=>{if(currentTopics&&window.VEKTOR_SYNC&&(!location.hash||location.hash==='#home'))mount(currentTopics);},20000);
 })();

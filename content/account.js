@@ -36,12 +36,16 @@
     if(CFG.maintenance&&r!=='logout'){const e=new Error('Технические работы — прогресс сохраняется на этом устройстве');e.status=0;throw e;}
     if (SB) {
       const [fn, args] = RPC[r](body || {}, token);
-      const res = await fetch(`${SB}/rest/v1/rpc/${fn}`, {
+      const send = values => fetch(`${SB}/rest/v1/rpc/${fn}`, {
         method: 'POST', cache: 'no-store',
         headers: { 'Content-Type': 'application/json', apikey: CFG.supabaseKey, Authorization: 'Bearer ' + CFG.supabaseKey },
-        body: JSON.stringify(args),
+        body: JSON.stringify(values),
       });
+      let res=await send(args);
       let j = null; try { j = await res.json(); } catch {}
+      if(!res.ok&&r==='login'&&j?.code==='PGRST202'){
+        const old={...args};delete old.p_device;res=await send(old);try{j=await res.json();}catch{j=null;}
+      }
       if (!res.ok) {
         const code = j && /no_session|forbidden/.exec(j.message || '');
         const e = new Error(code ? (code[0] === 'no_session' ? 'Сессия закончилась, войди заново' : 'Нет доступа') : 'Нет связи с сервером');
@@ -363,7 +367,7 @@
   window.VEKTOR_ACCOUNT = { boot, logout: () => exitHook && exitHook(), rpc: async (fn,args={}) => {
     const session=ls.get(SESS); if(!SB||!session)throw Error('Войди заново');
     const r=await fetch(SB+'/rest/v1/rpc/'+fn,{method:'POST',headers:{'Content-Type':'application/json',apikey:CFG.supabaseKey,Authorization:'Bearer '+CFG.supabaseKey},body:JSON.stringify({...args,p_token:session.token})});
-    const j=await r.json();if(!r.ok||j?.error)throw Error(j?.message||'Не получилось выполнить запрос');return j;
+    const j=await r.json();if(!r.ok)throw Error(/maintenance/.test(j?.message||'')?'Технические работы. Попробуй немного позже':/no_session/.test(j?.message||'')?'Войди заново':'Не получилось выполнить запрос');if(j?.error)throw Error(j.message||'Не получилось выполнить запрос');return j;
   } };
   boot();
 })();

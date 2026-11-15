@@ -137,12 +137,11 @@ export async function handle(req: Request): Promise<Response> {
   // кэш классификаций: попадание не тратит лимит ребёнка
   let cacheKey = '';
   if (mode === 'classify') {
-    const d = body.data, norm = (x: unknown) => String(x ?? '').replace(/\s+/g, '').toLowerCase();
-    cacheKey = 'classify:' + await sha256(JSON.stringify([d.topic, norm(d.cond), (d.lines || []).map((l: any) => norm(l?.t)), norm(d.kid)]));
+    cacheKey = 'classify:v2:' + await sha256(JSON.stringify(built!.messages));
     const c = await (await db('vk_ai_cache_get', { p_token: token, p_key: cacheKey })).json().catch(() => null);
     if (!c) return json(502, 'db', 'Не получилось проверить вход, попробуй ещё раз');
     if (!c.ok) { const [s, m] = LIMIT_SAY[c.reason] || [403, 'Нет доступа']; return json(s, c.reason, m); }
-    if (c.value) return new Response(JSON.stringify({ ...c.value, cached: true }), { headers: { ...cors, 'Content-Type': 'application/json' } });
+    if (c.value) return new Response(JSON.stringify({ ...validClassify(JSON.stringify(c.value),(body.data.bugs || []).map((b:any)=>String(b.id))), cached: true }), { headers: { ...cors, 'Content-Type': 'application/json' } });
   }
 
   // сессия ученика и лимиты — в базе
@@ -150,13 +149,22 @@ export async function handle(req: Request): Promise<Response> {
   const t = await take.json().catch(() => null);
   if (!take.ok || !t) return json(502, 'db', 'Не получилось проверить вход, попробуй ещё раз');
   if (!t.ok) { const [s, m] = LIMIT_SAY[t.reason] || [403, 'Нет доступа']; return json(s, t.reason, m); }
+  const spendId = crypto.randomUUID();
   const spend = (u: any, model: string) => {
     if (!u) return;
     const pin = Number(u.prompt_tokens) || 0, pout = Number(u.completion_tokens) || 0, [a, b] = priceOf(model);
     const usd = Number.isFinite(Number(u.cost)) && u.cost != null ? Number(u.cost) : (pin * a + pout * b) / 1e6;
     const topic = String(body.data?.topic || body.topic || 'unknown');
-    return db('vk_ai_spend', { p_student: t.student_id, p_in: pin, p_out: pout, p_usd: usd,
-      p_topic: /^[a-z0-9_-]{1,80}$/.test(topic) ? topic : 'unknown', p_estimated: !!u.estimated }).catch(() => {});
+    const job = (async () => {
+      for(let attempt=0;attempt<3;attempt++) {
+        try { const r=await db('vk_ai_spend',{p_student:t.student_id,p_in:pin,p_out:pout,p_usd:usd,
+          p_topic:/^[a-z0-9_-]{1,80}$/.test(topic)?topic:'unknown',p_estimated:!!u.estimated,p_request_id:spendId});if(r.ok)return; }catch{}
+        await new Promise(resolve=>setTimeout(resolve,25*(attempt+1)));
+      }
+      console.error('AI usage persistence failed');
+    })();
+    (globalThis as any).EdgeRuntime?.waitUntil(job);
+    return job;
   };
   const lastUser = mode === 'chat' ? [...body.messages].reverse().find((m: any) => m.role === 'user')
     : { content: [body.data?.kid, body.data?.task].filter(Boolean).join(' ') };

@@ -18,4 +18,5 @@ need_file "$DUMP_FILE"; need_file "$DUMP_FILE.sha256"
 (cd "$(dirname "$DUMP_FILE")" && sha256sum --check --status "$(basename "$DUMP_FILE").sha256")
 command -v pg_restore >/dev/null
 pg_restore --dbname="$TARGET_DB" --clean --if-exists --no-owner --exit-on-error --single-transaction "$DUMP_FILE"
+db_query "$TARGET_DB" -c "notify pgrst, 'reload schema'" >/dev/null
 echo 'Restore committed atomically. Run verify.sh before opening access.'

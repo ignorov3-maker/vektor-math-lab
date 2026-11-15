@@ -17,6 +17,7 @@ async def main():
                 for i in range(7):
                     svg=page.locator('.figure>svg').nth(i)
                     assert await svg.get_attribute('aria-label')
+                    assert (await svg.bounding_box())['width']>=250, 'geometry labels must remain readable'
                     markup=await svg.inner_html()
                     assert not any(s in markup for s in ['NaN','Infinity','undefined'])
                     total+=1
