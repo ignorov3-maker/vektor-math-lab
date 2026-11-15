@@ -1,0 +1,1 @@
+{"Rules":[{"ID":"vektor-daily-14-days","Status":"Enabled","Filter":{"Prefix":"vektor-daily/"},"Expiration":{"Days":14},"AbortIncompleteMultipartUpload":{"DaysAfterInitiation":1}}]}

@@ -33,6 +33,7 @@
   const STATUS = { bad_login: 401, no_session: 401, locked: 429, too_many: 429, layout: 400, forbidden: 403, too_large: 413 };
 
   async function call(r, body, token) {
+    if(CFG.maintenance&&r!=='logout'){const e=new Error('Технические работы — прогресс сохраняется на этом устройстве');e.status=0;throw e;}
     if (SB) {
       const [fn, args] = RPC[r](body || {}, token);
       const res = await fetch(`${SB}/rest/v1/rpc/${fn}`, {
@@ -206,6 +207,7 @@
     if (/^#student_(email|reset)=/.test(location.hash)) {location.replace('parent.html?student=1'+location.hash);return;}
     if (!(await hasServer())) { window.VEKTOR_SYNC = null; loadApp(); return; }
     const sess = ls.get(SESS);
+    if(CFG.maintenance&&!sess){loginScreen('Технические работы. Вход скоро вернётся.');return;}
     if (!sess || !sess.token) { ls.del(KEY); loginScreen(); return; }
     try {
       const r = await call('state', null, sess.token);
@@ -226,6 +228,7 @@
     window.VEKTOR_SYNC = sync;
     if (ls.get('vektor-dirty:' + sess.login) && ls.get(KEY)) sync.push(ls.get(KEY)); // не успели отправить в прошлый раз
     chrome(sync, sess);
+    if(CFG.maintenance){const banner=document.createElement('p');banner.className='test-banner';banner.textContent='Технические работы. Занимайся дальше: прогресс сохранится на этом устройстве и отправится после восстановления связи.';document.querySelector('main').prepend(banner);}
     loadApp();
     if (SB) watchTests(sess);
   }

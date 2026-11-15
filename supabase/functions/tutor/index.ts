@@ -119,7 +119,8 @@ export async function handle(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
   if (req.method !== 'POST') return json(405, 'method', 'Only POST');
 
-  const KEY = Deno.env.get('OPENROUTER_API_KEY');
+  const workerUrl = Deno.env.get('OPENROUTER_WORKER_URL');
+  const KEY = workerUrl ? Deno.env.get('OPENROUTER_WORKER_KEY') : Deno.env.get('OPENROUTER_API_KEY');
   const SB = Deno.env.get('SUPABASE_URL'), SR = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   if (!SB || !SR) return json(500, 'config', 'Server is not configured');
 
@@ -184,7 +185,7 @@ export async function handle(req: Request): Promise<Response> {
   const model = MODELS.includes(body.model) ? body.model : MODELS[0];
   const maxTokens = mode === 'chat' ? Math.min(Number(body.max_tokens) || 450, MAX_TOKENS) : CEIL[mode];
   const isJson = !!(built && built.json);
-  const UP = Deno.env.get('OPENROUTER_URL') || 'https://openrouter.ai/api/v1/chat/completions'; // для тестов
+  const UP = workerUrl || Deno.env.get('OPENROUTER_URL') || 'https://openrouter.ai/api/v1/chat/completions'; // для тестов
   const call = (reasoningOff: boolean) => fetch(UP, {
     method: 'POST',
     headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json', 'X-OpenRouter-Title': 'Vektor' },

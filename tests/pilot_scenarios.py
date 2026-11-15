@@ -1,5 +1,17 @@
 """Проверки новых RPC пилота на изолированной БД из supabase_scenarios.py."""
 def run(psql, rep):
+    rep('CX-24: обслуживание сохраняет очередь и запрещает запись', psql(r"""
+begin;
+do $$declare s int;t text;r jsonb;begin
+ insert into vk_students(login,pass_hash,state) values('cx24','test','{"answers":1}') returning id into s;
+ t:=vk_new_session('student',s);
+ insert into vk_settings values('maintenance','true') on conflict(key) do update set value='true';
+ r:=vektor_sync(t,'{"answers":2}');if r->>'error'<>'maintenance' then raise exception 'maintenance writes';end if;
+ if (select state->>'answers' from vk_students where id=s)<>'1' then raise exception 'state changed';end if;
+ update vk_settings set value='false' where key='maintenance';
+ perform vektor_sync(t,'{"answers":2}');if (select state->>'answers' from vk_students where id=s)<>'2' then raise exception 'queue not accepted';end if;
+end $$;rollback;select 'OK';
+""").endswith('OK'))
     rep('CX-23: срок сессий, общий выход, журнал действий без секретов', psql(r"""
 begin;
 do $$

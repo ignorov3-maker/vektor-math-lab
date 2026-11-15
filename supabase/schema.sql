@@ -110,6 +110,7 @@ create or replace function vektor_sync(p_token text, p_state jsonb default null,
 language plpgsql security definer set search_path = public, extensions as $$
 declare uid int := vk_auth(p_token, 'student'); r int; e jsonb; acc text[] := '{}';
 begin
+  if coalesce((select value='true'::jsonb from vk_settings where key='maintenance'),false) then return jsonb_build_object('error','maintenance','message','Технические работы — прогресс остаётся на устройстве');end if;
   if p_state is not null then
     if length(p_state::text) > 400000 then return jsonb_build_object('error', 'too_large', 'message', 'Прогресс слишком большой'); end if;
     p_state := p_state #- '{settings,name}'; -- имя, которое ребёнок мог вписать, на сервер не попадает

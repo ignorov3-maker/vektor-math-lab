@@ -16,6 +16,8 @@ export default {
     const origin = request.headers.get('Origin') || '';
     const allowed = (env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
     const okOrigin = allowed.includes(origin);
+    const serviceMode=!!env.WORKER_SERVICE_KEY;
+    const serviceAllowed=serviceMode&&!origin&&request.headers.get('Authorization')===`Bearer ${env.WORKER_SERVICE_KEY}`;
     const cors = {
       'Access-Control-Allow-Origin': okOrigin ? origin : allowed[0] || 'null',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -27,7 +29,7 @@ export default {
 
     if (request.method === 'OPTIONS') return new Response(null, { status: okOrigin ? 204 : 403, headers: cors });
     if (request.method !== 'POST') return json(405, 'Only POST');
-    if (!okOrigin) return json(403, 'Origin not allowed');
+    if (serviceMode?!serviceAllowed:!okOrigin) return json(403, 'Access denied');
     if (!env.OPENROUTER_API_KEY) return json(500, 'OPENROUTER_API_KEY is not set');
 
     let body;
@@ -51,7 +53,9 @@ export default {
       body: JSON.stringify({
         model,
         messages: body.messages.map(m => ({ role: m.role === 'system' ? 'system' : m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '').slice(0, 8000) })),
-        stream: true,
+        stream: body.stream !== false,
+        usage: { include: true },
+        ...(body.response_format?.type === 'json_object' ? { response_format: { type: 'json_object' } } : {}),
         max_tokens: reasoningOff ? maxTokens : maxTokens + 600,
         temperature: typeof body.temperature === 'number' ? Math.min(1, Math.max(0, body.temperature)) : 0.4,
         reasoning: reasoningOff ? { enabled: false } : { exclude: true },

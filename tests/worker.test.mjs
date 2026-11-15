@@ -14,4 +14,9 @@ r = await worker.fetch(req('https://ignorov3-maker.github.io', null, 'OPTIONS'),
 ok(r.status === 204, 'preflight');
 r = await worker.fetch(req('https://ignorov3-maker.github.io', { messages: [] }), env);
 ok(r.status === 400, 'empty messages rejected');
+const serviceEnv={...env,WORKER_SERVICE_KEY:'worker-test'};
+r=await worker.fetch(req('https://ignorov3-maker.github.io',{messages:[{role:'user',content:'2+2'}]}),serviceEnv);
+ok(r.status===403,'служебный воркер закрыт браузеру');
+r=await worker.fetch(new Request('https://w.dev/',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer worker-test'},body:JSON.stringify({stream:false,response_format:{type:'json_object'},user:'must-not-pass',messages:[{role:'user',content:'2+2'}]})}),serviceEnv);
+ok(r.status===200&&sent.body.stream===false&&sent.body.response_format.type==='json_object'&&sent.body.usage.include&&!('user' in sent.body),'служебный Bearer, JSON и учёт расхода без идентификатора');
 console.log(fails ? `ошибок: ${fails}` : 'worker tests: ok'); process.exit(fails ? 1 : 0);
