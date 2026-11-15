@@ -75,4 +75,4 @@ jobs:
           run supabase_scenarios
 
       - name: Нагрузка на изолированной БД и заглушке модели
-        run: python tests/load_test.py --local --duration 12 --report load-report.json
+        run: python tests/load_test.py --local --report load-report.json
