@@ -72,6 +72,7 @@ jobs:
           run xray_scenario
           run codex_visual
           run tour_scenario
+          run ux_scenario
           run e2e_scenarios && grep -q "ИТОГО: \([0-9]*\) из \1$" e2e_scenarios.log
           run supabase_scenarios
           run codex_pilot

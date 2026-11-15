@@ -964,3 +964,86 @@ body.landing #app { max-width: none; padding: 0; }
 .ld-rules s, .bs-rule s { text-decoration: underline wavy; text-decoration-color: var(--red-pen, #D2493D); text-decoration-thickness: 1.5px; text-underline-offset: 5px; }
 .ld-rules s::before, .bs-rule s::before { content: "✗ "; color: var(--red-pen, #D2493D); text-decoration: none; display: inline-block; margin-right: 2px; }
 @media (max-width: 600px) { .grade-tabs .gt-s { display: none; } .grade-tabs button { min-width: 48px; } .grade-tabs::before { content: "Класс"; align-self: center; padding: 0 6px 0 10px; color: var(--ink-2); font-size: 14px; } }
+
+/* ---------- Знакомство: поймай ошибку Бипыча ---------- */
+body.is-intro .sidebar,body.is-intro main>header,body.is-intro footer,body.is-intro .skin-switch{display:none!important}
+body.is-intro main{margin-left:0;padding-bottom:0}
+body.is-intro #app{max-width:none;padding:0}
+.intro{min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:24px 16px}
+.intro-card{width:min(560px,100%);background:var(--sheet);border:var(--border-w) solid var(--line);border-radius:20px;padding:24px 28px 28px;box-shadow:0 18px 50px rgba(30,43,64,.10);display:grid;gap:4px;justify-items:center;text-align:center;animation:intro-in .35s ease both}
+.intro-top{width:100%;display:flex;align-items:center;justify-content:space-between;min-height:32px}
+.intro-dots{display:flex;gap:6px;list-style:none;margin:0;padding:0}
+.intro-dots li{width:28px;height:6px;border-radius:3px;background:var(--tint);transition:background .3s}
+.intro-dots li.is-done{background:var(--done-line)}
+.intro-dots li.is-now{background:var(--green)}
+.intro-pet{min-height:120px;display:grid;place-items:end center}
+.intro-body{display:grid;gap:16px;justify-items:center;width:100%}
+.intro-title{font:800 clamp(22px,5.2vw,28px)/1.2 var(--font-display);margin:4px 0 0;letter-spacing:-.01em;text-wrap:balance}
+.intro-text{margin:0;color:var(--ink-2);font-size:17px;max-width:44ch;text-wrap:pretty}
+.intro-text .frac{font-size:.9em;color:var(--ink)}
+.intro-board{display:flex;align-items:center;justify-content:center;gap:14px;font:800 40px/1 var(--font-display);padding:18px 26px;border-radius:14px;background:var(--paper);border:1.5px dashed var(--dash)}
+.intro-board .frac{font-size:1em}
+.intro-board>span{color:var(--ink-2);font-weight:700}
+.intro-board .frac:last-child{color:var(--margin)}
+.intro-figure{width:100%;display:grid;justify-items:center}
+.intro-figure .figure svg{max-width:100%;height:auto}
+.intro-hint{margin:0;padding:10px 14px;border-radius:10px;background:var(--amber-soft);color:var(--amber-ink);font-size:15px;animation:intro-shake .35s ease}
+.intro-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;width:100%;margin-top:4px}
+.intro-actions .btn{flex:1 1 200px;justify-content:center}
+.intro-trophy{display:grid;place-items:center;width:120px;height:120px;border-radius:50%;background:var(--green-soft);animation:intro-pop .5s cubic-bezier(.3,1.6,.5,1) both}
+.intro-how{list-style:none;counter-reset:how;margin:0;padding:0;display:grid;gap:8px;text-align:left;width:100%}
+.intro-how li{counter-increment:how;display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:start;padding:10px 12px;border-radius:10px;background:var(--paper);font-size:15px;color:var(--ink-2)}
+.intro-how li::before{content:counter(how);display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--green);color:var(--on-accent);font-weight:800;font-size:14px}
+.intro-how b{color:var(--ink)}
+@keyframes intro-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes intro-pop{from{transform:scale(.6);opacity:0}to{transform:none;opacity:1}}
+@keyframes intro-shake{0%,100%{transform:none}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+@media (max-width:480px){.intro-card{padding:18px 18px 22px;border-radius:16px}.intro-board{font-size:34px;gap:10px;padding:14px 18px}.intro-actions .btn{flex-basis:100%}}
+@media (prefers-reduced-motion:reduce){.intro-card,.intro-trophy,.intro-hint{animation:none}}
+
+/* ---------- Ошибка с узнанным правилом: одна главная кнопка ---------- */
+.feedback.fb-bug{background:color-mix(in srgb,var(--margin) 9%,var(--sheet));border-left-color:var(--margin);animation:fb-in .25s ease both}
+.feedback.fb-bug .fb-title{color:var(--ink)}
+.feedback.fb-bug .fb-title svg{flex:none}
+.feedback.big .fb-actions .btn-big{min-width:min(280px,100%);justify-content:center}
+@media (max-width:760px){.feedback.big .fb-actions .btn{flex:1 1 100%;justify-content:center}}
+@keyframes fb-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.feedback.fb-bug{animation:none}}
+
+/* ---------- Итог проверки: что нашли ---------- */
+.diag-list{list-style:none;margin:0 0 8px;padding:0;display:grid;gap:10px}
+.diag-row{display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--paper)}
+.diag-row b{display:block}
+.diag-row .muted{display:block;line-height:1.35}
+.diag-art{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--sheet)}
+.diag-num{font-weight:800;color:var(--ink-2);border:1px solid var(--line)}
+@media (max-width:480px){.diag-row{grid-template-columns:40px 1fr}.diag-row .btn{grid-column:1/-1;justify-content:center}}
+
+/* ---------- Разбор ошибки: мелочи ---------- */
+#xray-host{scroll-margin-top:80px}
+.rv-more{display:inline-flex;align-items:center;margin-top:10px;background:none;border:0;padding:6px 0;font:inherit;font-size:15px;color:var(--green);text-decoration:underline;cursor:pointer}
+.rv-more:disabled{color:var(--ink-2);text-decoration:none;cursor:default}
+.rv-more-out:not(:empty){margin-top:8px;padding:10px 12px;border-radius:10px;background:var(--paper);border:1px solid var(--line)}
+
+/* ---------- Профиль: что видит родитель ---------- */
+.seen-list{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px;font-size:15px}
+.seen-list li{display:grid;grid-template-columns:22px 1fr;gap:8px;align-items:start}
+.seen-list li::before{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;font-size:13px;font-weight:800}
+.seen-list li.yes::before{content:'✓';background:var(--green-soft);color:var(--green)}
+.seen-list li.no::before{content:'✕';background:var(--tint);color:var(--ink-2)}
+.seen-list li.no{color:var(--ink-2)}
+
+/* ---------- Лендинг: ребёнку и родителю ---------- */
+.ld-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;padding:56px 0;border-top:1px solid var(--line)}
+.ld-two-card{background:var(--sheet);border:1px solid var(--line);border-radius:18px;padding:28px;display:grid;gap:10px;align-content:start}
+.ld-two-parent{background:color-mix(in srgb,var(--green) 6%,var(--sheet));border-color:var(--done-line)}
+.ld-two-kicker{margin:0;font-weight:800;color:var(--green);font-size:14px;letter-spacing:.04em;text-transform:uppercase}
+.ld-two-card h2{margin:0 0 4px;font:800 26px/1.2 var(--font-display)}
+.ld-two-card ul{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.ld-two-card li{padding-left:28px;position:relative;color:var(--ink-2);line-height:1.5}
+.ld-two-card li::before{content:'';position:absolute;left:4px;top:.55em;width:12px;height:12px;border-radius:50%;background:var(--green-soft);box-shadow:inset 0 0 0 3px var(--green)}
+.ld-two-card li b{color:var(--ink);display:block}
+.ld-two-card .btn{justify-self:start;margin-top:8px}
+.ld-teacher-links{display:flex;flex-wrap:wrap;gap:10px;margin:0}
+.ld-foot-links{display:flex;gap:18px;flex-wrap:wrap}
+@media (max-width:900px){.ld-two{grid-template-columns:1fr;padding:40px 0}.ld-two-card{padding:22px}}

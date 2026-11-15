@@ -22,12 +22,17 @@
   function loginForm() {
     captchaToken='';
     const registering=mode==='register', reset=mode==='request', change=mode==='reset';
-    host.innerHTML=`${studentRecovery?'<p><a href="index.html">Войти в Вектор</a></p>':'<nav><button class="secondary" data-mode="login">Войти</button><button class="secondary" data-mode="register">Создать аккаунт</button><button class="secondary" data-mode="request">Забыли пароль?</button></nav>'}
+    const tabs=studentRecovery?'<p><a href="index.html">Войти в Вектор</a></p>':`<nav class="adult-tabs" aria-label="Вход или регистрация"><button class="secondary" data-mode="login" aria-pressed="${mode==='login'}">Войти</button><button class="secondary" data-mode="register" aria-pressed="${registering}">Создать аккаунт</button></nav>`;
+    // Зачем родителю кабинет — рядом с формой входа, а не мелким шрифтом на другой странице
+    const why=studentRecovery?'':role==='tutor'?`<aside class="adult-why"><ul><li><span class="ic">1</span><div><b>Группы до 6 учеников</b><span>Задания из готовых тем со сроком.</span></div></li><li><span class="ic">2</span><div><b>Пульс</b><span>Какое неверное правило у кого прямо сейчас.</span></div></li><li><span class="ic">3</span><div><b>Отчёт родителю ссылкой</b><span>Без логинов и почты, ссылку можно отозвать.</span></div></li></ul></aside>`
+      :`<aside class="adult-why"><ul><li><span class="ic">1</span><div><b>Что было трудно</b><span>Какие неверные правила нашлись в рассуждениях ребёнка — не просто «ошибся».</span></div></li><li><span class="ic">2</span><div><b>Что уже исправлено</b><span>Ошибка считается закрытой, только когда через день и через три ребёнок не попался на неё снова.</span></div></li><li><span class="ic">3</span><div><b>Как помочь</b><span>Одна подсказка на неделю: что спросить и за что похвалить. Без слежки за каждым ответом.</span></div></li></ul></aside>`;
+    host.innerHTML=`<div class="adult-login"><div>${tabs}
       <form id="adult-form"><h2>${registering?'Создать аккаунт':reset?'Восстановить пароль':change?'Новый пароль':'Войти'}</h2>
       ${!change?'<label>Почта<input type="email" name="email" autocomplete="email" required maxlength="254"></label>':''}
       ${!reset?`<label>Пароль<input type="password" name="password" autocomplete="${registering||change?'new-password':'current-password'}" required minlength="${studentRecovery?6:8}" maxlength="72"></label>`:''}
       ${registering?'<label><input type="checkbox" name="consent" required> Я принимаю согласие на обработку данных</label><button type="button" class="secondary" data-legal="consent">Прочитать согласие</button><button type="button" class="secondary" data-legal="privacy">Политика данных</button><div id="legal-text"></div>':''}
-      ${registering||reset?'<div id="adult-captcha"></div>':''}<p id="adult-message" role="status"></p><button type="submit">${registering?'Зарегистрироваться':reset?'Отправить ссылку':change?'Сохранить пароль':'Войти'}</button></form>`;
+      ${registering||reset?'<div id="adult-captcha"></div>':''}<p id="adult-message" role="status"></p><button type="submit">${registering?'Зарегистрироваться':reset?'Отправить ссылку':change?'Сохранить пароль':'Войти'}</button>${!studentRecovery&&mode==='login'?'<p class="small" style="margin:12px 0 0;text-align:center"><button type="button" class="link" data-mode="request">Забыли пароль?</button></p>':''}${!studentRecovery&&(reset||change)?'<p class="small" style="margin:12px 0 0;text-align:center"><button type="button" class="link" data-mode="login">Вернуться ко входу</button></p>':''}</form></div>${why}</div>`;
+    const sub=document.getElementById('adult-sub');if(sub)sub.hidden=studentRecovery;
     if (registering && !publicCfg.signup_open) {message('Регистрация скоро откроется');host.querySelector('[type=submit]').disabled=true;}
     if ((registering && publicCfg.signup_open)||reset) mountCaptcha();
   }

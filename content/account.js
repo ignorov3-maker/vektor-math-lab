@@ -73,7 +73,7 @@
     catch { return false; } finally { clearTimeout(t); }
   }
 
-  function loadApp() { const s = document.createElement('script'); s.src = 'app.js'; s.onload=()=>{if(SB&&window.VEKTOR_PROFILE)window.VEKTOR_PROFILE.offer();}; document.body.appendChild(s); }
+  function loadApp() { const s = document.createElement('script'); s.src = 'app.js';  document.body.appendChild(s); }
 
   /* ---------- Экран входа ---------- */
   function loginScreen(msg) {
