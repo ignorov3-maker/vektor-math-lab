@@ -73,3 +73,6 @@ jobs:
           run tour_scenario
           run e2e_scenarios && grep -q "ИТОГО: \([0-9]*\) из \1$" e2e_scenarios.log
           run supabase_scenarios
+
+      - name: Нагрузка на изолированной БД и заглушке модели
+        run: python tests/load_test.py --local --duration 12 --report load-report.json
