@@ -223,6 +223,7 @@
     bubble.setAttribute('aria-live', 'polite');
     bubble.hidden = true;
     charge.className = 'bipych-charge';
+    charge.hidden = options.hideCharge === true;
     charge.setAttribute('role', 'progressbar');
     charge.setAttribute('aria-valuemin', '0');
     charge.setAttribute('aria-label', 'Задачи цели дня');
