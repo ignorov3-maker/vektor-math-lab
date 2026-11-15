@@ -137,7 +137,9 @@ export async function handle(req: Request): Promise<Response> {
   // кэш классификаций: попадание не тратит лимит ребёнка
   let cacheKey = '';
   if (mode === 'classify') {
-    cacheKey = 'classify:v2:' + await sha256(JSON.stringify(built!.messages));
+    const d=body.data,norm=(x:unknown,n:number)=>str(x,n).replace(/\s+/g,'').toLowerCase();
+    cacheKey='classify:v2:'+await sha256(JSON.stringify([built!.messages[0].content,built!.messages[1].content.replace(/\s+/g,' ').trim(),
+      norm(d.cond,120),norm(d.answer,40),(d.lines||[]).slice(0,6).map((l:any)=>[norm(l?.t,80),norm(l?.v,30)]),norm(d.kid,300)]));
     const c = await (await db('vk_ai_cache_get', { p_token: token, p_key: cacheKey })).json().catch(() => null);
     if (!c) return json(502, 'db', 'Не получилось проверить вход, попробуй ещё раз');
     if (!c.ok) { const [s, m] = LIMIT_SAY[c.reason] || [403, 'Нет доступа']; return json(s, c.reason, m); }
