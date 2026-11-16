@@ -751,36 +751,53 @@ function home() {
    чужую ошибку, видит, как её ломает простой пример, и узнаёт, как работает Вектор. */
 let introStep = 1, introPick = null, introMiss = false;
 const INTRO_BUG = 'add-diff:add-denominators';
+// Пицца: круг на n кусков, закрашенные группы — [сколько кусков, цвет]. Подписей внутри нет: их даёт текст рядом.
+function introPizza(n, groups, label) {
+  const R = 52, C = 60, pt = a => `${(C + R * Math.sin(a)).toFixed(1)} ${(C - R * Math.cos(a)).toFixed(1)}`;
+  const step = 2 * Math.PI / n; let k = 0;
+  const wedges = groups.flatMap(([cnt, col]) => Array.from({ length: cnt }, () => { const a = k++ * step;
+    return `<path d="M${C} ${C} L${pt(a)} A${R} ${R} 0 0 1 ${pt(a + step)} Z" fill="${col}"/>`; })).join('');
+  const cuts = Array.from({ length: n }, (_, m) => `<line x1="${C}" y1="${C}" x2="${pt(m * step).replace(' ', '" y2="')}" />`).join('');
+  return `<svg class="intro-pizza" viewBox="0 0 120 120" role="img" aria-label="${label}"><circle cx="${C}" cy="${C}" r="${R + 4}" fill="#E9B872"/><circle cx="${C}" cy="${C}" r="${R}" fill="#FFF3D6"/>${wedges}<g stroke="#C98B3A" stroke-width="1.5">${cuts}</g><circle cx="${C}" cy="${C}" r="${R}" fill="none" stroke="#C98B3A" stroke-width="1.5"/></svg>`;
+}
 function introPage() {
   const senior = window.VEKTOR_TONE.senior(), F = V.f;
   const bug = window.VEKTOR_BUGS && window.VEKTOR_BUGS.byKey[INTRO_BUG];
-  const sum = `<div class="intro-board" role="img" aria-label="Одна вторая плюс одна третья равно две пятых">${F(1, 2)}<span>+</span>${F(1, 3)}<span>=</span>${F(2, 5)}</div>`;
+  // пример всегда перед глазами; у каждой дроби свой цвет — те же цвета на пиццах
+  const sum = (big) => `<div class="intro-board${big ? '' : ' intro-board-small'}" role="img" aria-label="Одна вторая плюс одна третья равно две пятых"><span class="ib-half">${F(1, 2)}</span><span>+</span><span class="ib-third">${F(1, 3)}</span><span>=</span><span class="ib-bip">${F(2, 5)}</span></div>`;
   const dots = `<ol class="intro-dots" aria-label="Шаг ${introStep} из 3">${[1, 2, 3].map(k => `<li class="${k < introStep ? 'is-done' : k === introStep ? 'is-now' : ''}"></li>`).join('')}</ol>`;
+  const HALF = 'var(--intro-half)', THIRD = 'var(--intro-third)', BIP = 'var(--intro-bip)';
   let body;
   if (introStep === 1) body = `
-      <h1 class="intro-title">${senior ? 'Одноклассник решил пример. Здесь всё верно?' : 'Я решил пример, но, кажется, поймал жучка. Проверишь?'}</h1>
-      ${sum}
+      <h1 class="intro-title">${senior ? 'Проверь решение одноклассника' : 'Я съел половину пиццы, а потом ещё треть. Посчитал, сколько всего:'}</h1>
+      ${senior ? '<p class="intro-text">Половина пиццы и ещё треть — сколько это вместе? Он посчитал так:</p>' : ''}
+      ${sum(true)}
+      <p class="intro-text">${senior ? 'Здесь всё верно?' : 'Верно я посчитал?'}</p>
       <div class="intro-actions"><button class="btn btn-primary btn-big" data-intro-pick="wrong">${senior ? 'Есть ошибка' : 'Тут ошибка'}</button><button class="btn btn-ghost btn-big" data-intro-pick="right">Всё верно</button></div>`;
   else if (introStep === 2) body = `
-      <h1 class="intro-title">${introPick === 'wrong' ? (senior ? 'Верно, ошибка есть. Докажем её.' : 'Зоркий глаз! Давай докажем.') : 'Давай проверим на полосках.'}</h1>
-      <p class="intro-text">Сверху — половина. Снизу — ответ ${F(2, 5)}. К половине прибавили ещё кусочек. Могло получиться меньше половины?</p>
-      <div class="intro-figure">${V.figure({ type: 'pair', a: [1, 2], b: [2, 5] })}</div>
-      ${introMiss ? `<p class="intro-hint" role="status">Прибавили — значит, стало больше. А ${F(2, 5)} меньше половины: посмотри, нижняя полоска короче.</p>` : ''}
-      <div class="intro-actions"><button class="btn btn-primary btn-big" data-intro-pick="never">Нет, так не бывает</button><button class="btn btn-ghost btn-big" data-intro-pick="maybe">Могло</button></div>`;
+      ${sum(false)}
+      <h1 class="intro-title">${introPick === 'wrong' ? (senior ? 'Верно, ошибка есть. Докажем на пицце.' : 'Зоркий глаз! Давай проверим на пицце.') : 'Давай проверим на пицце.'}</h1>
+      <div class="intro-pizzas">
+        <figure>${introPizza(6, [[3, HALF], [2, THIRD]], 'Пицца: закрашена половина и ещё треть — почти вся')}
+          <figcaption><b>Сколько съели</b><span><i class="dot dot-half"></i>половина <i class="dot dot-third"></i>и ещё треть</span></figcaption></figure>
+        <figure>${introPizza(5, [[2, BIP]], 'Пицца на пять кусков, закрашены два — меньше половины')}
+          <figcaption><b>Что вышло у ${senior ? 'него' : 'Бипыча'}</b><span><i class="dot dot-bip"></i>2 куска из 5</span></figcaption></figure>
+      </div>
+      <p class="intro-text">${senior ? 'Слева съедено больше половины пиццы. А по его ответу — меньше половины.' : 'Слева видно: съели больше половины пиццы. А у меня вышло меньше половины!'} Может такое быть?</p>
+      ${introMiss ? `<p class="intro-hint" role="status">Посмотри на левую пиццу: целая половина и ещё кусок. Это точно больше, чем ${F(2, 5)} на правой.</p>` : ''}
+      <div class="intro-actions"><button class="btn btn-primary btn-big" data-intro-pick="never">Нет, съели больше</button><button class="btn btn-ghost btn-big" data-intro-pick="maybe">Может</button></div>`;
   else body = `
       <div class="intro-trophy">${window.VEKTOR_TONE.art(bug, { size: 88, status: 'beaten' })}</div>
       <h1 class="intro-title">${senior ? 'Ты нашёл неверное правило' : 'Ты поймал первого жучка!'}</h1>
-      <p class="intro-text">${senior ? `«${esc(bug ? bug.title : 'Складывает числители и знаменатели')}». С таким правилом в голове ошибаются от 5 класса до ОГЭ.` : `Это ${esc(bug ? bug.kidName : 'Складыватель')}: он складывает и верх, и низ. Такой жучок живёт у многих — а ты его уже раскусил.`}</p>
-      <ol class="intro-how">
-        <li><span><b>Находим</b> неверное правило, а не просто неверный ответ</span></li>
-        <li><span><b>Ломаем</b> его простым примером, как сейчас</span></li>
-        <li><span><b>Проверяем через день</b>, что оно не вернулось</span></li>
-      </ol>
+      ${senior ? '' : `<p class="intro-text">Это ${esc(bug ? bug.kidName : 'Складыватель')} — он живёт у многих.</p>`}
+      <div class="intro-why"><p><b>${senior ? 'Ошибка:' : 'Я ошибся:'}</b> сложил верх с верхом (1 + 1) и низ с низом (2 + 3). А половина и треть — куски разного размера.</p>
+        <p><b>Верно:</b> режем пиццу на 6 кусков. Половина — 3 куска, треть — 2. Вместе ${F(5, 6)}.</p></div>
+      <p class="intro-how-line"><span>Так работает Вектор:</span> <b>находим</b> неверное правило → <b>ломаем</b> примером → <b>проверяем через день</b></p>
       <div class="intro-actions"><button class="btn btn-primary btn-big" data-intro-go="diagnostic">${senior ? 'Проверить себя: 6 задач' : 'Найти моих жучков: 6 задач'}</button><button class="btn btn-ghost btn-big" data-intro-go="home">Сразу к первой теме</button></div>`;
   return `<section class="intro intro-step-${introStep}" aria-live="polite">
     <div class="intro-card">
       <div class="intro-top">${dots}${introStep < 3 ? '<button class="link small" data-intro-skip>Пропустить</button>' : ''}</div>
-      ${senior || introStep === 3 ? '' : '<div class="intro-pet" id="pet-intro" aria-hidden="true"></div>'}
+      ${senior || introStep !== 1 ? '' : '<div class="intro-pet" id="pet-intro" aria-hidden="true"></div>'}
       <div class="intro-body">${body}</div>
     </div>
   </section>`;

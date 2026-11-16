@@ -1047,3 +1047,29 @@ body.is-intro #app{max-width:none;padding:0}
 .ld-teacher-links{display:flex;flex-wrap:wrap;gap:10px;margin:0}
 .ld-foot-links{display:flex;gap:18px;flex-wrap:wrap}
 @media (max-width:900px){.ld-two{grid-template-columns:1fr;padding:40px 0}.ld-two-card{padding:22px}}
+
+/* Знакомство: пример с пиццей — у каждой дроби свой цвет, тот же на картинке */
+.intro{--intro-half:#2E9B6F;--intro-third:#F2B233;--intro-bip:#E46A5E}
+.intro-board .ib-half .frac{color:var(--intro-half)}
+.intro-board .ib-third .frac{color:var(--intro-third)}
+.intro-board .ib-bip .frac{color:var(--intro-bip)}
+.intro-board>span{display:inline-flex}
+.intro-board>span:not([class]){color:var(--ink-2);font-weight:700}
+.intro-board-small{font-size:26px;padding:10px 18px;gap:10px}
+.intro-pizzas{display:grid;grid-template-columns:1fr 1fr;gap:14px;width:100%}
+.intro-pizzas figure{margin:0;display:grid;justify-items:center;gap:8px;padding:12px 8px;border-radius:14px;background:var(--paper)}
+.intro-pizza{width:min(150px,100%);height:auto;animation:intro-pop .45s cubic-bezier(.3,1.5,.5,1) both}
+.intro-pizzas figure:nth-child(2) .intro-pizza{animation-delay:.15s}
+.intro-pizzas figcaption{display:grid;gap:2px;font-size:14px;color:var(--ink-2);text-align:center}
+.intro-pizzas figcaption b{color:var(--ink);font-size:15px}
+.intro .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin:0 4px 0 2px;vertical-align:baseline}
+.intro .dot-half{background:var(--intro-half)}.intro .dot-third{background:var(--intro-third)}.intro .dot-bip{background:var(--intro-bip)}
+.intro-why{display:grid;gap:8px;text-align:left;width:100%}
+.intro-why p{margin:0;padding:10px 14px;border-radius:10px;background:var(--paper);font-size:15px;color:var(--ink-2)}
+.intro-why b{color:var(--ink)}
+.intro-why .frac{color:var(--ink);font-size:.95em}
+.intro-how-line{margin:0;font-size:14px;color:var(--ink-2);line-height:1.5;text-wrap:balance}
+.intro-how-line span{display:block;font-weight:700;color:var(--green)}
+.intro-how-line b{color:var(--ink)}
+@media (max-width:480px){.intro-board-small{font-size:22px}.intro-pizzas{gap:10px}.intro-pizzas figure{padding:10px 4px}}
+@media (prefers-reduced-motion:reduce){.intro-pizza{animation:none}}
