@@ -15,7 +15,7 @@ async def main():
         await pg.evaluate("""() => { const f=(a,b)=>`<span class="frac"><span>${a}</span><span>${b}</span></span>`;
           Object.assign(session.task, { question: `${f(1,2)} + ${f(1,3)} = ?`, answer: '5/6', accept: 'equivalent', misc: g => (g && g.n===2 && g.d===5 ? 'add-denominators' : null) }); }""")
         await pg.evaluate("v => fillAnswer(v)", '2/5'); await pg.click('form.answer button[type=submit]'); await pg.wait_for_timeout(150)
-        rep('после ошибки главная кнопка — «Поймать жучка»', await pg.locator('#xray-open.btn-primary').count()==1)
+        rep('после ошибки главная кнопка — «Поймать жучка»', await pg.locator('#catch-open.btn-primary').count()==1)
         await pg.click('#xray-open'); await pg.wait_for_timeout(150)
         rep('черновик открыт, условие серое', await pg.locator('.xray .xr-cond').inner_text()=='1/2 + 1/3'.replace(' ','') or '1' in await pg.locator('.xray .xr-cond').inner_text())
         # ввод строки на клавиатуре черновика — засекаем время как ребёнок: стираем и набираем
@@ -46,6 +46,7 @@ async def main():
         await pg.evaluate("""() => { const f=(a,b)=>`<span class="frac"><span>${a}</span><span>${b}</span></span>`;
           Object.assign(session.task, { question: `${f(1,2)} + ${f(1,3)} = ?`, answer: '5/6', accept: 'equivalent', misc: g => (g && g.n===2 && g.d===5 ? 'add-denominators' : null) }); }""")
         await pg.evaluate("v => fillAnswer(v)", '2/5'); await pg.click('form.answer button[type=submit]'); await pg.wait_for_timeout(100)
+        rep('известная ошибка: одна главная кнопка, черновик — ссылкой', await pg.locator('#feedback .fb-actions .btn').count()==1 and await pg.locator('#catch-open').count()==1 and await pg.locator('#xray-open.link').count()==1)
         await pg.click('#xray-open'); await pg.click('[data-xr="done"]'); await pg.wait_for_timeout(100)
         await pg.click('#review-open'); await pg.wait_for_timeout(100)
         rep('разбор: «Найти» называет жучка и правило', 'Складыватель' in await pg.inner_text('.review') and 'складываешь' in await pg.inner_text('.review'))
@@ -69,8 +70,8 @@ async def main():
         await pg.goto(B+'#lesson/0/practice'); await pg.wait_for_timeout(300)
         await pg.evaluate("""() => Object.assign(session.task, { story:'Пиццу разрезали на 8 равных кусков. Съели 3.', question:'Какая часть пиццы осталась?', answer:'5/8', accept:'equivalent', misc: g => (g && g.n===3 && g.d===8 ? 'took-eaten' : null) })""")
         await pg.evaluate("v => fillAnswer(v)", '3/8'); await pg.click('form.answer button[type=submit]'); await pg.wait_for_timeout(100)
-        rep('словесная задача: «Поймать жучка» ведёт в разбор', await pg.locator('#review-open').count()==1)
-        await pg.click('#review-open'); await pg.click('.rv-next')
+        rep('словесная задача: «Поймать жучка» ведёт в разбор', await pg.locator('#catch-open').count()==1)
+        await pg.click('#catch-open'); await pg.click('.rv-next')
         c0 = await pg.inner_text('.rv-body')
         await pg.locator('.rv-choice', has_text='что съели').click(); await pg.click('.rv-next')
         await pg.locator('.rv-ans input').fill('5/8'); await pg.click('.rv-ans .btn-primary'); await pg.click('.rv-next'); await pg.wait_for_timeout(100)
@@ -111,7 +112,7 @@ async def main():
         await pg.evaluate("""() => { const f=(a,b)=>`<span class="frac"><span>${a}</span><span>${b}</span></span>`;
           Object.assign(session.task, { question: `${f(1,2)} + ${f(1,3)} = ?`, answer: '5/6', accept: 'equivalent', misc: g => (g && g.n===2 && g.d===5 ? 'add-denominators' : null) }); }""")
         await pg.evaluate("v => fillAnswer(v)", '2/5'); await pg.click('form.answer button[type=submit]'); await pg.wait_for_timeout(100)
-        rep('8 класс: кнопка «Найти ошибку»', (await pg.inner_text('#xray-open'))=='Найти ошибку')
+        rep('8 класс: кнопка «Найти ошибку»', (await pg.inner_text('#catch-open'))=='Найти ошибку')
         await pg.click('#xray-open'); await pg.click('[data-xr="done"]'); await pg.wait_for_timeout(100)
         await pg.click('#review-open'); await pg.wait_for_timeout(100)
         txt = await pg.inner_text('#xray-host')

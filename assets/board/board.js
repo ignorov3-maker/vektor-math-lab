@@ -50,7 +50,7 @@
   } else {
     document.getElementById('lesson').hidden = false;
     document.getElementById('bug-name').textContent = String(data.kidName || '');
-    if (window.VEKTOR_DROBIK) pet = VEKTOR_DROBIK.mount(document.getElementById('pet'), { state: 'thinking', size: 210, age: 'senior' });
+    if (window.VEKTOR_DROBIK) pet = VEKTOR_DROBIK.mount(document.getElementById('pet'), { state: 'thinking', size: 210, age: 'senior', hideCharge: true });
     draw();
   }
   document.getElementById('previous').addEventListener('click', function () { move(-1); });

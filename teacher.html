@@ -183,6 +183,8 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
   <span class="live" id="live" hidden><i></i><span></span></span>
   <span class="who" id="who"></span>
   <button class="btn btn-sm" id="logout" hidden>Выйти</button>
+  <button class="btn btn-sm" id="logout-all" hidden>Выйти со всех устройств</button>
+  <a class="btn btn-sm" href="report.html" id="pilot-report" hidden>Отчёт пилота</a>
 </header>
 <main id="root"></main>
 <script src="config.js"></script>
@@ -210,9 +212,11 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
 
   /* ---------- сервер ---------- */
   async function rpc(fn, args) {
-    const r = await fetch(`${SB}/rest/v1/rpc/${fn}`, { method: 'POST', cache: 'no-store',
-      headers: { 'Content-Type': 'application/json', apikey: CFG.supabaseKey, Authorization: 'Bearer ' + CFG.supabaseKey }, body: JSON.stringify(args) });
+    const send=values=>fetch(`${SB}/rest/v1/rpc/${fn}`, { method: 'POST', cache: 'no-store',
+      headers: { 'Content-Type': 'application/json', apikey: CFG.supabaseKey, Authorization: 'Bearer ' + CFG.supabaseKey }, body: JSON.stringify(values) });
+    let r=await send(args);
     let j = null; try { j = await r.json(); } catch {}
+    if(!r.ok&&fn==='vektor_teacher_login'&&j?.code==='PGRST202'){const old={...args};delete old.p_device;r=await send(old);try{j=await r.json();}catch{j=null;}}
     if (!r.ok) {
       const m = (j && j.message) || '';
       const e = new Error(/no_session/.test(m) ? 'Сессия закончилась, войдите заново' : /bad_login|Неверн/.test(m) ? 'Неверный логин или пароль' : /locked/.test(m) ? 'Слишком много попыток. Подождите 5 минут' : 'Нет связи с сервером');
@@ -234,7 +238,7 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
   /* ---------- вход (К-12) ---------- */
   function loginView(msg) {
     clearInterval(timer); clearInterval(ticker);
-    ['logout', 'tabs', 'cls', 'live'].forEach(id => $(id).hidden = true); $('who').textContent = '';
+    ['logout', 'logout-all', 'pilot-report', 'tabs', 'cls', 'live'].forEach(id => $(id).hidden = true); $('who').textContent = '';
     if (!SB) { root.innerHTML = '<div class="login"><h1>Сервер не подключён</h1><p class="muted">Кабинет работает с сервером Supabase. Заполните config.js.</p></div>'; return; }
     root.innerHTML = `<div class="login"><h1>Вход для учителя</h1><p class="muted" style="margin:0">Логин и пароль выдал администратор пилота.</p>
       <form id="f"><label>Логин<input name="login" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
@@ -247,7 +251,9 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
       e.preventDefault(); $('m').textContent = '';
       const b = f.querySelector('button'); b.disabled = true;
       try {
-        const r = await rpc('vektor_teacher_login', { p_login: f.login.value, p_password: f.password.value });
+        let device;
+        try { device = JSON.parse(localStorage.getItem('vektor-device')); if (!device) { device = crypto.randomUUID(); localStorage.setItem('vektor-device', JSON.stringify(device)); } } catch { device = crypto.randomUUID(); }
+        const r = await rpc('vektor_teacher_login', { p_login: f.login.value, p_password: f.password.value, p_device: device });
         sess = { token: r.token, name: r.name || f.login.value, login: f.login.value.trim().toLowerCase() }; sessionStorage.setItem(KEY, JSON.stringify(sess)); start();
       } catch (err) { $('m').textContent = err.message; b.disabled = false; }
     };
@@ -631,6 +637,9 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
     labels = ls.get(LKEY()) || {};
     $('who').textContent = sess.name || ''; $('logout').hidden = false; $('tabs').hidden = false;
     $('logout').onclick = async () => { try { await rpc('vektor_logout', { p_token: sess.token }); } catch {} sessionStorage.removeItem(KEY); sess = null; loginView(); };
+    $('logout-all').hidden=false;
+    $('pilot-report').hidden=false;
+    $('logout-all').onclick=async()=>{try{await rpc('vektor_logout_all',{p_token:sess.token});sessionStorage.removeItem(KEY);sess=null;loginView();}catch(e){$('who').textContent=e.message;}};
     $('cls').onchange = () => { ui.cls = $('cls').value; ls.set('vektor-teacher-cls', ui.cls); ui.only = ''; $('tests')._h = null; $('logins')._h = null; paint(); };
     document.querySelectorAll('#tabs [data-tab]').forEach(b => b.onclick = () => tab(b.dataset.tab));
     shell(); root.querySelector('[data-pane=class]').insertAdjacentHTML('afterbegin', '');

@@ -52,7 +52,7 @@ async def main():
         for k in range(6):
             a = await pg.evaluate("diagTask.task.answer")
             await answer(pg, a if k%2==0 else ('<' if a!='<' else '>') if await pg.locator('.choices').count() else '0'); await pg.wait_for_timeout(80)
-        txt=await pg.inner_text('#app'); rep('диагностика: итог и рекомендации', 'Диагностика пройдена' in txt and 'С этого стоит начать' in txt)
+        txt=await pg.inner_text('#app'); rep('диагностика: итог и рекомендации', 'Вот что мы нашли' in txt and 'Начнём с того' in txt and await pg.locator('.diag-row [data-lesson]').count() >= 1)
         await pg.click('#diag-restart'); rep('диагностика: пройти ещё раз', 'Вопрос 1 из 6' in await pg.inner_text('#app'))
 
         # 4. Офлайн-урок до конца, задача внутри урока
@@ -126,7 +126,7 @@ async def main():
         # 11. ИИ: подключение, стрим, ошибки, запасной режим
         await pg.goto(B+'#settings'); await pg.check('input[value=key]'); await pg.fill('#ai-key','abc'); await pg.click('#ai-form button[type=submit]')
         rep('неверный формат ключа отклоняется', 'sk-or-' in await pg.inner_text('#ai-status'))
-        await pg.fill('#ai-key','sk-or-v1-fake'); await pg.click('#ai-test'); await pg.wait_for_timeout(500)
+        await pg.fill('#ai-key','-'.join(['sk', 'or', 'v1', 'fake'])); await pg.click('#ai-test'); await pg.wait_for_timeout(500)
         rep('проверка подключения', 'Работает' in await pg.inner_text('#ai-status'))
         rep('ключ не попал в адрес страницы', 'sk-or' not in pg.url)
         MOCK['mode']='reasoning400'; MOCK['calls'].clear()

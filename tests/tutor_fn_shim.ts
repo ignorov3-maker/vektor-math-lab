@@ -18,7 +18,7 @@ Bun.serve({ port: fakePort, async fetch(req) {
   return new Response(sse, { headers: { 'Content-Type': 'text/event-stream' } });
 } });
 (globalThis as any).Deno = {
-  env: { get: (k: string) => ({ OPENROUTER_API_KEY: 'sk-test', OPENROUTER_URL: `http://127.0.0.1:${fakePort}/v1`, SUPABASE_URL: process.env.SB_URL, SUPABASE_SERVICE_ROLE_KEY: 'service-test' } as any)[k] },
+  env: { get: (k: string) => ({ ALLOWED_ORIGINS: process.env.SB_URL, OPENROUTER_API_KEY: 'sk-test', OPENROUTER_URL: `http://127.0.0.1:${fakePort}/v1`, SUPABASE_URL: process.env.SB_URL, SUPABASE_SERVICE_ROLE_KEY: 'service-test' } as any)[k] },
   serve: (h: any) => Bun.serve({ port, fetch: h }),
 };
 await import('../supabase/functions/tutor/index.ts');

@@ -16,7 +16,7 @@
   const CFG = window.VEKTOR_CONFIG || {};
   const SB = CFG.supabaseUrl && CFG.supabaseKey ? CFG.supabaseUrl.replace(/\/+$/, '') : '';
   const RPC = {
-    login: b => ['vektor_login', { p_login: b.login, p_password: b.password }],
+    login: b => ['vektor_login', { p_login: b.login, p_password: b.password, p_device: deviceId() }],
     logout: (b, t) => ['vektor_logout', { p_token: t }],
     state: (b, t) => ['vektor_state', { p_token: t }],
     sync: (b, t) => ['vektor_sync', { p_token: t, p_state: b.state ?? null, p_events: b.events || [] }],
@@ -25,17 +25,27 @@
     test_finish: (b, t) => ['vektor_test_finish', { p_token: t }],
     push_get: (b, t) => ['vektor_push_get', { p_token: t }],
   };
-  const STATUS = { bad_login: 401, no_session: 401, locked: 429, layout: 400, forbidden: 403, too_large: 413 };
+  function deviceId() {
+    let id = ls.get('vektor-device');
+    if (!id) { id = crypto.randomUUID(); ls.set('vektor-device', id); }
+    return id;
+  }
+  const STATUS = { bad_login: 401, no_session: 401, locked: 429, too_many: 429, layout: 400, forbidden: 403, too_large: 413 };
 
   async function call(r, body, token) {
+    if(CFG.maintenance&&r!=='logout'){const e=new Error('Технические работы — прогресс сохраняется на этом устройстве');e.status=0;throw e;}
     if (SB) {
       const [fn, args] = RPC[r](body || {}, token);
-      const res = await fetch(`${SB}/rest/v1/rpc/${fn}`, {
+      const send = values => fetch(`${SB}/rest/v1/rpc/${fn}`, {
         method: 'POST', cache: 'no-store',
         headers: { 'Content-Type': 'application/json', apikey: CFG.supabaseKey, Authorization: 'Bearer ' + CFG.supabaseKey },
-        body: JSON.stringify(args),
+        body: JSON.stringify(values),
       });
+      let res=await send(args);
       let j = null; try { j = await res.json(); } catch {}
+      if(!res.ok&&r==='login'&&j?.code==='PGRST202'){
+        const old={...args};delete old.p_device;res=await send(old);try{j=await res.json();}catch{j=null;}
+      }
       if (!res.ok) {
         const code = j && /no_session|forbidden/.exec(j.message || '');
         const e = new Error(code ? (code[0] === 'no_session' ? 'Сессия закончилась, войди заново' : 'Нет доступа') : 'Нет связи с сервером');
@@ -63,7 +73,7 @@
     catch { return false; } finally { clearTimeout(t); }
   }
 
-  function loadApp() { const s = document.createElement('script'); s.src = 'app.js'; document.body.appendChild(s); }
+  function loadApp() { const s = document.createElement('script'); s.src = 'app.js';  document.body.appendChild(s); }
 
   /* ---------- Экран входа ---------- */
   function loginScreen(msg) {
@@ -80,7 +90,7 @@
         <p class="feedback ${msg ? 'bad' : ''}" id="login-msg" role="alert">${msg ? esc(msg) : ''}</p>
         <button class="btn btn-primary btn-big" type="submit">Войти</button>
       </form>
-      <div class="role-switch"><span>Я учитель</span><a class="btn btn-ghost btn-sm" href="teacher.html">Вход для учителя</a></div></section>`;
+      <p><a href="parent.html?student=1">Забыли пароль? Восстановить по почте</a></p><div class="role-switch"><a class="btn btn-ghost btn-sm" href="teacher.html">Я учитель</a><a class="btn btn-ghost btn-sm" href="parent.html">Я родитель</a><a class="btn btn-ghost btn-sm" href="parent.html?role=tutor">Я репетитор</a></div></section>`;
     // Первая страница — лендинг, форма входа внутри него
     if (L) { document.body.classList.add('landing'); app.innerHTML = L.render(loginHtml); L.mount(app); }
     else app.innerHTML = loginHtml;
@@ -198,8 +208,10 @@
   }
 
   async function boot() {
+    if (/^#student_(email|reset)=/.test(location.hash)) {location.replace('parent.html?student=1'+location.hash);return;}
     if (!(await hasServer())) { window.VEKTOR_SYNC = null; loadApp(); return; }
     const sess = ls.get(SESS);
+    if(CFG.maintenance&&!sess){loginScreen('Технические работы. Вход скоро вернётся.');return;}
     if (!sess || !sess.token) { ls.del(KEY); loginScreen(); return; }
     try {
       const r = await call('state', null, sess.token);
@@ -220,6 +232,7 @@
     window.VEKTOR_SYNC = sync;
     if (ls.get('vektor-dirty:' + sess.login) && ls.get(KEY)) sync.push(ls.get(KEY)); // не успели отправить в прошлый раз
     chrome(sync, sess);
+    if(CFG.maintenance){const banner=document.createElement('p');banner.className='test-banner';banner.textContent='Технические работы. Занимайся дальше: прогресс сохранится на этом устройстве и отправится после восстановления связи.';document.querySelector('main').prepend(banner);}
     loadApp();
     if (SB) watchTests(sess);
   }
@@ -351,6 +364,10 @@
     scrollTo(0, 0);
   }
   let exitHook = null;
-  window.VEKTOR_ACCOUNT = { boot, logout: () => exitHook && exitHook() };
+  window.VEKTOR_ACCOUNT = { boot, logout: () => exitHook && exitHook(), rpc: async (fn,args={}) => {
+    const session=ls.get(SESS); if(!SB||!session)throw Error('Войди заново');
+    const r=await fetch(SB+'/rest/v1/rpc/'+fn,{method:'POST',headers:{'Content-Type':'application/json',apikey:CFG.supabaseKey,Authorization:'Bearer '+CFG.supabaseKey},body:JSON.stringify({...args,p_token:session.token})});
+    const j=await r.json();if(!r.ok)throw Error(/maintenance/.test(j?.message||'')?'Технические работы. Попробуй немного позже':/no_session/.test(j?.message||'')?'Войди заново':'Не получилось выполнить запрос');if(j?.error)throw Error(j.message||'Не получилось выполнить запрос');return j;
+  } };
   boot();
 })();

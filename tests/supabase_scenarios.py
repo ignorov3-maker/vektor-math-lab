@@ -36,7 +36,7 @@ class H(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         if self.path.startswith('/functions/v1/tutor'):
             data = self.rfile.read(int(self.headers['Content-Length'] or 0))
-            req = urllib.request.Request(f'http://127.0.0.1:{FN_PORT}/', data=data, headers={'Content-Type': 'application/json'})
+            req = urllib.request.Request(f'http://127.0.0.1:{FN_PORT}/', data=data, headers={'Content-Type': 'application/json', 'Origin': self.headers.get('Origin', '')})
             try: res = urllib.request.urlopen(req); code, out, ct = res.status, res.read(), res.headers.get('Content-Type')
             except urllib.error.HTTPError as e: code, out, ct = e.code, e.read(), 'application/json'
             self.send_response(code); self.send_header('Content-Type', ct); self.end_headers(); self.wfile.write(out); return
@@ -48,7 +48,7 @@ class H(http.server.SimpleHTTPRequestHandler):
             fn = self.path.rsplit('/', 1)[1]
             if not re.fullmatch(r'vk_ai_(take|cache_get|cache_put|spend)', fn): self.send_response(404); self.end_headers(); return
             args = json.loads(self.rfile.read(int(self.headers['Content-Length'] or 0)) or b'{}')
-            casts = {'p_in': 'int', 'p_out': 'int', 'p_student': 'int', 'p_usd': 'numeric'}
+            casts = {'p_in': 'int', 'p_out': 'int', 'p_student': 'int', 'p_usd': 'numeric', 'p_estimated': 'boolean'}
             call = f"{fn}(" + ', '.join(f"{k} => {lit(v)}" + (f'::{casts[k]}' if k in casts else '') for k, v in args.items()) + ")"
             out = 'null' if fn in ('vk_ai_cache_put', 'vk_ai_spend') and psql(f"select {call}") is not None else psql(f"select {call}::text")
             self.send_response(200); self.send_header('Content-Type', 'application/json'); self.end_headers(); self.wfile.write(out.encode()); return
@@ -82,7 +82,7 @@ async def main():
         psql("do $$ begin create role anon nologin; exception when duplicate_object then null; end $$;"
              "do $$ begin create role authenticated nologin; exception when duplicate_object then null; end $$;")
         subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase/schema.sql')], check=True, capture_output=True)
-        for f in ('test.sql', 'admin.sql', 'teacher.sql', 'pulse.sql', 'ai.sql'):
+        for f in ('test.sql', 'admin.sql', 'teacher.sql', 'pulse.sql', 'ai.sql', 'guard.sql', 'accounts.sql', 'plans.sql', 'parent.sql', 'tutor_cabinet.sql', 'audit.sql', 'pilot_report.sql'):
             subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase' / f)], check=True, capture_output=True)
         rep('схема накатывается повторно', True)
         rep('vk_seed: 80 профилей с паролями', psql("select count(*) from vk_seed(80, '5А:1-28,5Б:29-56,5В:57-80') where password ~ '^[а-я]+[0-9]{4}$'") == '80')
@@ -92,6 +92,8 @@ async def main():
              "update vk_students set pass_hash = extensions.crypt('компас1111', extensions.gen_salt('bf', 8)) where login = 'ученик40';"
              "select vk_teacher('uchitel', 'учитель-1', 'Учитель', '5А')")
         # anon не читает таблицы и не вызывает служебные функции
+        from pilot_scenarios import run as pilot_scenarios
+        pilot_scenarios(psql, rep)
         try: psql('set role anon; select count(*) from vk_students'); rep('anon не читает таблицы', False)
         except RuntimeError: rep('anon не читает таблицы', True)
         try: psql("set role anon; select * from vk_seed(1)"); rep('anon не создаёт профили', False)
@@ -139,7 +141,7 @@ async def main():
             user_txt = ' '.join(m['content'] for m in last['body']['messages'] if m['role'] == 'user')
             sys_txt = ' '.join(m['content'] for m in last['body']['messages'] if m['role'] == 'system')
             rep('ключ модели — только на сервере', last['auth'] == 'Bearer sk-test' and 'token' not in last['body'])
-            rep('телефон вырезан из текста ребёнка', '916' not in user_txt and 'номер скрыт' in user_txt, user_txt[:80])
+            rep('телефон вырезан из текста ребёнка', '916' not in user_txt and '[скрыто]' in user_txt, user_txt[:80])
             rep('имя ученика не уходит в модель', 'Ученик 1' not in sys_txt and 'зовут' not in sys_txt)
             await pg.fill('#chat-in-task', 'ты сука тупая'); await pg.click('.chat-task .chat-form button[type=submit]'); await pg.wait_for_timeout(1500)
             _log = await pg.inner_text('.chat-task .chat-log'); rep('модерация: мягкий ответ ребёнку', 'вернёмся к математике' in _log, _log[-200:])
@@ -159,14 +161,14 @@ async def main():
             rep('имя из состояния на сервер не пишется', psql("select coalesce(state->'settings'->>'name', 'нет') from vk_students where login='ученик1'") == 'нет')
             psql("update vk_settings set value = '{\"enabled\": true, \"per_student_day\": 30, \"total_day\": 100}' where key = 'ai'")
             st, j = rpc(base, 'vektor_login', p_login='ученик2', p_password='компас1234')
-            r = urllib.request.Request(base + '/functions/v1/tutor', data=json.dumps({'token': 'x' * 64, 'messages': [{'role': 'user', 'content': 'hi'}]}).encode(), headers={'Content-Type': 'application/json'})
+            r = urllib.request.Request(base + '/functions/v1/tutor', data=json.dumps({'token': 'x' * 64, 'messages': [{'role': 'user', 'content': 'hi'}]}).encode(), headers={'Content-Type': 'application/json', 'Origin': base})
             try: urllib.request.urlopen(r); code = 200
             except urllib.error.HTTPError as e: code = e.code
             rep('без входа наставник не отвечает (401)', code == 401, code)
             # ---------- ИИ-режимы (CL-8) ----------
             tok2 = j['token']
             def fn_call(payload):
-                r = urllib.request.Request(base + '/functions/v1/tutor', data=json.dumps(payload).encode(), headers={'Content-Type': 'application/json'})
+                r = urllib.request.Request(base + '/functions/v1/tutor', data=json.dumps(payload).encode(), headers={'Content-Type': 'application/json', 'Origin': base})
                 try:
                     with urllib.request.urlopen(r) as x: return x.status, x.read().decode()
                 except urllib.error.HTTPError as e: return e.code, e.read().decode()
@@ -194,7 +196,7 @@ async def main():
             rep('поток: расход из usage записан', await_spend >= 0.00014 * 3 - 1e-9, str(await_spend))
             psql("update vk_settings set value = value || '{\"usd_day\": 0}' where key = 'ai'")
             code, out = fn_call({'token': tok2, 'messages': [{'role': 'user', 'content': 'помоги'}]})
-            rep('дневной бюджет в $ исчерпан → тихий режим (503)', code == 503 and 'budget' in out, out[:100])
+            rep('дневной бюджет исчерпан → спокойное сообщение (429)', code == 429 and 'budget' in out, out[:100])
             psql("update vk_settings set value = value || '{\"usd_day\": 3}' where key = 'ai'")
             try: psql("set role anon; select vk_ai_cache_put('k', '{}')"); rep('служебные ИИ-функции закрыты', False)
             except RuntimeError: rep('служебные ИИ-функции закрыты', True)

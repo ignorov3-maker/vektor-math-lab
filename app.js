@@ -34,7 +34,7 @@ const ROUTE = window.VEKTOR_FRACTIONS.topics.map((t, i) => i); // раздел �
 const DIAG = ['concept', 'reduce', 'compare', 'add-same', 'mult', 'part-of'].map(id => byId[id]);
 const DONE = 80;
 
-const pages = { home: 'Мой путь', map: 'Все темы', diagnostic: 'Диагностика', library: 'Все темы', awards: 'Награды', teacher: 'Отчёт для учителя', settings: 'Профиль', lesson: 'Занятие', warmup: 'Разминка' };
+const pages = { home: 'Мой путь', map: 'Все темы', diagnostic: 'Диагностика', library: 'Все темы', awards: 'Награды', teacher: 'Отчёт для учителя', settings: 'Профиль', lesson: 'Занятие', warmup: 'Разминка', intro: 'Знакомство' };
 const STAGES = [['learn', 'Узнать'], ['practice', 'Потренироваться'], ['check', 'Проверить себя']];
 
 /* ================= Состояние ================= */
@@ -43,7 +43,7 @@ const KEY = 'vektor-progress-v3';
 const fresh = () => ({
   progress: Object.fromEntries(topics.map(t => [t.id, t.start])),
   meta: {}, attempts: [], answers: 0, asked: 0, days: [], diag: { step: 0, results: [] },
-  settings: { name: 'Александр', style: 'steps' },
+  settings: { name: 'Ученик', style: 'steps' },
 });
 let state;
 try { state = Object.assign(fresh(), JSON.parse(localStorage.getItem(KEY))); } catch { state = fresh(); }
@@ -60,6 +60,11 @@ try { state = Object.assign(fresh(), JSON.parse(localStorage.getItem(KEY))); } c
   if (![5, 6, 7, 8, 9].includes(state.settings.grade)) state.settings.grade = 5;
   if (!Array.isArray(state.diag.results) || !Number.isInteger(state.diag.step)) state.diag = d.diag;
   state.attempts = state.attempts.filter(a => a && typeof a === 'object');
+  // Раньше у четырёх тем стоял демонстрационный прогресс: новый ученик видел «Начато», хотя ничего не решал.
+  // Если по теме нет ни одной попытки, а процент ровно тот старый, — это не его прогресс.
+  const DEMO_START = { concept: 25, reduce: 33, compare: 20, 'add-same': 33 };
+  const idle = (id, m = state.meta[id]) => !(m && (m.tasks || m.practice || m.errorsTotal || m.mastered || m.failedChecks || m.cleanTotal)) && !state.attempts.some(a => a.topic === id);
+  for (const [id, v] of Object.entries(DEMO_START)) if (state.progress[id] === v && idle(id)) state.progress[id] = 0;
 })();
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} if (window.VEKTOR_SYNC) window.VEKTOR_SYNC.push(state); };
 // Ф-31: «Как тебе занятие?» — 5 смайликов, один раз за занятие, можно пропустить (только с сервером)
@@ -488,7 +493,7 @@ async function aiReply(i, kind, hiddenUser) {
   c.msgs.push(msg); c.busy = true; refreshChat(i, kind);
   const call = () => T.stream(ai, [{ role: 'system', content: sys }, ...history], txt => {
     msg.html = T.render(txt, { streaming: true }).html || '<p class="typing">…</p>'; updateLastMsg(i, kind, msg);
-  }, { maxTokens: kind === 'lesson' ? 700 : 550, onFinish: r => { c.truncated = r === 'length'; } });
+  }, { maxTokens: kind === 'lesson' ? 700 : 550, topic: topics[i].id, onFinish: r => { c.truncated = r === 'length'; } });
   try {
     let text;
     try { text = await call(); }
@@ -502,6 +507,11 @@ async function aiReply(i, kind, hiddenUser) {
     // ИИ недоступен — урок не стопорится: продолжаем по конспекту
     c.busy = false;
     const idx = c.msgs.indexOf(msg); if (idx >= 0) c.msgs.splice(idx, 1);
+    if (/Я на сегодня выдохся/.test(e.message || '')) {
+      c.forceOffline = true;
+      c.msgs.push({ role: 'assistant', html: `<p>${esc(e.message)}</p>` });
+      offlineFallback(i, kind); return;
+    }
     if (e.quiet) { aiPaused = true; offlineFallback(i, kind); return; }
     c.forceOffline = true;
     if (SERVER) c.msgs.push({ role: 'assistant', error: true, html: `<p class="small">${/вопрос/.test(e.message || '') ? esc(e.message) : 'Наставник сейчас не на связи — продолжаем по конспекту.'} <button type="button" class="link" data-retry-ai>Спросить ещё раз</button></p>` });
@@ -703,10 +713,10 @@ function home() {
   }).join('');
   return `<div class="page-head home-head"><h1>${hello}, ${esc(state.settings.name)}!</h1></div>
   ${state.warmupDay !== today() && warmupPlan().length ? `<section class="hero-next hero-warmup" aria-label="Разминка">
-    <div class="hero-text"><p class="hero-kicker">Разминка</p><h2>Две минуты перед занятием</h2><p class="muted">${window.VEKTOR_TONE.t('warmupSub')}</p></div>
+    <div class="hero-text"><p class="hero-kicker">Разминка</p><h2>${window.VEKTOR_TONE.senior() ? 'Проверим разобранные ошибки' : 'Не вернулись ли жучки?'}</h2><p class="muted">${window.VEKTOR_TONE.t('warmupSub')}</p></div>
     <button class="btn btn-primary btn-big btn-go" data-warmup>${G.icon('rocket', 22)} Начать</button></section>` : ''}
   ${(state.settings.grade || 5) >= 7 ? `<section class="sheet grade-note"><p><b>Программа ${state.settings.grade} класса скоро появится.</b> А пока проверим фундамент: ошибки в алгебре и геометрии часто растут из дробей 5–6 класса — найдём и закроем такие дыры.</p><a href="#map" class="btn btn-ghost btn-sm">Что будет в ${state.settings.grade} классе</a></section>` : ''}
-  ${!Array.isArray(state.settings.interests) && window.VEKTOR_STORIES ? `<section class="sheet interests-ask" aria-label="Интересы"><h2>Что тебе нравится?</h2><p class="muted">Выбери 2–3 — задачи будут про это.</p>${interestPicker([])}<div class="row-actions"><button class="btn btn-primary" data-interests-save>Готово</button><button class="btn btn-ghost" data-interests-skip>Пропустить</button></div></section>` : ''}
+  ${!Array.isArray(state.settings.interests) && window.VEKTOR_STORIES && state.answers > 0 ? `<section class="sheet interests-ask" aria-label="Интересы"><h2>Про что сделать следующие задачи?</h2><p class="muted">Выбери 2–3 темы: математика та же, а сюжет — про то, что тебе нравится.</p>${interestPicker([])}<div class="row-actions"><button class="btn btn-primary" data-interests-save>Готово</button><button class="btn btn-ghost" data-interests-skip>Пропустить</button></div></section>` : ''}
   <section class="hero-next" aria-label="Следующий шаг">
     <div class="hero-text">
       <p class="hero-kicker">${ct.stage === 'review' ? 'Повторение' : ct.reason ? 'Сначала повторим' : 'Продолжай отсюда'}</p>
@@ -727,13 +737,85 @@ function home() {
     <div class="stack side">
       ${firstTime ? `<div class="sheet note"><h3>Не знаешь, с чего начать?</h3><p>Пройди быстрый тест из 6 задач — и путь подстроится под тебя.</p><button class="btn btn-primary" data-go="diagnostic">Пройти тест</button></div>` : ''}
       ${todayCard()}
-      <div class="sheet pace pace-${p}">
+      ${state.attempts.length >= 5 ? `<div class="sheet pace pace-${p}">
         <h3>Твой темп: ${A.PACE[p].label.toLowerCase()}</h3>
         <p class="muted small">${A.PACE[p].say}</p>
-      </div>
-      <div class="sheet small-note"><h3>Наставник ${isOnline() ? 'на связи' : 'работает по конспекту'}</h3><p class="muted small">${isOnline() ? `Ведёт урок, отвечает на вопросы и рисует дроби (${esc(modelName())}).` : (SERVER ? 'Ведёт урок по конспекту, показывает примеры и подсказки.' : 'Ведёт урок по методичке. Чтобы он отвечал на любые вопросы, подключи ИИ в профиле.')}</p></div>
+      </div>` : ''}
+      ${SERVER ? '' : `<div class="sheet small-note"><h3>Наставник ${isOnline() ? 'на связи' : 'работает по конспекту'}</h3><p class="muted small">${isOnline() ? `Ведёт урок, отвечает на вопросы и рисует дроби (${esc(modelName())}).` : 'Ведёт урок по методичке. Чтобы он отвечал на любые вопросы, подключи ИИ в профиле.'}</p></div>`}
     </div>
   </div>`;
+}
+
+/* ================= Знакомство: поймай ошибку Бипыча =================
+   Первая минута — не экскурсия и не анкета, а маленькая победа: ребёнок находит
+   чужую ошибку, видит, как её ломает простой пример, и узнаёт, как работает Вектор. */
+let introStep = 1, introPick = null, introMiss = false;
+const INTRO_BUG = 'add-diff:add-denominators';
+// Пицца: круг на n кусков, закрашенные группы — [сколько кусков, цвет]. Подписей внутри нет: их даёт текст рядом.
+function introPizza(n, groups, label) {
+  const R = 52, C = 60, pt = a => `${(C + R * Math.sin(a)).toFixed(1)} ${(C - R * Math.cos(a)).toFixed(1)}`;
+  const step = 2 * Math.PI / n; let k = 0;
+  const wedges = groups.flatMap(([cnt, col]) => Array.from({ length: cnt }, () => { const a = k++ * step;
+    return `<path d="M${C} ${C} L${pt(a)} A${R} ${R} 0 0 1 ${pt(a + step)} Z" fill="${col}"/>`; })).join('');
+  const cuts = Array.from({ length: n }, (_, m) => `<line x1="${C}" y1="${C}" x2="${pt(m * step).replace(' ', '" y2="')}" />`).join('');
+  return `<svg class="intro-pizza" viewBox="0 0 120 120" role="img" aria-label="${label}"><circle cx="${C}" cy="${C}" r="${R + 4}" fill="#E9B872"/><circle cx="${C}" cy="${C}" r="${R}" fill="#FFF3D6"/>${wedges}<g stroke="#C98B3A" stroke-width="1.5">${cuts}</g><circle cx="${C}" cy="${C}" r="${R}" fill="none" stroke="#C98B3A" stroke-width="1.5"/></svg>`;
+}
+function introPage() {
+  const senior = window.VEKTOR_TONE.senior(), F = V.f;
+  const bug = window.VEKTOR_BUGS && window.VEKTOR_BUGS.byKey[INTRO_BUG];
+  // пример всегда перед глазами; у каждой дроби свой цвет — те же цвета на пиццах
+  const sum = (big) => `<div class="intro-board${big ? '' : ' intro-board-small'}" role="img" aria-label="Одна вторая плюс одна третья равно две пятых"><span class="ib-half">${F(1, 2)}</span><span>+</span><span class="ib-third">${F(1, 3)}</span><span>=</span><span class="ib-bip">${F(2, 5)}</span></div>`;
+  const dots = `<ol class="intro-dots" aria-label="Шаг ${introStep} из 3">${[1, 2, 3].map(k => `<li class="${k < introStep ? 'is-done' : k === introStep ? 'is-now' : ''}"></li>`).join('')}</ol>`;
+  const HALF = 'var(--intro-half)', THIRD = 'var(--intro-third)', BIP = 'var(--intro-bip)';
+  let body;
+  if (introStep === 1) body = `
+      <h1 class="intro-title">${senior ? 'Проверь решение одноклассника' : 'Я съел половину пиццы, а потом ещё треть. Посчитал, сколько всего:'}</h1>
+      ${senior ? '<p class="intro-text">Половина пиццы и ещё треть — сколько это вместе? Он посчитал так:</p>' : ''}
+      ${sum(true)}
+      <p class="intro-text">${senior ? 'Здесь всё верно?' : 'Верно я посчитал?'}</p>
+      <div class="intro-actions"><button class="btn btn-primary btn-big" data-intro-pick="wrong">${senior ? 'Есть ошибка' : 'Тут ошибка'}</button><button class="btn btn-ghost btn-big" data-intro-pick="right">Всё верно</button></div>`;
+  else if (introStep === 2) body = `
+      ${sum(false)}
+      <h1 class="intro-title">${introPick === 'wrong' ? (senior ? 'Верно, ошибка есть. Докажем на пицце.' : 'Зоркий глаз! Давай проверим на пицце.') : 'Давай проверим на пицце.'}</h1>
+      <div class="intro-pizzas">
+        <figure>${introPizza(6, [[3, HALF], [2, THIRD]], 'Пицца: закрашена половина и ещё треть — почти вся')}
+          <figcaption><b>Сколько съели</b><span><i class="dot dot-half"></i>половина <i class="dot dot-third"></i>и ещё треть</span></figcaption></figure>
+        <figure>${introPizza(5, [[2, BIP]], 'Пицца на пять кусков, закрашены два — меньше половины')}
+          <figcaption><b>Что вышло у ${senior ? 'него' : 'Бипыча'}</b><span><i class="dot dot-bip"></i>2 куска из 5</span></figcaption></figure>
+      </div>
+      <p class="intro-text">${senior ? 'Слева съедено больше половины пиццы. А по его ответу — меньше половины.' : 'Слева видно: съели больше половины пиццы. А у меня вышло меньше половины!'} Может такое быть?</p>
+      ${introMiss ? `<p class="intro-hint" role="status">Посмотри на левую пиццу: целая половина и ещё кусок. Это точно больше, чем ${F(2, 5)} на правой.</p>` : ''}
+      <div class="intro-actions"><button class="btn btn-primary btn-big" data-intro-pick="never">Нет, съели больше</button><button class="btn btn-ghost btn-big" data-intro-pick="maybe">Может</button></div>`;
+  else body = `
+      <div class="intro-trophy">${window.VEKTOR_TONE.art(bug, { size: 88, status: 'beaten' })}</div>
+      <h1 class="intro-title">${senior ? 'Ты нашёл неверное правило' : 'Ты поймал первого жучка!'}</h1>
+      ${senior ? '' : `<p class="intro-text">Это ${esc(bug ? bug.kidName : 'Складыватель')} — он живёт у многих.</p>`}
+      <div class="intro-why"><p><b>${senior ? 'Ошибка:' : 'Я ошибся:'}</b> сложил верх с верхом (1 + 1) и низ с низом (2 + 3). А половина и треть — куски разного размера.</p>
+        <p><b>Верно:</b> режем пиццу на 6 кусков. Половина — 3 куска, треть — 2. Вместе ${F(5, 6)}.</p></div>
+      <p class="intro-how-line"><span>Так работает Вектор:</span> <b>находим</b> неверное правило → <b>ломаем</b> примером → <b>проверяем через день</b></p>
+      <div class="intro-actions"><button class="btn btn-primary btn-big" data-intro-go="diagnostic">${senior ? 'Проверить себя: 6 задач' : 'Найти моих жучков: 6 задач'}</button><button class="btn btn-ghost btn-big" data-intro-go="home">Сразу к первой теме</button></div>`;
+  return `<section class="intro intro-step-${introStep}" aria-live="polite">
+    <div class="intro-card">
+      <div class="intro-top">${dots}${introStep < 3 ? '<button class="link small" data-intro-skip>Пропустить</button>' : ''}</div>
+      ${senior || introStep !== 1 ? '' : '<div class="intro-pet" id="pet-intro" aria-hidden="true"></div>'}
+      <div class="intro-body">${body}</div>
+    </div>
+  </section>`;
+}
+function runIntro() {
+  const host = app.querySelector('.intro'); if (!host) return;
+  const petEl = app.querySelector('#pet-intro');
+  const pet = petEl ? petMount(petEl, { size: introStep === 3 ? 96 : 112, hideCharge: true, state: introStep === 1 ? 'confused' : introStep === 2 ? 'thinking' : 'celebrate' }) : null;
+  const finish = to => { state.introDone = true; save(); introStep = 1; introPick = null; introMiss = false; location.hash = to; };
+  host.querySelectorAll('[data-intro-pick]').forEach(b => b.onclick = () => {
+    const v = b.dataset.introPick;
+    if (introStep === 1) { introPick = v; introStep = 2; logEvent('intro', { step: 1, pick: v }); render(); return; }
+    if (v === 'maybe') { introMiss = true; sfx('wrong'); render(); return; }
+    introStep = 3; sfx('win'); confetti(); logEvent('intro', { step: 2, miss: introMiss }); render();
+  });
+  host.querySelectorAll('[data-intro-go]').forEach(b => b.onclick = () => finish(b.dataset.introGo));
+  const sk = host.querySelector('[data-intro-skip]'); if (sk) sk.onclick = () => { logEvent('intro', { skip: introStep }); finish('home'); };
+  if (pet && introStep === 3) try { pet.setState('celebrate'); } catch {}
 }
 
 // Три точки шагов темы: ✓ готово, ● сейчас, ○ потом
@@ -943,14 +1025,21 @@ let diagTask = null;
 function diagnostic() {
   const d = state.diag;
   if (d.step >= DIAG.length) {
-    const right = d.results.filter(Boolean).length, weak = DIAG.filter((_, k) => !d.results[k]);
-    return head('Диагностика пройдена', `Верных ответов: ${right} из ${DIAG.length}.`) + `<div class="sheet" style="max-width:640px">
-      ${weak.length ? `<h3>С этого стоит начать</h3><ul>${weak.map(i => `<li><button class="link" data-lesson="${i}">${topics[i].title}</button></li>`).join('')}</ul>` : '<h3>Отличный результат</h3><p>Все темы диагностики тебе знакомы. Можно двигаться дальше по маршруту.</p>'}
-      <div class="row-actions"><button class="btn btn-primary" data-go="home">К маршруту</button><button class="btn btn-ghost" id="diag-restart">Пройти ещё раз</button></div></div>`;
+    const right = d.results.filter(Boolean).length, weak = DIAG.map((i, k) => ({ i, k })).filter(x => !d.results[x.k]);
+    const B = window.VEKTOR_BUGS, TN = window.VEKTOR_TONE, senior = TN.senior();
+    const row = ({ i, k }) => {
+      const key = Array.isArray(d.bugs) && d.bugs[k], bug = key && B && B.byKey[`${topics[i].id}:${key}`];
+      return `<li class="diag-row">${bug ? `<span class="diag-art">${TN.art(bug, { size: 36 })}</span>` : `<span class="diag-art diag-num">${k + 1}</span>`}
+        <div><b>${topics[i].title}</b><span class="muted small">${bug ? (senior ? esc(bug.title) : `Жучок «${esc(bug.kidName)}»: ${esc(bug.kidRule || bug.title.toLowerCase())}`) : 'Здесь стоит потренироваться'}</span></div>
+        <button class="btn btn-ghost btn-sm" data-lesson="${i}">Разобрать</button></li>`;
+    };
+    return head(weak.length ? (senior ? 'Проверка пройдена' : 'Готово! Вот что мы нашли') : 'Отличный результат', `Верно ${right} из ${DIAG.length}. ${weak.length ? 'Начнём с того, где правило сбивает чаще всего.' : 'Все темы проверки тебе знакомы — двигаемся дальше по пути.'}`) + `<div class="sheet diag-result" style="max-width:640px">
+      ${weak.length ? `<ol class="diag-list">${weak.map(row).join('')}</ol>` : ''}
+      <div class="row-actions"><button class="btn btn-primary" data-go="home">К моему пути</button><button class="btn btn-ghost" id="diag-restart">Пройти ещё раз</button></div></div>`;
   }
   const i = DIAG[d.step];
   if (!diagTask || diagTask.i !== i) diagTask = { i, task: topics[i].generate(2), started: Date.now() };
-  return head('Диагностика', `${DIAG.length} коротких задач по разным темам, без подсказок. Ошибаться можно — так мы точнее подберём маршрут и темп.`) + `
+  return head(window.VEKTOR_TONE.senior() ? 'Проверка' : 'Ищем твоих жучков', `${DIAG.length} коротких задач по разным темам, без подсказок. Ошибаться можно — так мы найдём, где правило сбивает, и подберём путь.`) + `
   <section class="sheet task" style="max-width:760px">
     <div class="steps" aria-hidden="true">${DIAG.map((_, k) => `<i class="${k < d.step ? 'on' : ''}"></i>`).join('')}</div>
     <p class="muted">Вопрос ${d.step + 1} из ${DIAG.length} · ${topics[i].title}</p>
@@ -1046,7 +1135,7 @@ function settings() {
           <label><input type="radio" name="mode" value="key"${ai.mode === 'key' ? ' checked' : ''}> Мой ключ OpenRouter в этом браузере</label>
           <label><input type="radio" name="mode" value="proxy"${ai.mode === 'proxy' ? ' checked' : ''}> Свой сервер-прокси (ключ хранится на сервере)</label>
         </fieldset>
-        <label class="field" data-show="key">Ключ OpenRouter<input type="password" name="key" id="ai-key" value="${esc(ai.key)}" placeholder="sk-or-v1-…" spellcheck="false"></label>
+        <label class="field" data-show="key">Ключ OpenRouter<input type="password" name="key" id="ai-key" value="${esc(ai.key)}" placeholder="Ключ из настроек OpenRouter" spellcheck="false"></label>
         <label class="field" data-show="proxy">Адрес прокси<input type="url" name="proxy" id="ai-proxy" value="${esc(ai.proxy)}" placeholder="https://vektor-tutor.имя.workers.dev"></label>
         <label class="field" data-show="key proxy">Модель<select name="model" id="ai-model">${T.MODELS.map(m => `<option value="${m.id}"${ai.model === m.id ? ' selected' : ''}>${m.name}</option>`).join('')}</select></label>
         <div class="row-actions">
@@ -1089,11 +1178,14 @@ function settingsServer() {
         <button class="btn btn-primary" type="submit">Сохранить</button>
         <div class="feedback" id="feedback" role="status" aria-live="polite"></div>
       </form>
+      ${window.VEKTOR_PROFILE ? window.VEKTOR_PROFILE.html() : ''}
       ${skinPicker()}
     </div>
     <div class="stack side">
       <div class="sheet"><h2>Закончил занятие?</h2><p class="muted small">Выйди, чтобы следующий ученик не попал в твой аккаунт. Прогресс сохранится.</p>
         <button class="btn btn-primary" type="button" id="profile-logout">Выйти</button></div>
+      <div class="sheet seen"><h2>Что видит родитель</h2><p class="muted small">Если дашь родителю код из «Моего аккаунта», он увидит только итог недели — то же, что здесь:</p>
+        <ul class="seen-list"><li class="yes">в какие дни ты занимался</li><li class="yes">какие темы прошёл</li><li class="yes">какие ошибки нашлись и какие ты уже закрыл</li><li class="no">каждый твой ответ</li><li class="no">переписку с наставником</li></ul></div>
       <div class="sheet"><h2>Помощь</h2><p class="muted small">Короткая экскурсия по главному экрану.</p><button class="btn btn-ghost" id="tour-again">Показать подсказки снова</button></div>
     </div>
   </div>`;
@@ -1104,10 +1196,15 @@ function settingsServer() {
 const filterState = { map: 'Все', library: 'Все' };
 const route = () => { const [page, arg, stage] = (location.hash.slice(1) || 'home').split('/'); return { page: pages[page] && !(SERVER && page === 'teacher') ? page : 'home', i: Math.min(Math.max(+arg || 0, 0), topics.length - 1), stage }; };
 
+let passwordOffered = false;
+// Первый вход: сначала знакомство «Поймай ошибку Бипыча», а не экскурсия и анкеты
+const needsIntro = () => !state.introDone && !state.answers && !state.diag.step && !state.attempts.length;
 function render() {
+  if (route().page === 'home' && needsIntro() && !navigator.webdriver) { history.replaceState(null, '', '#intro'); }
   petsClear();
   if (window.VEKTOR_TONE) { window.VEKTOR_TONE.setGrade(state.settings.grade); document.body.classList.toggle('age-senior', window.VEKTOR_TONE.senior()); }
   const { page, i, stage } = route();
+  document.body.classList.toggle('is-intro', page === 'intro');
   const lessonStage = stage || (topics[i].legacy || meta(i).practice ? 'practice' : 'learn');
   document.querySelector('#crumb').textContent = page === 'lesson' ? topics[i].title : pages[page];
   document.title = (page === 'home' ? '' : (page === 'lesson' ? topics[i].title : pages[page]) + ' — ') + 'Вектор';
@@ -1115,14 +1212,19 @@ function render() {
   document.querySelector('#student-name').textContent = state.settings.name;
   { const sm = document.querySelector('.sidebar .profile small'); if (sm) sm.textContent = `Математика, ${state.settings.grade || 5} класс`; }
   document.querySelector('#avatar').textContent = (state.settings.name[0] || 'А').toUpperCase();
-  app.innerHTML = ({ home, map: () => mapPage(filterState.map), diagnostic, library: () => library(filterState.library), awards, teacher, settings, lesson: () => lessonPage(i, lessonStage), warmup: warmupPage })[page]();
+  app.innerHTML = ({ home, map: () => mapPage(filterState.map), diagnostic, library: () => library(filterState.library), awards, teacher, settings, lesson: () => lessonPage(i, lessonStage), warmup: warmupPage, intro: introPage })[page]();
   bind(page, i, lessonStage);
+  if(page==='settings'&&SERVER&&window.VEKTOR_PROFILE)window.VEKTOR_PROFILE.mount();
+  if(page==='home'&&SERVER&&window.VEKTOR_ASSIGNMENTS)window.VEKTOR_ASSIGNMENTS.mount(topics);
   bindInterests(app);
   mountPetsAndCollection(page, lessonStage);
   if (page === 'warmup') runWarmup();
+  if (page === 'intro') runIntro();
   app.querySelectorAll('[data-warmup]').forEach(b => b.onclick = () => { location.hash = 'warmup'; });
   hud();
-  if (page === 'home' && !state.toured && !navigator.webdriver) setTimeout(() => route().page === 'home' && startTour(0), 600);
+  if (page === 'home' && state.toured === false && !navigator.webdriver) setTimeout(() => route().page === 'home' && startTour(0), 600);
+  // Предложить свой пароль — когда ребёнок уже позанимался, а не в первую минуту
+  if (page === 'home' && SERVER && state.answers >= 3 && !passwordOffered && window.VEKTOR_PROFILE) { passwordOffered = true; window.VEKTOR_PROFILE.offer(); }
   requestAnimationFrame(drawRoute);
 }
 
@@ -1190,25 +1292,35 @@ function bind(page, i, stage) {
           const ev = t.legacy ? [] : A.afterAttempt(m, { solved: false, firstTry: false, hints: s.hints, sec: 0, mistake: r.mistake }, pace());
           const X = window.VEKTOR_XRAY, xrayExpr = X && !t.legacy ? X.exprOf(s.task) : null;
           petState('thinking');
-          fb.className = 'feedback bad big';
-          fb.innerHTML = `<p class="fb-title">${G.icon('repeat', 22)} Пока не так — попробуй ещё раз</p><p>${feedbackFor(r, s.task, i)}</p>` + eventsHtml(ev, i) +
-            `<div class="fb-actions">${xrayExpr ? `<button class="btn btn-primary" id="xray-open">${window.VEKTOR_TONE.t('catchBtn')}</button>` : ''}<button class="btn ${xrayExpr ? 'btn-ghost' : 'btn-primary'}" id="try-again">Исправить ответ</button></div><div class="fb-links">${s.hints < s.task.hints.length ? '<button class="link" id="fb-hint">Подсказка</button>' : ''}${t.legacy ? '' : '<button class="link" id="ask-tutor">Спросить наставника</button>'}</div>`;
+          // Известная ошибка → одна главная кнопка: сразу к разбору правила, без черновика.
+          // Черновик «как считал» остаётся ссылкой — и главным путём для незнакомых ошибок.
+          const rk = !t.legacy && r.mistake && window.VEKTOR_BUGS && window.VEKTOR_BUGS.byKey[`${t.id}:${r.mistake}`];
+          const senior = window.VEKTOR_TONE.senior();
+          const fbTitle = rk ? (senior ? 'Здесь сработало неверное правило' : 'Похоже, тут жучок') : 'Пока не так — попробуй ещё раз';
+          const primary = rk ? `<button class="btn btn-primary btn-big" id="catch-open">${window.VEKTOR_TONE.t('catchBtn')}</button>`
+            : xrayExpr ? `<button class="btn btn-primary btn-big" id="xray-open">${window.VEKTOR_TONE.t('catchBtn')}</button>`
+            : '<button class="btn btn-primary" id="try-again">Исправить ответ</button>';
+          const links = [rk || xrayExpr ? '<button class="link" id="try-again">Исправить ответ</button>' : '',
+            rk && xrayExpr ? '<button class="link" id="xray-open">Записать, как считал</button>' : '',
+            s.hints < s.task.hints.length ? '<button class="link" id="fb-hint">Подсказка</button>' : '',
+            t.legacy ? '' : '<button class="link" id="ask-tutor">Спросить наставника</button>'].filter(Boolean).join('');
+          fb.className = 'feedback bad big' + (rk ? ' fb-bug' : '');
+          fb.innerHTML = `<p class="fb-title">${rk ? window.VEKTOR_TONE.art(rk, { size: 30 }) : G.icon('repeat', 22)} ${fbTitle}</p><p>${rk && mistakeOf(i, r.mistake) ? `<b>${mistakeOf(i, r.mistake).title}.</b> ${mistakeOf(i, r.mistake).say}` : feedbackFor(r, s.task, i)}</p>` + eventsHtml(ev, i) +
+            `<div class="fb-actions">${primary}</div><div class="fb-links">${links}</div>`;
           fb.querySelector('#try-again').onclick = () => { const inp = app.querySelector('#ans-num'); if (inp) { inp.focus(); inp.select(); } };
           const fh = fb.querySelector('#fb-hint'); if (fh) fh.onclick = () => app.querySelector('#hint-btn')?.click();
           sfx('wrong');
           const ask = fb.querySelector('#ask-tutor');
           if (ask) ask.onclick = () => { tutorSay(i, 'task', `Я ответил «${value}», но не получилось. Помоги понять, где ошибка.`); app.querySelector('.chat-task')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
           bindEventButtons(fb, i);
-          const rk = !xrayExpr && r.mistake && window.VEKTOR_BUGS && window.VEKTOR_BUGS.byKey[`${t.id}:${r.mistake}`];
-          if (rk && !t.legacy) {
-            fb.querySelector('.fb-actions').insertAdjacentHTML('afterbegin', `<button class="btn btn-primary" id="review-open">${window.VEKTOR_TONE.t('catchBtn')}</button>`);
-            fb.querySelector('#try-again').className = 'btn btn-ghost';
-            fb.querySelector('#review-open').onclick = () => {
-              let host = app.querySelector('#xray-host'); if (!host) { host = document.createElement('div'); host.id = 'xray-host'; fb.after(host); }
-              if (!(s.xray && s.xray.key === rk.key)) { s.xray = { key: rk.key, level: 1, step: null }; logEvent('bug_found', { bug: rk.key, topic: t.id, level: 1, step: null }); }
-              openReview(host, rk.key, s, i);
-            };
-          }
+          const co = fb.querySelector('#catch-open');
+          if (co) co.onclick = () => {
+            let host = app.querySelector('#xray-host'); if (!host) { host = document.createElement('div'); host.id = 'xray-host'; fb.after(host); }
+            if (!(s.xray && s.xray.key === rk.key)) { s.xray = { key: rk.key, level: 1, step: null }; logEvent('bug_found', { bug: rk.key, topic: t.id, level: 1, step: null }); }
+            petState('catching'); co.disabled = true;
+            openReview(host, rk.key, s, i);
+            host.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          };
           const xo = fb.querySelector('#xray-open');
           if (xo) xo.onclick = () => {
             let host = app.querySelector('#xray-host');
@@ -1303,7 +1415,7 @@ function bind(page, i, stage) {
     if (ok) setPct(ti, Math.max(pct(ti), 60));
     if (r.mistake) { const m = meta(ti); m.errors[r.mistake] = (m.errors[r.mistake] || 0) + 1; }
     state.attempts = [...state.attempts, { topic: topics[ti].id, firstTry: ok, hints: 0, sec, level: 2, diag: true }].slice(-60);
-    state.diag.results[k] = ok; state.diag.step++; diagTask = null; save(); render();
+    state.diag.results[k] = ok; if (!Array.isArray(state.diag.bugs)) state.diag.bugs = []; state.diag.bugs[k] = ok ? null : (r.mistake || null); state.diag.step++; diagTask = null; save(); render();
     if (state.diag.step >= DIAG.length) celebrate(G.diag(game(), today()));
   };
   if (dform) bindAnswerKeys();
