@@ -1313,3 +1313,57 @@ body.is-focus #app{max-width:820px;padding:10px 20px calc(28px + env(safe-area-i
   .chat-lesson{column-gap:6px}
   .chat-lesson .msg.assistant:not(.is-old) .msg-body{font-size:16px;padding:12px 14px}
 }
+
+/* ================= Разговор с Бипычем: просто, как в мессенджере ================= */
+/* поле ввода — одна «таблетка»: микрофон, пока пусто; стрелка «отправить», когда есть текст */
+.composer{position:relative;display:flex;align-items:center;gap:4px;flex:1;min-width:0;padding:4px 4px 4px 16px;border:1.5px solid var(--line);border-radius:999px;background:var(--field,var(--sheet));transition:border-color .2s,box-shadow .2s}
+.composer:focus-within{border-color:var(--green);box-shadow:0 0 0 4px var(--green-soft)}
+.chat-form .composer input{flex:1;min-width:0;padding:10px 0;border:0!important;background:none;box-shadow:none!important;font-size:16px;outline:none}
+.composer-btn{flex:none;display:grid;place-items:center;width:40px;height:40px;border:0;border-radius:50%;cursor:pointer;transition:transform .15s ease,background .2s,opacity .2s}
+.composer-btn:active{transform:scale(.9)}
+.chat-mic{background:none;color:var(--ink-2)}
+.chat-mic:hover{background:var(--tint)}
+.chat-send{background:var(--green);color:var(--on-accent);animation:send-pop .25s cubic-bezier(.3,1.6,.5,1)}
+.composer:has(input:placeholder-shown) .chat-send{display:none}
+.composer:has(input:not(:placeholder-shown)) .chat-mic{display:none}
+.composer-btn:disabled{opacity:.4;cursor:default}
+@keyframes send-pop{0%{transform:scale(.4);opacity:0}100%{transform:scale(1);opacity:1}}
+
+/* главная кнопка «Дальше» — одна и крупная; остальные подсказки — лёгкие «чипсы» над ней */
+.chat-quick{display:flex;flex-direction:column;gap:10px}
+.chat-next{width:100%;justify-content:center;min-height:52px;font-size:18px;border-radius:16px;animation:next-in .35s ease both;transition:transform .12s ease}
+.chat-next:active{transform:translateY(2px) scale(.99)}
+.chat-chips{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:2px}
+.chat-chips::-webkit-scrollbar{display:none}
+.chip{flex:none;padding:8px 14px;border:1.5px solid var(--line);border-radius:999px;background:var(--sheet);color:var(--ink);font:inherit;font-size:14px;font-weight:600;cursor:pointer;
+  opacity:0;animation:chip-in .35s ease forwards;animation-delay:calc(.9s + var(--n) * .08s);transition:transform .12s,border-color .2s,background .2s}
+.chip:hover{border-color:var(--green);background:var(--green-soft)}
+.chip:active{transform:scale(.95)}
+/* пока ребёнок пишет — подсказки не мешают */
+.chat:has(.composer input:not(:placeholder-shown)) .chat-chips,.chat:has(.composer:focus-within) .chat-chips{display:none}
+@keyframes chip-in{0%{opacity:0;transform:translateY(6px)}100%{opacity:1;transform:none}}
+@keyframes next-in{0%{opacity:0;transform:translateY(8px)}100%{opacity:1;transform:none}}
+
+/* ответ ученика въезжает справа, как в мессенджере */
+.chat .msg.user .msg-body{border-radius:18px 18px 4px 18px;animation:user-in .25s ease both}
+@keyframes user-in{0%{opacity:0;transform:translateX(16px)}100%{opacity:1;transform:none}}
+
+/* «Весь разговор» ↔ «Свернуть»: понятная кнопка-таблетка, при открытом разговоре прилипает сверху */
+.chat-lesson .bip-history{position:sticky;top:0;z-index:2;justify-self:center;align-self:center;display:inline-flex!important;align-items:center;gap:4px;margin:0 auto 8px;padding:6px 14px;border:1.5px solid var(--line);border-radius:999px;
+  background:var(--sheet);color:var(--ink-2);font:inherit;font-size:13px;font-weight:700;text-decoration:none;cursor:pointer;box-shadow:0 2px 8px rgba(20,30,40,.06);transition:transform .15s}
+.chat-lesson .bip-history:active{transform:scale(.96)}
+.bip-history .bh-close{display:none}
+.chat-lesson.show-old .bip-history .bh-open{display:none}
+.chat-lesson.show-old .bip-history .bh-close{display:inline-flex;align-items:center;gap:4px}
+.bip-history .bh-open,.bip-history .bh-close{display:inline-flex;align-items:center;gap:4px}
+.chat-lesson.show-old .bip-history .bh-open{display:none}
+.chat-lesson:not(.show-old) .bip-history .bh-close{display:none}
+.chat-lesson.show-old .chat-log{max-height:58vh;overflow-y:auto;border-radius:16px}
+.chat-lesson.show-old .msg.is-old{display:flex;opacity:.75;animation:user-in .2s ease both}
+.chat-lesson.show-old .msg.assistant.is-old .msg-body{border-radius:18px 18px 18px 4px}
+
+/* полоска «Узнать» вверху заполняется по ходу объяснения */
+.lesson-bar .step.on .step-bar{background:linear-gradient(90deg,var(--green) 0 var(--fill,40%),var(--green-soft) var(--fill,40%));transition:background .4s}
+.lesson-bar .step.on .step-bar{transition:--fill .4s}
+@media (max-width:760px){.lesson .lesson-progress{display:none}}
+@media (prefers-reduced-motion:reduce){.chip,.chat-next,.chat-send,.chat .msg.user .msg-body{animation:none;opacity:1}}

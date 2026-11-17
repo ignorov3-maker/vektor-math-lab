@@ -261,13 +261,15 @@ function chatBox(i, kind) {
   const steps = kind === 'lesson' && c.beats && !online ? `<div class="lesson-progress"><span>Шаг ${Math.max(1, c.beat + 1)} из ${c.beats.length}</span>${bar(Math.round(Math.max(1, c.beat + 1) / c.beats.length * 100))}</div>` : '';
   // урок: Бипыч сам говорит — на виду его последняя реплика и ответ ученика, раньше сказанное спрятано в «Что было раньше»
   const vis = c.msgs.filter(m => !m.hidden), lastA = kind === 'lesson' ? vis.map(m => m.role).lastIndexOf('assistant') : -1;
-  const older = lastA > 0 ? `<button type="button" class="bip-history" data-bip-history>Что было раньше</button>` : '';
+  const older = lastA > 0 ? `<button type="button" class="bip-history" data-bip-history aria-label="Показать или свернуть весь разговор"><span class="bh-open">${CHEV_UP} Весь разговор</span><span class="bh-close">${CHEV_DOWN} Свернуть</span></button>` : '';
+  // главная кнопка — крупно; остальные подсказки — маленькие «чипсы», появляются после реплики Бипыча
+  const qr = quickReplies(i, kind), main = qr.filter(x => x[2]), rest = qr.filter(x => !x[2]).slice(0, 3);
   return `<div class="chat chat-${kind}" data-chat="${kind}">${steps}
     ${kind === 'lesson' ? '<div class="bip-stage" aria-hidden="true"><span class="bip-stage-pet"></span></div>' : ''}
     <div class="chat-log" aria-live="polite">${older}${vis.map((m, k) => msgHtml(m, k, k < lastA && !m.error)).join('') || (kind === 'task' ? '<p class="muted small chat-empty">Застрял? Спроси Бипыча — он не скажет ответ, но поможет дойти до него самому.</p>' : '')}</div>
-    <div class="chat-quick">${quickReplies(i, kind).map(([v, l, main]) => `<button type="button" class="btn ${main ? 'btn-primary' : 'btn-ghost'} btn-sm" data-quick="${esc(v)}">${l}</button>`).join('')}</div>
+    <div class="chat-quick">${rest.length ? `<div class="chat-chips">${rest.map(([v, l], n) => `<button type="button" class="chip" style="--n:${n}" data-quick="${esc(v)}">${l}</button>`).join('')}</div>` : ''}${main.map(([v, l]) => `<button type="button" class="btn btn-primary chat-next" data-quick="${esc(v)}">${l}</button>`).join('')}</div>
     ${kind === 'lesson' && c.pending ? `<form class="chat-form chat-answer" autocomplete="off">${answerInput(c.pending.task, 'Проверить')}</form>` : `<form class="chat-form" autocomplete="off"><label class="visually-hidden" for="chat-in-${kind}">Сообщение наставнику</label>
-      <input id="chat-in-${kind}" placeholder="${ph}" maxlength="400"${c.busy ? ' disabled' : ''}>${SPEECH ? `<button class="btn btn-ghost chat-mic" type="button" aria-label="Сказать голосом" title="Сказать голосом"${c.busy ? ' disabled' : ''}>${MIC_SVG}</button>` : ''}<button class="btn btn-primary" type="submit"${c.busy ? ' disabled' : ''}>Отправить</button></form>`}
+      <div class="composer"><input id="chat-in-${kind}" placeholder="${ph}" maxlength="400"${c.busy ? ' disabled' : ''}>${SPEECH ? `<button class="composer-btn chat-mic" type="button" aria-label="Сказать голосом" title="Сказать голосом"${c.busy ? ' disabled' : ''}>${MIC_SVG}</button>` : ''}<button class="composer-btn chat-send" type="submit" aria-label="Отправить" title="Отправить"${c.busy ? ' disabled' : ''}>${SEND_SVG}</button></div></form>`}
     <p class="chat-mode small muted">${online && !c.forceOffline ? (SERVER ? 'Бипыч не скажет ответ — поможет дойти до него самому.' : `Наставник: ${esc(modelName())}.`) : online ? 'ИИ временно недоступен — урок идёт по конспекту.' : 'Бипыч без ИИ — отвечает по конспекту.'} ${online || SERVER ? '' : '<a href="#settings">Подключить ИИ</a>'}</p>
   </div>`;
 }
@@ -286,7 +288,14 @@ function refreshChat(i, kind) {
   bindChat(i, kind);
   V.labBind(box);
   log.scrollTop = log.scrollHeight;
-  if (kind === 'lesson') bipReact(i);
+  if (kind === 'lesson') { bipReact(i); learnFill(i); }
+}
+// полоска «Узнать» вверху заполняется по ходу объяснения
+function learnFill(i) {
+  const bar = app.querySelector('.lesson-bar .step.on[data-stage="learn"] .step-bar'); if (!bar) return;
+  const c = getChat(i, 'lesson');
+  const p = c.done ? 100 : c.beats && c.beats.length ? Math.round(Math.max(1, c.beat + 1) / c.beats.length * 100) : Math.min(90, 12 + c.msgs.filter(m => m.role === 'assistant').length * 12);
+  bar.style.setProperty('--fill', p + '%');
 }
 
 // Бипыч на сцене урока: говорит последнюю реплику, жест — по смыслу
@@ -316,6 +325,9 @@ function updateLastMsg(i, kind, m) {
 /* Голосовой ввод в чат: встроенное распознавание речи браузера (ru-RU), без платных моделей.
    Где браузер не умеет — кнопки микрофона нет, остаётся текст. Речь → текст в поле, ребёнок проверяет и отправляет. */
 const SPEECH = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+const SEND_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const CHEV_UP = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="m6 15 6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const CHEV_DOWN = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const MIC_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-2.1A7 7 0 0 0 19 12z" fill="currentColor"/></svg>';
 let listening = null;
 function listen(inp, btn) {
@@ -375,9 +387,9 @@ function mountPetsAndCollection(page, stage) {
     }
   }
   const sp = app.querySelector('.chat-lesson .bip-stage-pet');
-  stagePet = sp ? petMount(sp, { size: innerWidth <= 760 ? 96 : 110, state: 'happy', hideCharge: true }) : null;
+  stagePet = sp ? petMount(sp, { size: innerWidth <= 760 ? 76 : 110, state: 'happy', hideCharge: true }) : null;
   stageSaid = -1;
-  if (stagePet && page === 'lesson') setTimeout(() => bipReact(route().i, true), 250);
+  if (stagePet && page === 'lesson') { setTimeout(() => bipReact(route().i, true), 250); learnFill(route().i); }
   const lp = app.querySelector('#pet-lesson');
   if (lp) petMount(lp, { size: 56, state: 'idle', hideCharge: true });
   if (page === 'lesson' && stage === 'practice') {
@@ -1722,7 +1734,7 @@ resetBtn.onclick = () => {
   state = fresh(); session = null; for (const k in chats) delete chats[k]; save(); location.hash = 'home'; render();
 };
 addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
-app.addEventListener('click', e => { const h = e.target.closest('[data-bip-history]'); if (h) h.closest('.chat')?.classList.toggle('show-old'); });
+app.addEventListener('click', e => { const h = e.target.closest('[data-bip-history]'); if (!h) return; const c = h.closest('.chat'), open = c.classList.toggle('show-old'), log = c.querySelector('.chat-log'); if (log) log.scrollTop = open ? log.scrollHeight : 0; });
 
 // ---------- Скины ----------
 function setSkin(name) {
