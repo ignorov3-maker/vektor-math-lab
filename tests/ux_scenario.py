@@ -85,7 +85,7 @@ async def main():
         rep('старт: на карте следующий уровень — «Умножение»', await pg.locator('#path .is-current a[href="#quick/q-mult"]').count() >= 1)
         # Метрика: при номере счётчика грузится, поля и реплики ученика скрыты от Вебвизора, текст ответов в цели не уходит
         mp = await ctx.new_page(); mp.on('pageerror', lambda e: errs.append(str(e)))
-        await mp.add_init_script("Object.defineProperty(navigator,'webdriver',{get:()=>false}); Object.defineProperty(window, 'VEKTOR_CONFIG', { configurable: true, set(v) { Object.defineProperty(window, 'VEKTOR_CONFIG', { value: Object.assign(v, { metrikaId: '12345' }), writable: true }); }, get() { return undefined; } })")
+        await mp.add_init_script("window.__ymTest = true; Object.defineProperty(navigator,'webdriver',{get:()=>false}); Object.defineProperty(window, 'VEKTOR_CONFIG', { configurable: true, set(v) { Object.defineProperty(window, 'VEKTOR_CONFIG', { value: Object.assign(v, { metrikaId: '12345' }), writable: true }); }, get() { return undefined; } })")
         await mp.route('https://mc.yandex.ru/**', lambda r: r.fulfill(status=200, content_type='application/javascript', body=''))
         await mp.goto(B + '#settings'); await mp.wait_for_timeout(500)
         ym = await mp.evaluate("(window.ym && window.ym.a || []).map(a => [...a])")

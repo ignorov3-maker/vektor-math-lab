@@ -4,12 +4,14 @@
 // его сообщения Бипычу и имя скрыты (ym-hide-content). В цели уходят только номера уровней и тем, без текста ответов.
 (function () {
   var id = window.VEKTOR_CONFIG && +window.VEKTOR_CONFIG.metrikaId;
-  if (!id || navigator.webdriver) { window.VEKTOR_METRIKA = { goal: function () {} }; return; }
+  // локально, в автотестах и с файла не считаем: в отчётах — только настоящие посетители сайта
+  var local = location.protocol !== 'https:' || /^(localhost|127\.|0\.0\.0\.0)/.test(location.hostname);
+  if (!id || navigator.webdriver || (local && !window.__ymTest)) { window.VEKTOR_METRIKA = { goal: function () {} }; return; }
   window.ym = window.ym || function () { (window.ym.a = window.ym.a || []).push(arguments); };
   window.ym.l = +new Date();
-  var s = document.createElement('script'); s.async = true; s.src = 'https://mc.yandex.ru/metrika/tag.js';
+  var s = document.createElement('script'); s.async = true; s.src = 'https://mc.yandex.ru/metrika/tag.js?id=' + id;
   document.head.appendChild(s);
-  window.ym(id, 'init', { clickmap: true, trackLinks: true, accurateTrackBounce: true, trackHash: true, webvisor: true, ssr: false });
+  window.ym(id, 'init', { clickmap: true, trackLinks: true, accurateTrackBounce: true, trackHash: true, webvisor: true, ssr: false, referrer: document.referrer, url: location.href });
 
   // разметка приватных мест: поля ввода, реплики ученика, имя
   var PRIVATE = '.msg.user, [data-ym-private], #student-name, #avatar, .bip-dock .bipych-bubble';
