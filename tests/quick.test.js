@@ -4,7 +4,11 @@ require('../content/quick.js');
 const Q = window.VEKTOR_QUICK; let bad = 0;
 const ok = (c, n) => { if (!c) { bad++; console.log('FAIL', n); } };
 ok(Q.LEVELS.length >= 3 && Q.PER_LEVEL === 5, 'уровни есть, по 5 задач');
-for (const l of Q.LEVELS) {
+const chk = Q.byId['q-check'];
+ok(Q.LEVELS[0] === chk && chk.check && chk.plan.every(x => Q.byId[x] && !Q.byId[x].check), 'первый уровень — проверка знаний по другим уровням');
+ok(Q.count(chk) === chk.plan.length && Q.count(Q.byId['q-add']) === Q.PER_LEVEL, 'длина уровней');
+chk.plan.forEach((x, k) => { const t = Q.task(chk, k); ok(t.from === x && t.tiles.includes(t.answer), 'проверка: задача ' + k + ' из ' + x); });
+for (const l of Q.LEVELS.filter(l => !l.check)) {
   ok(Q.byId[l.id] === l && l.title && l.short && l.say, l.id + ': описание');
   for (let k = 0; k < 300; k++) {
     const t = l.gen();

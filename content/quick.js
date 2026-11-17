@@ -11,6 +11,10 @@
     return shuffle([...set]);
   };
   const LEVELS = [
+    // первый уровень — проверка: что ребёнок уже знает, то пропускаем, чтобы не скучал
+    { id: 'q-check', short: 'Что ты знаешь', title: 'Проверка знаний', check: true,
+      plan: ['q-add', 'q-mult', 'q-seq', 'q-half', 'q-mult', 'q-seq'],
+      say: 'Давай проверим твои прошлые знания! Что помнишь — перепрыгнем.' },
     { id: 'q-add', short: 'Сложение', title: 'Сложение', say: 'Разомнёмся: сложи два числа.',
       gen() { const a = rnd(1, 4), b = rnd(1, 5 - a); return { parts: [a, '+', b, '='], answer: a + b, tiles: [1, 2, 3, 4, 5], hint: `Отсчитай от ${a} ещё ${b}.` }; } },
     { id: 'q-mult', short: 'Умножение', title: 'Умножение', say: 'Умножение — это сложение одинаковых чисел.',
@@ -21,5 +25,12 @@
       gen() { const n = rnd(1, 6) * 2; return { parts: ['Половина от', n, '='], answer: n / 2, tiles: around(n / 2), hint: `Раздели ${n} поровну на двоих: сколько у каждого?` }; } },
   ];
   const PER_LEVEL = 5;
-  window.VEKTOR_QUICK = { LEVELS, PER_LEVEL, byId: Object.fromEntries(LEVELS.map(l => [l.id, l])) };
+  const byId = Object.fromEntries(LEVELS.map(l => [l.id, l]));
+  const count = l => (l.plan ? l.plan.length : PER_LEVEL);
+  // задача k уровня; в проверке — по плану из разных уровней, с пометкой, откуда она
+  const task = (l, k) => {
+    const src = l.plan ? byId[l.plan[k % l.plan.length]] : l, t = src.gen();
+    return { ...t, from: src.id, tiles: t.tiles.includes(t.answer) ? t.tiles : [...t.tiles, t.answer] };
+  };
+  window.VEKTOR_QUICK = { LEVELS, PER_LEVEL, byId, count, task };
 })();

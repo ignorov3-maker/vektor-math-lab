@@ -78,7 +78,7 @@ document.addEventListener('click', e => {
   b.closest('.mood').innerHTML = '<span>Спасибо!</span>';
 });
 // журнал событий для анализа пилота (раздел 7 ТЗ); без сервера ничего не делает
-const logEvent = (type, data) => { if (window.VEKTOR_SYNC) window.VEKTOR_SYNC.event(type, data); window.VEKTOR_METRIKA?.goal(type); };
+const logEvent = (type, data) => { if (window.VEKTOR_SYNC) window.VEKTOR_SYNC.event(type, data); window.VEKTOR_METRIKA?.goal(type, data); };
 // Разбор жучка (Рентген мышления, шаги 1–4). Своя задача ребёнка — в виде структуры для движка.
 function ownProblem(task, topic) {
   const X = window.VEKTOR_XRAY, expr = X && X.exprOf(task);
@@ -739,7 +739,7 @@ function home() {
       const l = q.byId[n.id], done = quickDone(n.id), st = done ? 'done' : isCur ? 'started' : 'todo';
       return `<li class="node is-${st}${isCur ? ' is-current' : ''} node-quick${xx > 0 ? ' left' : ''}" style="--x:${xx}">
         ${isCur ? `<a class="node-bubble" href="#quick/${n.id}">Начать</a>` : ''}
-        <a class="node-btn" href="#quick/${n.id}" style="--p:${done ? 100 : 0}" aria-label="${l.title}: ${done ? 'пройдено' : isCur ? 'ты здесь' : 'можно открыть'}"><span class="node-face">${done ? '✓' : '★'}</span></a>
+        <a class="node-btn" href="#quick/${n.id}" style="--p:${done ? 100 : 0}" aria-label="${l.title}: ${done ? 'пройдено' : isCur ? 'ты здесь' : 'можно открыть'}"><span class="node-face">${done ? '✓' : l.check ? G.icon('target', 28) : '★'}</span></a>
         <div class="node-label"><b>${l.short}</b></div></li>`;
     }
     const i = n.i, st = status(i), due = dueReviews().includes(i), steps = stepStates(i);
@@ -784,15 +784,24 @@ function home() {
    Экран как в Duolingo: сверху крестик и полоска прогресса, в центре пример с пустой клеткой,
    снизу плитки. Плитку можно перетащить в клетку или просто нажать на неё. */
 let quickRun = null;
-function quickTask(l) { const t = l.gen(); return { ...t, tiles: t.tiles.includes(t.answer) ? t.tiles : [...t.tiles, t.answer] }; }
+const quickTask = (l, k) => Q().task(l, k);
+const ymGoal = (name, params) => window.VEKTOR_METRIKA?.goal(name, params);
 function quickPage() {
   const q = Q(), id = (location.hash.split('/')[1] || ''), l = q && q.byId[id];
   if (!l) return head('Старт', 'Такого уровня нет.') + '<a class="btn btn-primary" href="#home">К карте</a>';
-  if (!quickRun || quickRun.id !== id) quickRun = { id, k: 0, streak: 0, best: 0, misses: 0, task: quickTask(l), done: false, msg: l.say };
-  const r = quickRun, N = q.PER_LEVEL;
+  if (!quickRun || quickRun.id !== id) { quickRun = { id, k: 0, streak: 0, best: 0, misses: 0, task: quickTask(l, 0), done: false, msg: l.say, res: {} }; ymGoal(l.check ? 'check_start' : 'quick_start', { level: id }); }
+  const r = quickRun, N = q.count(l);
   const bar = `<div class="qz-top"><a class="qz-close" href="#home" aria-label="Выйти на карту">✕</a><div class="qz-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${N}" aria-valuenow="${r.k}"><i style="width:${r.k / N * 100}%"></i></div><span class="qz-streak${r.streak >= 2 ? ' on' : ''}" title="Подряд без ошибок">${G.icon('flame', 18)}<b>${r.streak}</b></span></div>`;
+  if (r.done && l.check) {
+    const known = (state.quick[id] && state.quick[id].known) || [], next = q.LEVELS.find(x => !x.check && !quickDone(x.id));
+    return `<section class="qz qz-done">${bar}
+      <div class="qz-center"><div class="qz-pet" id="pet-quick"></div>
+        <h1 class="qz-title">${next ? 'Проверка пройдена!' : 'Ты всё помнишь!'}</h1>
+        <p class="qz-sub">${known.length ? `Уже знаешь: ${known.map(x => q.byId[x].short.toLowerCase()).join(', ')}. Эти уровни засчитаны.` : 'Начнём с самого простого — так быстрее разгонимся.'}</p></div>
+      <div class="qz-foot">${next ? `<a class="btn btn-primary btn-big" href="#quick/${next.id}" data-quick-next>Начнём с: ${next.short}</a>` : `<a class="btn btn-primary btn-big" href="#home">Сразу к дробям</a>`}<a class="btn btn-ghost btn-big" href="#home">На карту</a></div></section>`;
+  }
   if (r.done) {
-    const next = q.LEVELS[q.LEVELS.findIndex(x => x.id === id) + 1];
+    const next = q.LEVELS.find((x, j) => j > q.LEVELS.findIndex(y => y.id === id) && !quickDone(x.id));
     return `<section class="qz qz-done">${bar}
       <div class="qz-center"><div class="qz-pet" id="pet-quick"></div>
         <h1 class="qz-title">Уровень пройден!</h1>
@@ -814,8 +823,26 @@ function runQuick() {
   const host = app.querySelector('.qz'); if (!host || !quickRun) return;
   const q = Q(), l = q.byId[quickRun.id], r = quickRun;
   const pet = petMount(app.querySelector('#pet-quick'), { size: 76, hideCharge: true, state: r.done ? 'celebrate' : 'idle' });
-  if (pet) setTimeout(() => { try { pet.say(r.done ? 'Вот это скорость! Идём дальше?' : r.msg, { type: true }); } catch {} }, 150);
+  if (pet) setTimeout(() => { try { pet.say(r.done ? (l.check ? 'Теперь я знаю, с чего начать!' : 'Вот это скорость! Идём дальше?') : r.msg, { type: true }); } catch {} }, 150);
+  const close = host.querySelector('.qz-close'); if (close) close.onclick = () => { if (!r.done) ymGoal('quick_exit', { level: r.id, k: r.k }); };
   if (r.done) return;
+  const N = q.count(l);
+  const finishLevel = () => {
+    r.done = true; state.quick = state.quick || {};
+    if (l.check) {
+      // уровень засчитан, если все его задачи в проверке решены с первого раза
+      const known = [...new Set(l.plan)].filter(x => r.res[x] && r.res[x].right && !r.res[x].wrong);
+      known.forEach(x => { if (!quickDone(x)) state.quick[x] = { done: true, at: today(), via: 'check' }; });
+      state.quick[r.id] = { done: true, at: today(), known };
+      logEvent('quick_check', { level: r.id, known: known.length, misses: r.misses }); ymGoal('check_done', { known: known.length, misses: r.misses });
+    } else {
+      state.quick[r.id] = { done: true, at: today(), best: r.best };
+      logEvent('quick', { level: r.id, misses: r.misses });
+    }
+    confetti(); sfx('win');
+  };
+  const nextTask = msg => { r.lock = false; r.missed = false; if (r.k >= N) finishLevel(); else { r.task = quickTask(l, r.k); r.msg = msg; } save(); render(); };
+  const mark = ok => { const f = r.task.from; r.res[f] = r.res[f] || { right: 0, wrong: 0 }; r.res[f][ok ? 'right' : 'wrong']++; };
   const slot = host.querySelector('[data-slot]');
   const answer = (v, tile) => {
     if (r.lock) return;
@@ -825,14 +852,16 @@ function runQuick() {
       celebrate(G.solved(game(), today(), { firstTry: !r.missed, hints: 0, wrongBefore: r.missed ? 1 : 0 }), { quiet: true });
       sfx('ok'); try { pet && pet.setState('happy'); } catch {}
       if (r.streak === 5) toast(`${G.icon('flame', 18)}<b>5 подряд!</b> Серия без ошибок`, 'toast-stars');
-      setTimeout(() => {
-        r.lock = false; r.missed = false;
-        if (r.k >= q.PER_LEVEL) { r.done = true; state.quick = state.quick || {}; state.quick[r.id] = { done: true, at: today(), best: r.best }; logEvent('quick', { level: r.id, misses: r.misses }); confetti(); sfx('win'); }
-        else { r.task = quickTask(l); r.msg = ['Точно!', 'Есть!', 'Верно!', 'Отлично!'][r.k % 4] + ' Следующий.'; }
-        save(); render();
-      }, 650);
+      if (l.check && !r.missed) mark(true);
+      setTimeout(() => nextTask(['Точно!', 'Есть!', 'Верно!', 'Отлично!'][r.k % 4] + (l.check ? ' Дальше.' : ' Следующий.')), 650);
+    } else if (l.check) {
+      // в проверке не переспрашиваем: показываем верный ответ и идём дальше, без наказания
+      r.lock = true; r.streak = 0; r.misses++; mark(false); ymGoal('quick_wrong', { level: r.id, from: r.task.from, k: r.k });
+      slot.textContent = r.task.answer; slot.classList.add('miss'); tile && tile.classList.add('shake');
+      try { pet && pet.setState('thinking'); pet && pet.say(`Не страшно — вот ответ. Потренируем в уровне «${q.byId[r.task.from].short}».`, { type: true }); } catch {}
+      r.k++; setTimeout(() => nextTask('Следующий вопрос.'), 1700);
     } else {
-      r.streak = 0; r.misses++; r.missed = true; sfx('wrong');
+      r.streak = 0; r.misses++; r.missed = true; sfx('wrong'); ymGoal('quick_wrong', { level: r.id, k: r.k });
       if (tile) { tile.classList.remove('shake'); void tile.offsetWidth; tile.classList.add('shake'); }
       try { pet && pet.setState('thinking'); pet && pet.say(r.task.hint, { type: true }); } catch {}
       host.querySelector('.qz-streak b').textContent = 0; host.querySelector('.qz-streak').classList.remove('on');
@@ -910,7 +939,7 @@ function introPage() {
       <div class="intro-why"><p><b>${senior ? 'Ошибка:' : 'Я ошибся:'}</b> сложил верх с верхом (1 + 1) и низ с низом (2 + 3). А половина и треть — куски разного размера.</p>
         <p><b>Верно:</b> режем пиццу на 6 кусков. Половина — 3 куска, треть — 2. Вместе ${F(5, 6)}.</p></div>
       <p class="intro-how-line"><span>Так работает Вектор:</span> <b>находим</b> неверное правило → <b>ломаем</b> примером → <b>проверяем через день</b></p>
-      <div class="intro-actions"><button class="btn btn-primary btn-big" data-intro-go="quick/q-add">Поехали!</button><button class="btn btn-ghost btn-big" data-intro-go="home">Посмотреть карту</button></div>`;
+      <div class="intro-actions"><button class="btn btn-primary btn-big" data-intro-go="quick/q-check">Поехали!</button><button class="btn btn-ghost btn-big" data-intro-go="home">Посмотреть карту</button></div>`;
   return `<section class="intro intro-step-${introStep}" aria-live="polite">
     <div class="intro-card">
       <div class="intro-top">${dots}${introStep < 3 ? '<button class="link small" data-intro-skip>Пропустить</button>' : ''}</div>
@@ -923,7 +952,7 @@ function runIntro() {
   const host = app.querySelector('.intro'); if (!host) return;
   const petEl = app.querySelector('#pet-intro');
   const pet = petEl ? petMount(petEl, { size: introStep === 3 ? 96 : 112, hideCharge: true, state: introStep === 1 ? 'confused' : introStep === 2 ? 'thinking' : 'celebrate' }) : null;
-  const finish = to => { state.introDone = true; save(); window.VEKTOR_METRIKA?.goal('intro_done'); introStep = 1; introPick = null; introMiss = false; location.hash = to; };
+  const finish = to => { state.introDone = true; save(); ymGoal('intro_done', { to }); introStep = 1; introPick = null; introMiss = false; location.hash = to; };
   host.querySelectorAll('[data-intro-pick]').forEach(b => b.onclick = () => {
     const v = b.dataset.introPick;
     if (introStep === 1) { introPick = v; introStep = 2; logEvent('intro', { step: 1, pick: v }); render(); return; }
@@ -1287,7 +1316,7 @@ function settingsServer() {
   <div class="layout settings">
     <div class="stack">
       <form class="sheet" id="settings-form">
-        <h2>${esc(s.name)}</h2>
+        <h2 data-ym-private>${esc(s.name)}</h2>
         <p class="muted small">Так тебя видит учитель. Своё имя вписывать не нужно.</p>
         <label class="field">Класс<select name="grade" id="set-grade">${[5, 6, 7, 8, 9].map(n => `<option value="${n}"${s.grade === n ? ' selected' : ''}>${n} класс</option>`).join('')}</select></label>
         <label class="field">Цель дня<select name="goal" id="set-goal">${[3, 5, 10].map(n => `<option value="${n}"${game().goal === n ? ' selected' : ''}>${n} задач в день</option>`).join('')}</select></label>
@@ -1314,7 +1343,7 @@ function settingsServer() {
 const filterState = { map: 'Все', library: 'Все' };
 const route = () => { const [page, arg, stage] = (location.hash.slice(1) || 'home').split('/'); return { page: pages[page] && !(SERVER && page === 'teacher') ? page : 'home', i: Math.min(Math.max(+arg || 0, 0), topics.length - 1), stage }; };
 
-let passwordOffered = false, bipChatFocus = false;
+let passwordOffered = false, bipChatFocus = false, ymLesson = '';
 // Первый вход: сначала знакомство «Поймай ошибку Бипыча», а не экскурсия и анкеты
 const needsIntro = () => !state.introDone && !state.answers && !state.diag.step && !state.attempts.length;
 function render() {
@@ -1339,13 +1368,15 @@ function render() {
   if (page === 'warmup') runWarmup();
   if (page === 'intro') runIntro();
   if (page === 'quick') runQuick();
+  if (page === 'lesson') { const key = i + '/' + lessonStage; if (key !== ymLesson) { ymLesson = key; ymGoal('lesson_' + lessonStage, { topic: topics[i].id }); } } else ymLesson = '';
   app.querySelectorAll('[data-warmup]').forEach(b => b.onclick = () => { location.hash = 'warmup'; });
   app.querySelectorAll('[data-bip-chat]').forEach(b => b.onclick = () => {
-    const cur = currentSpot();
+    const cur = currentSpot(); ymGoal('bip_tap', { kind: cur.kind });
     if (cur.kind === 'quick') { location.hash = 'quick/' + cur.id; return; }
     bipChatFocus = true; session = null; location.hash = `lesson/${cur.i}/practice`;
   });
-  if (page === 'home' && innerWidth <= 760) { const cur = app.querySelector('#path .is-current'); if (cur) { const r = cur.getBoundingClientRect(); if (r.bottom > innerHeight * .62) scrollTo({ top: scrollY + r.top - innerHeight * .3, behavior: 'instant' }); } }
+  // на телефоне карта сразу показывает текущий уровень (после сброса прокрутки при смене экрана)
+  if (page === 'home' && innerWidth <= 760) requestAnimationFrame(() => { const cur = app.querySelector('#path .is-current'); if (cur) { const r = cur.getBoundingClientRect(); if (r.bottom > innerHeight * .62) scrollTo({ top: scrollY + r.top - innerHeight * .3, behavior: 'instant' }); } });
   if (bipChatFocus && app.querySelector('#bip-chat')) { bipChatFocus = false; const c = app.querySelector('#bip-chat'); setTimeout(() => { c.scrollIntoView({ behavior: 'smooth', block: 'start' }); c.querySelector('input, textarea')?.focus({ preventScroll: true }); }, 300); }
   hud();
   if (page === 'home' && state.toured === false && !navigator.webdriver) setTimeout(() => route().page === 'home' && startTour(0), 600);
@@ -1616,7 +1647,7 @@ function finishSession(i) {
     if (s.right >= t.check.passScore) {
       const already = m.mastered;
       setPct(i, 100); m.failedChecks = 0;
-      if (!already) { window.VEKTOR_METRIKA?.goal('mastered'); m.mastered = true; m.masteredAt = today(); m.reviewStep = 0; m.reviewDue = addDays(today(), t.review.afterDays[0]); }
+      if (!already) { ymGoal('mastered', { topic: t.id }); m.mastered = true; m.masteredAt = today(); m.reviewStep = 0; m.reviewDue = addDays(today(), t.review.afterDays[0]); }
       if (!already) logEvent('mastery', { topic: t.id });
       if (!already) gameEvents = G.mastered(game(), ROUTE.filter(r => pct(r) >= DONE).length); // Д-02
     } else m.failedChecks++;

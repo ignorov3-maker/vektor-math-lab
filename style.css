@@ -1170,3 +1170,5 @@ a.node-bubble{text-decoration:none}
   .interests-ask .row-actions{margin-top:10px}
   .interests-ask .row-actions .btn{padding:8px 14px;min-height:0}
 }
+
+.qz-slot.miss{border-style:solid;border-color:var(--warn-line);background:var(--amber-soft);color:var(--amber-ink);animation:intro-pop .35s cubic-bezier(.3,1.6,.5,1)}
