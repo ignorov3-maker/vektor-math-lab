@@ -121,8 +121,8 @@ async def main():
         await pg.goto(D+'#lesson/9'); await pg.wait_for_timeout(150); await answer(pg,'3'); rep('краткая тема решается', 'Верно' in await pg.inner_text('#feedback'))
         await pg.goto(D+'#lesson/9/check'); rep('краткая тема не ломается на /check', await pg.locator('#answer-form').count()==1)
         # 10. Материалы → конспект открывает урок, а не тренировку
-        await pg.goto(B+'#library'); await pg.click('[data-lesson="2"][data-tab="notes"]'); await pg.wait_for_timeout(200)
-        rep('«Открыть конспект» ведёт в конспект', await pg.locator('.method').count()==1, await pg.evaluate("location.hash"))
+        await pg.goto(B+'#library'); await pg.click('.topic-row[data-lesson="2"]'); await pg.wait_for_timeout(200); await pg.goto(B+'#lesson/2/learn'); await pg.wait_for_timeout(200); await pg.click('.lb-tabs [data-learn-tab="notes"]'); await pg.wait_for_timeout(200)
+        rep('конспект открывается из урока кнопкой в верхней строке', await pg.locator('.method').count()==1, await pg.evaluate("location.hash"))
         # 11. ИИ: подключение, стрим, ошибки, запасной режим
         await pg.goto(B+'#settings'); await pg.check('input[value=key]'); await pg.fill('#ai-key','abc'); await pg.click('#ai-form button[type=submit]')
         rep('неверный формат ключа отклоняется', 'sk-or-' in await pg.inner_text('#ai-status'))
@@ -166,7 +166,7 @@ async def main():
         rep('после старта текущий уровень — первая тема дробей', await pg.locator('#path .is-current [data-lesson="0"]').count()==1)
         await pg.click('#path .is-current [data-continue]', force=True); await pg.wait_for_timeout(200)
         rep('«Продолжить» ведёт в урок первой темы', (await pg.evaluate("location.hash")).startswith('#lesson/0/learn'))
-        rep('шаги урока и «что делать сейчас»', await pg.locator('.stepper .step').count()==3 and await pg.locator('.do-now').count()==1)
+        rep('шаги урока — полоска из трёх частей вверху', await pg.locator('.lesson-bar .stepper .step').count()==3 and await pg.locator('.do-now').count()==0)
         await pg.click('.stepper [data-stage=practice]'); await pg.wait_for_timeout(150)
         await pg.fill('#ans-num','3'); await pg.press('#ans-num','/'); await pg.keyboard.type('5')
         rep('«/» переносит курсор в знаменатель', await pg.input_value('#ans-den')=='5')
@@ -177,7 +177,7 @@ async def main():
         rep('неверный ответ: кнопка «Исправить ответ»', await pg.locator('#try-again').count()==1)
         await pg.click('#try-again'); rep('«Исправить ответ» ставит курсор в клеточку', await pg.evaluate("document.activeElement.id")=='ans-num')
         await pg.click('.back'); rep('«← К пути» возвращает на главную', (await pg.evaluate("location.hash"))=='#home')
-        await pg.goto(B+'#map'); rep('«Все темы»: кнопки Урок и Конспект', await pg.locator('.topic-actions .btn').count()>=17)
+        await pg.goto(B+'#map'); rep('«Все темы»: каждая тема — одна строка, нажатие открывает урок', await pg.locator('.topic-row[data-lesson]').count()>=9)
         rep('меню из 4 пунктов', await pg.locator('nav [data-page]').count()==4)
         await pg.goto(B+'#lesson/0/practice'); await pg.wait_for_timeout(150)
         rep('обычная дробь: клеточки «целые» нет', await pg.locator('.fi-whole').count()==0 and await pg.locator('[data-whole]').count()==0)

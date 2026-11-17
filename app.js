@@ -257,7 +257,7 @@ function quickReplies(i, kind) {
 
 function chatBox(i, kind) {
   const c = getChat(i, kind), online = isOnline();
-  const ph = kind === 'lesson' ? (c.pending ? 'Твой ответ, например 3/4' : 'Ответь или спроси наставника…') : 'Спроси, что непонятно…';
+  const ph = kind === 'lesson' ? (c.pending ? 'Твой ответ, например 3/4' : 'Ответь или спроси Бипыча…') : 'Спроси, что непонятно…';
   const steps = kind === 'lesson' && c.beats && !online ? `<div class="lesson-progress"><span>Шаг ${Math.max(1, c.beat + 1)} из ${c.beats.length}</span>${bar(Math.round(Math.max(1, c.beat + 1) / c.beats.length * 100))}</div>` : '';
   return `<div class="chat chat-${kind}" data-chat="${kind}">${steps}
     <div class="chat-log" aria-live="polite">${c.msgs.filter(m => !m.hidden).map(msgHtml).join('') || (kind === 'task' ? '<p class="muted small chat-empty">Застрял? Спроси Бипыча — он не скажет ответ, но поможет дойти до него самому.</p>' : '')}</div>
@@ -353,6 +353,8 @@ function mountPetsAndCollection(page, stage) {
       setTimeout(() => { if (route().page === 'home') try { pet.say(''); } catch {} }, 9000);
     }
   }
+  const lp = app.querySelector('#pet-lesson');
+  if (lp) petMount(lp, { size: 56, state: 'idle', hideCharge: true });
   if (page === 'lesson' && stage === 'practice') {
     const at = app.querySelector('#answer-form') && app.querySelector('.story');
     if (at && !app.querySelector('.task-pet')) { const d = document.createElement('div'); d.className = 'task-pet'; d.setAttribute('aria-hidden', 'true'); at.before(d); taskPet = petMount(d, { size: 64, state: 'idle', charge: dayCharge() }); }
@@ -1013,11 +1015,13 @@ function topicCards(ids) {
   const cur = continueTarget().i;
   return `<div class="topics">${ids.map(id => topics.findIndex(t => t.id === id)).filter(i => i >= 0).map(i => {
     const t = topics[i];
+    const p = pct(i), done = p >= DONE;
     return `<article class="topic is-${status(i)}${i === cur ? ' is-current' : ''}">
-      <h3>${t.title}</h3>
-      <span class="status">${i === cur ? 'Ты здесь' : statusText(i)}</span>
-      ${miniSteps(i)}
-      <div class="topic-actions"><button class="btn btn-primary btn-sm" data-lesson="${i}">${pct(i) >= DONE ? 'Повторить урок' : 'Урок'}</button><button class="btn btn-ghost btn-sm" data-lesson="${i}" data-tab="notes">Конспект</button></div>
+      <button class="topic-row" data-lesson="${i}" aria-label="${t.title}: ${i === cur ? 'ты здесь' : statusText(i)}">
+        <span class="topic-ring" style="--p:${p}">${done ? '✓' : ''}</span>
+        <span class="topic-text"><b>${t.title}</b><small>${i === cur ? 'Ты здесь' : statusText(i)}</small></span>
+        <span class="topic-go" aria-hidden="true">›</span>
+      </button>
     </article>`; }).join('')}</div>`;
 }
 function mapPage() {
@@ -1034,8 +1038,7 @@ function mapPage() {
       ${st.bug ? `<div class="bug-sample"><p class="bs-label">Как Вектор поймает ошибку здесь</p><p class="bs-rule"><s>${esc(st.bug.rule)}</s></p><p class="bs-counter">${esc(st.bug.counter)}</p></div>` : ''}
     </section>`;
   }).join('');
-  const lead = gn <= 6 ? 'Можно открыть любую готовую тему. Остальные разделы появятся по плану.'
-    : `Программа ${gn} класса в работе. Ошибки здесь часто растут из 5–6 класса — Вектор найдёт такую «дыру» и закроет её на простых числах.`;
+  const lead = gn <= 6 ? '' : `Программа ${gn} класса в работе. Пока закрываем дыры из 5–6 класса.`;
   return head('Все темы', lead) + tabs + body;
 }
 const library = filter => mapPage(filter);
@@ -1058,43 +1061,47 @@ function lessonPage(i, stage) {
   if (stage === 'review' && !reviewOpen(meta(i))) stage = meta(i).practice ? 'practice' : 'learn';
   const st = stepStates(i), need = A.need(pace()), m = meta(i);
   const sub = { learn: st.learn === 'done' ? 'Пройдено' : 'Картинки и правило', practice: st.practice === 'done' ? 'Готово' : `${Math.min(m.practice, need)} из ${need} задач`, check: st.check === 'done' ? 'Тема освоена' : 'Нужно 3 из 4' };
-  const steps = t.legacy || stage === 'review' ? '' : `<ol class="stepper" aria-label="Шаги темы">${STAGES.map(([id, name], k) => `
-    <li><button class="step is-${st[id]}${id === stage ? ' on' : ''}" data-stage="${id}"${id === stage ? ' aria-current="step"' : ''}>
-      <span class="step-n">${st[id] === 'done' ? '✓' : k + 1}</span><span class="step-t"><b>${name}</b><small>${sub[id]}</small></span>
+  // шаги темы — тонкая полоска из трёх частей вверху экрана, как в играх
+  const steps = t.legacy || stage === 'review' ? '<div class="stepper stepper-empty"></div>' : `<ol class="stepper" aria-label="Шаги темы">${STAGES.map(([id, name], k) => `
+    <li><button class="step is-${st[id]}${id === stage ? ' on' : ''}" data-stage="${id}"${id === stage ? ' aria-current="step"' : ''} title="${name}: ${sub[id]}">
+      <i class="step-bar" aria-hidden="true"></i><span class="step-t"><b>${name}</b></span>
     </button></li>`).join('')}</ol>`;
   const req = (t.requires || []).map(id => byId[id]).filter(x => x != null && pct(x) < DONE);
   const reqHtml = req.length && stage === 'learn' ? `<p class="requires small">Пригодится тема ${req.map(r => `<button class="link" data-lesson="${r}">«${topics[r].title}»</button>`).join(' и ')} — её можно повторить в любой момент.</p>` : '';
   const body = stage === 'learn' ? learnStage(i) : stage === 'check' ? checkStage(i, 'check') : stage === 'review' ? checkStage(i, 'review') : practiceStage(i);
-  return `<div class="lesson-top"><button class="btn btn-ghost btn-sm back" data-go="home">← К пути</button></div>
-    <div class="page-head"><h1>${t.title}</h1></div>
-    ${steps}
-    ${stage === 'practice' ? '' : `<p class="do-now">${G.icon('target', 20)}<span><b>Что делать сейчас:</b> ${DO_NOW[stage] ? DO_NOW[stage]() : ''}</span></p>`}
-    ${reqHtml}${body}`;
+  const learnTabs = stage === 'learn' && !t.legacy ? `<div class="lb-tabs" role="group" aria-label="Как изучать">
+      <button data-learn-tab="tutor" aria-pressed="${learnTab === 'tutor'}" aria-label="Урок с Бипычем" title="Урок с Бипычем">${G.icon('chat', 20)}</button>
+      <button data-learn-tab="notes" aria-pressed="${learnTab === 'notes'}" aria-label="Конспект" title="Конспект">${G.icon('book', 20)}</button></div>` : '<span class="lb-tabs"></span>';
+  return `<div class="lesson lesson-${stage}">
+    <div class="lesson-bar"><button class="lb-close back" data-go="home" aria-label="Выйти на карту">✕</button>${steps}${learnTabs}</div>
+    <h1 class="lesson-title">${t.title}</h1>
+    ${reqHtml}${body}</div>
+    ${stage === 'practice' && !t.legacy ? `<div class="bip-dock bip-dock-lesson"><button class="pet-tap" data-bip-open aria-label="Спросить Бипыча"><span id="pet-lesson"></span></button></div>` : ''}`;
 }
 
 function learnStage(i) {
   const t = topics[i], e = t.explain;
-  const tabBtns = `<div class="segmented" role="group" aria-label="Как изучать">
-    <button data-learn-tab="tutor" aria-pressed="${learnTab === 'tutor'}">${G.icon('chat', 18)} С наставником</button>
-    <button data-learn-tab="notes" aria-pressed="${learnTab === 'notes'}">${G.icon('book', 18)} Конспект</button></div>`;
+  const tabBtns = '';
   const side = `<aside class="stack side">
       <div class="sheet"><h3>Готов потренироваться?</h3><p class="muted small">Задачи каждый раз новые и подстраиваются под твой темп.</p><button class="btn btn-primary btn-big" data-stage="practice">Начать тренировку →</button></div>
       <details class="sheet lab-box" ${matchMedia('(min-width: 761px)').matches ? 'open' : ''}><summary><h3>Лаборатория дробей</h3><span class="muted small">Нажимай + и −, чтобы увидеть дробь</span></summary>${V.labHtml('lab-side', { n: 3, d: 5, k: 1 })}</details>
     </aside>`;
   if (learnTab === 'tutor') {
-    return tabBtns + `<div class="layout"><section class="sheet tutor-lesson" aria-label="Урок с наставником">${chatBox(i, 'lesson')}</section>${side}</div>`;
+    return tabBtns + `<div class="layout"><section class="sheet tutor-lesson" aria-label="Урок с Бипычем">${chatBox(i, 'lesson')}</section>${side}</div>`;
   }
   return tabBtns + `<div class="layout">
     <article class="sheet method">
-      <h2>Как это устроено</h2>
+      <h2>Коротко</h2>
       <p>${e.model}</p>
       ${figure(e.figure)}<p class="figure-caption">${e.figureCaption}</p>
       <div class="rule"><h3>Правило</h3><div class="rule-body">${e.rule}</div></div>
-      <h2>Разберём на примерах</h2>
-      ${e.examples.map(x => `<div class="worked"><p class="worked-q">${x.q}</p><ol>${x.steps.map(s => `<li>${s}</li>`).join('')}</ol></div>`).join('')}
-      <h2>Где чаще всего ошибаются</h2>
-      <ul class="mistakes">${t.mistakes.map(m => `<li><b>${m.title}.</b> ${m.say}</li>`).join('')}</ul>
-      <p class="muted small">${window.VEKTOR_FRACTIONS.sources}</p>
+      ${(() => { const open = matchMedia('(min-width: 761px)').matches ? ' open' : '';
+        return `<details class="notes-more"${open}><summary>Примеры <span class="muted">· ${e.examples.length}</span></summary>
+        ${e.examples.map(x => `<div class="worked"><p class="worked-q">${x.q}</p><ol>${x.steps.map(s => `<li>${s}</li>`).join('')}</ol></div>`).join('')}</details>
+      <details class="notes-more"${open}><summary>Где чаще ошибаются</summary>
+      <ul class="mistakes">${t.mistakes.map(m => `<li><b>${m.title}.</b> ${m.say}</li>`).join('')}</ul></details>`; })()}
+      <p class="muted small notes-src">${window.VEKTOR_FRACTIONS.sources}</p>
+      <div class="notes-go"><button class="btn btn-ghost btn-big" data-learn-tab="tutor">${G.icon('chat', 18)} Объясни, Бипыч</button><button class="btn btn-primary btn-big" data-stage="practice">Тренироваться</button></div>
     </article>${side}</div>`;
 }
 
@@ -1120,7 +1127,7 @@ function practiceStage(i) {
       ${t.legacy ? '' : `<div class="sheet streak ${ready ? 'ready' : ''}"><h3>${ready ? 'Можно проверять себя!' : 'Тренировка'}</h3>
         <p class="small muted">${ready ? 'Ты решил достаточно задач. Можешь потренироваться ещё или перейти к проверке.' : `Реши ещё ${need - m.practice} ${plural(need - m.practice, 'задачу', 'задачи', 'задач')} — потом проверка.`}</p>
         <button class="btn ${ready ? 'btn-primary' : 'btn-ghost'}" data-stage="check">Перейти к проверке</button></div>
-      <div class="sheet bip-chat" id="bip-chat"><h3><i class="bip-dot" aria-hidden="true"></i>Спроси Бипыча</h3>${chatBox(i, 'task')}</div>`}
+      <div class="sheet bip-chat" id="bip-chat"><h3><i class="bip-dot" aria-hidden="true"></i>Спроси Бипыча<button class="bc-close" data-bip-close aria-label="Закрыть">✕</button></h3>${chatBox(i, 'task')}</div>`}
     </aside>
   </div>`;
 }
@@ -1133,7 +1140,7 @@ function checkStage(i, mode) {
   const title = mode === 'check' ? `Проверка: задача ${s.k + 1} из ${s.total}` : `Повторение: задача ${s.k + 1} из ${s.total}`;
   return `<section class="sheet task" style="max-width:760px">
     <div class="steps" aria-hidden="true">${Array.from({ length: s.total }, (_, k) => `<i class="${k < s.k ? 'on' : ''}"></i>`).join('')}</div>
-    <p class="muted">${title}. Подсказок здесь нет.</p>
+    <p class="muted small check-note">${title} · без подсказок</p>
     ${taskCard(s.task, { button: 'Ответить', exam: true })}
   </section>`;
 }
@@ -1199,9 +1206,13 @@ function diagnostic() {
 function awards() {
   const g = game(), rk = G.rank(g.stars), st = G.liveStreak(g, today());
   const toNext = rk.next ? rk.next.min - g.stars : 0, prog = rk.next ? Math.round((g.stars - rk.min) / (rk.next.min - rk.min) * 100) : 100;
-  return head('Награды', 'Звёзды даются за каждую решённую задачу — больше, если решил сам с первой попытки. Ошибки звёзд не отнимают.') + `
+  const tab = awardsTab, TABS = [['rank', 'Звание'], ...(window.VEKTOR_COLLECTION ? [['bugs', 'Жучки'], ['shop', 'Гардероб']] : []), ['badges', 'Значки']];
+  const show = id => tab === id ? '' : ' hidden';
+  return `<div class="page-head"><h1>Награды</h1></div>
+  <div class="segmented aw-tabs" role="tablist" aria-label="Разделы наград">${TABS.map(([id, name]) => `<button role="tab" data-aw-tab="${id}" aria-selected="${tab === id}" aria-pressed="${tab === id}">${name}</button>`).join('')}</div>
   <div class="layout">
     <div class="stack">
+      <div class="aw-pane"${show('rank')}>
       <div class="sheet rank-card">
         <div class="rank-top">${G.icon('crown', 40)}<div><p class="muted small">Твоё звание</p><h2>${rk.name}</h2></div></div>
         ${bar(prog)}
@@ -1212,18 +1223,17 @@ function awards() {
         <div class="fact"><strong>${st}</strong><span>${plural(st, 'день', 'дня', 'дней')} подряд</span></div>
         <div class="fact"><strong>${g.earned.length}<small> из ${G.BADGES.length}</small></strong><span>достижений</span></div>
       </div>
-      ${window.VEKTOR_COLLECTION ? `<section class="sheet" aria-label="Мои жучки"><div id="col-bugs"></div></section>
-      <section class="sheet" aria-label="Мастерская"><div id="col-shop"></div></section>` : ''}
-      <section class="sheet"><h2>Достижения</h2>
-        <div class="badges">${G.BADGES.map(b => { const on = g.earned.includes(b.id); return `<div class="badge-card${on ? ' on' : ''}">${G.icon(b.icon, 30)}<div><b>${b.title}</b><span>${b.desc}</span></div>${on ? '' : '<span class="visually-hidden">Ещё не получено</span>'}</div>`; }).join('')}</div>
-      </section>
-    </div>
-    <div class="stack side">
-      <div class="sheet"><h3>Как получить звёзды</h3><ul class="small star-rules">
+      <details class="sheet star-how"><summary>Как получить звёзды</summary><ul class="small star-rules">
         <li><b>+3</b> — задача с первой попытки без подсказок</li><li><b>+2</b> — с первой попытки, но с подсказкой</li>
         <li><b>+1</b> — решил после ошибок: упорство тоже считается</li><li><b>+2</b> — каждый верный ответ в проверке</li>
-        <li><b>+10</b> — тема освоена</li><li><b>+5</b> — повторение без ошибок и выполненная цель дня</li></ul></div>
-      <div class="sheet"><h3>Звания</h3><ol class="small ranks">${G.RANKS.map(r => `<li class="${r.name === rk.name ? 'on' : ''}">${r.name} <span class="muted">— от ${r.min} ★</span></li>`).join('')}</ol></div>
+        <li><b>+10</b> — тема освоена</li><li><b>+5</b> — повторение без ошибок и выполненная цель дня</li></ul>
+        <h3>Звания</h3><ol class="small ranks">${G.RANKS.map(r => `<li class="${r.name === rk.name ? 'on' : ''}">${r.name} <span class="muted">— от ${r.min} ★</span></li>`).join('')}</ol></details>
+      </div>
+      ${window.VEKTOR_COLLECTION ? `<section class="sheet aw-pane" aria-label="Мои жучки"${show('bugs')}><div id="col-bugs"></div></section>
+      <section class="sheet aw-pane" aria-label="Мастерская"${show('shop')}><div id="col-shop"></div></section>` : ''}
+      <section class="sheet aw-pane"${show('badges')}><h2>Достижения</h2>
+        <div class="badges">${G.BADGES.map(b => { const on = g.earned.includes(b.id); return `<div class="badge-card${on ? ' on' : ''}">${G.icon(b.icon, 30)}<div><b>${b.title}</b><span>${b.desc}</span></div>${on ? '' : '<span class="visually-hidden">Ещё не получено</span>'}</div>`; }).join('')}</div>
+      </section>
     </div>
   </div>`;
 }
@@ -1343,7 +1353,7 @@ function settingsServer() {
 const filterState = { map: 'Все', library: 'Все' };
 const route = () => { const [page, arg, stage] = (location.hash.slice(1) || 'home').split('/'); return { page: pages[page] && !(SERVER && page === 'teacher') ? page : 'home', i: Math.min(Math.max(+arg || 0, 0), topics.length - 1), stage }; };
 
-let passwordOffered = false, bipChatFocus = false, ymLesson = '';
+let passwordOffered = false, bipChatFocus = false, ymLesson = '', awardsTab = 'rank';
 // Первый вход: сначала знакомство «Поймай ошибку Бипыча», а не экскурсия и анкеты
 const needsIntro = () => !state.introDone && !state.answers && !state.diag.step && !state.attempts.length;
 function render() {
@@ -1352,8 +1362,12 @@ function render() {
   if (window.VEKTOR_TONE) { window.VEKTOR_TONE.setGrade(state.settings.grade); document.body.classList.toggle('age-senior', window.VEKTOR_TONE.senior()); }
   const { page, i, stage } = route();
   document.body.classList.toggle('is-intro', page === 'intro' || page === 'quick');
+  document.body.classList.toggle('is-focus', page === 'lesson');
+  document.body.classList.remove('bip-open');
+  document.body.dataset.page = page;
   const lessonStage = stage || (topics[i].legacy || meta(i).practice ? 'practice' : 'learn');
   document.querySelector('#crumb').textContent = page === 'lesson' ? topics[i].title : pages[page];
+  const mt = document.querySelector('#m-title'); if (mt) mt.textContent = page === 'home' ? '' : pages[page];
   document.title = (page === 'home' ? '' : (page === 'lesson' ? topics[i].title : pages[page]) + ' — ') + 'Вектор';
   document.querySelectorAll('.sidebar [data-page]').forEach(b => (b.dataset.page === page || (page === 'library' && b.dataset.page === 'map')) ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
   document.querySelector('#student-name').textContent = state.settings.name;
@@ -1370,6 +1384,13 @@ function render() {
   if (page === 'quick') runQuick();
   if (page === 'lesson') { const key = i + '/' + lessonStage; if (key !== ymLesson) { ymLesson = key; ymGoal('lesson_' + lessonStage, { topic: topics[i].id }); } } else ymLesson = '';
   app.querySelectorAll('[data-warmup]').forEach(b => b.onclick = () => { location.hash = 'warmup'; });
+  app.querySelectorAll('[data-aw-tab]').forEach(b => b.onclick = () => { awardsTab = b.dataset.awTab; render(); });
+  // Бипыч в уроке: на телефоне разговор выезжает снизу, на компьютере он и так рядом с задачей
+  const openBip = () => { const c = app.querySelector('#bip-chat'); if (!c) return; ymGoal('bip_tap', { kind: 'lesson' });
+    if (innerWidth <= 760) document.body.classList.add('bip-open'); else c.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => c.querySelector('input, textarea')?.focus({ preventScroll: true }), 250); };
+  app.querySelectorAll('[data-bip-open]').forEach(b => b.onclick = openBip);
+  app.querySelectorAll('[data-bip-close]').forEach(b => b.onclick = () => document.body.classList.remove('bip-open'));
   app.querySelectorAll('[data-bip-chat]').forEach(b => b.onclick = () => {
     const cur = currentSpot(); ymGoal('bip_tap', { kind: cur.kind });
     if (cur.kind === 'quick') { location.hash = 'quick/' + cur.id; return; }
@@ -1377,7 +1398,7 @@ function render() {
   });
   // на телефоне карта сразу показывает текущий уровень (после сброса прокрутки при смене экрана)
   if (page === 'home' && innerWidth <= 760) requestAnimationFrame(() => { const cur = app.querySelector('#path .is-current'); if (cur) { const r = cur.getBoundingClientRect(); if (r.bottom > innerHeight * .62) scrollTo({ top: scrollY + r.top - innerHeight * .3, behavior: 'instant' }); } });
-  if (bipChatFocus && app.querySelector('#bip-chat')) { bipChatFocus = false; const c = app.querySelector('#bip-chat'); setTimeout(() => { c.scrollIntoView({ behavior: 'smooth', block: 'start' }); c.querySelector('input, textarea')?.focus({ preventScroll: true }); }, 300); }
+  if (bipChatFocus && app.querySelector('#bip-chat')) { bipChatFocus = false; setTimeout(openBip, 300); }
   hud();
   if (page === 'home' && state.toured === false && !navigator.webdriver) setTimeout(() => route().page === 'home' && startTour(0), 600);
   // Предложить свой пароль — когда ребёнок уже позанимался, а не в первую минуту
