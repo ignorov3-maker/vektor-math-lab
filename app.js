@@ -233,8 +233,8 @@ const SERVER = !!window.VEKTOR_SYNC;
 let aiPaused = false; // П-03: ИИ на сервере выключен — до конца занятия идём по конспекту молча
 const isOnline = () => !aiPaused && T.ready(ai);
 
-function msgHtml(m, k) {
-  return `<div class="msg ${m.role}${m.error ? ' error' : ''}">${m.role === 'assistant' ? '<span class="msg-who"><i class="bip-dot" aria-hidden="true"></i>Бипыч</span>' : ''}<div class="msg-body">${m.html}${m.lab ? V.labHtml(`lab-msg-${k}`) : ''}</div></div>`;
+function msgHtml(m, k, old) {
+  return `<div class="msg ${m.role}${m.error ? ' error' : ''}${old === true ? ' is-old' : ''}">${m.role === 'assistant' ? '<span class="msg-who"><i class="bip-dot" aria-hidden="true"></i>Бипыч</span>' : ''}<div class="msg-body">${m.html}${m.lab ? V.labHtml(`lab-msg-${k}`) : ''}</div></div>`;
 }
 
 function quickReplies(i, kind) {
@@ -259,8 +259,12 @@ function chatBox(i, kind) {
   const c = getChat(i, kind), online = isOnline();
   const ph = kind === 'lesson' ? (c.pending ? 'Твой ответ, например 3/4' : 'Ответь или спроси Бипыча…') : 'Спроси, что непонятно…';
   const steps = kind === 'lesson' && c.beats && !online ? `<div class="lesson-progress"><span>Шаг ${Math.max(1, c.beat + 1)} из ${c.beats.length}</span>${bar(Math.round(Math.max(1, c.beat + 1) / c.beats.length * 100))}</div>` : '';
+  // урок: Бипыч сам говорит — на виду его последняя реплика и ответ ученика, раньше сказанное спрятано в «Что было раньше»
+  const vis = c.msgs.filter(m => !m.hidden), lastA = kind === 'lesson' ? vis.map(m => m.role).lastIndexOf('assistant') : -1;
+  const older = lastA > 0 ? `<button type="button" class="bip-history" data-bip-history>Что было раньше</button>` : '';
   return `<div class="chat chat-${kind}" data-chat="${kind}">${steps}
-    <div class="chat-log" aria-live="polite">${c.msgs.filter(m => !m.hidden).map(msgHtml).join('') || (kind === 'task' ? '<p class="muted small chat-empty">Застрял? Спроси Бипыча — он не скажет ответ, но поможет дойти до него самому.</p>' : '')}</div>
+    ${kind === 'lesson' ? '<div class="bip-stage" aria-hidden="true"><span class="bip-stage-pet"></span></div>' : ''}
+    <div class="chat-log" aria-live="polite">${older}${vis.map((m, k) => msgHtml(m, k, k < lastA && !m.error)).join('') || (kind === 'task' ? '<p class="muted small chat-empty">Застрял? Спроси Бипыча — он не скажет ответ, но поможет дойти до него самому.</p>' : '')}</div>
     <div class="chat-quick">${quickReplies(i, kind).map(([v, l, main]) => `<button type="button" class="btn ${main ? 'btn-primary' : 'btn-ghost'} btn-sm" data-quick="${esc(v)}">${l}</button>`).join('')}</div>
     ${kind === 'lesson' && c.pending ? `<form class="chat-form chat-answer" autocomplete="off">${answerInput(c.pending.task, 'Проверить')}</form>` : `<form class="chat-form" autocomplete="off"><label class="visually-hidden" for="chat-in-${kind}">Сообщение наставнику</label>
       <input id="chat-in-${kind}" placeholder="${ph}" maxlength="400"${c.busy ? ' disabled' : ''}>${SPEECH ? `<button class="btn btn-ghost chat-mic" type="button" aria-label="Сказать голосом" title="Сказать голосом"${c.busy ? ' disabled' : ''}>${MIC_SVG}</button>` : ''}<button class="btn btn-primary" type="submit"${c.busy ? ' disabled' : ''}>Отправить</button></form>`}
@@ -282,6 +286,22 @@ function refreshChat(i, kind) {
   bindChat(i, kind);
   V.labBind(box);
   log.scrollTop = log.scrollHeight;
+  if (kind === 'lesson') bipReact(i);
+}
+
+// Бипыч на сцене урока: говорит последнюю реплику, жест — по смыслу
+let stagePet = null, stageSaid = -1;
+function bipReact(i, first) {
+  if (!stagePet) return;
+  const c = getChat(i, 'lesson'), vis = c.msgs.filter(m => !m.hidden), k = vis.map(m => m.role).lastIndexOf('assistant');
+  if (k < 0 || (k === stageSaid && !first)) return;
+  stageSaid = k;
+  const m = vis[k], text = String(m.html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const ok = /^(Верно|Точно|Да!|Отлично|Молодец)/.test(text), oops = m.error || /^(Почти|Не совсем|Пока нет|Смотри)/.test(text);
+  try {
+    stagePet.setState(ok ? 'celebrate' : oops ? 'thinking' : c.pending ? 'thinking' : c.done ? 'proud' : 'happy');
+    stagePet.talk(Math.min(5500, 600 + text.length * 32), first ? 'wave' : c.pending || /\?\s*$/.test(text) ? 'point' : ok ? null : 'nod');
+  } catch {}
 }
 
 function updateLastMsg(i, kind, m) {
@@ -290,6 +310,7 @@ function updateLastMsg(i, kind, m) {
   const body = box.querySelectorAll('.msg-body'); const last = body[body.length - 1];
   if (last) last.innerHTML = m.html;
   const log = box.querySelector('.chat-log'); log.scrollTop = log.scrollHeight;
+  if (kind === 'lesson' && stagePet) try { stagePet.talk(900); } catch {}
 }
 
 /* Голосовой ввод в чат: встроенное распознавание речи браузера (ru-RU), без платных моделей.
@@ -349,10 +370,14 @@ function mountPetsAndCollection(page, stage) {
     const pet = petMount(home, { size: small ? 64 : 84, state: ch.done >= ch.goal ? 'celebrate' : 'happy', charge: ch, hideCharge: small });
     // Бипыч здоровается: текст печатается в облачке, рот двигается
     if (pet) {
-      setTimeout(() => { try { pet.say(bipGreeting(currentSpot()), { type: true }); } catch {} }, 350);
+      setTimeout(() => { try { pet.say(bipGreeting(currentSpot()), { type: true, gesture: 'wave' }); } catch {} }, 350);
       setTimeout(() => { if (route().page === 'home') try { pet.say(''); } catch {} }, 9000);
     }
   }
+  const sp = app.querySelector('.chat-lesson .bip-stage-pet');
+  stagePet = sp ? petMount(sp, { size: innerWidth <= 760 ? 96 : 110, state: 'happy', hideCharge: true }) : null;
+  stageSaid = -1;
+  if (stagePet && page === 'lesson') setTimeout(() => bipReact(route().i, true), 250);
   const lp = app.querySelector('#pet-lesson');
   if (lp) petMount(lp, { size: 56, state: 'idle', hideCharge: true });
   if (page === 'lesson' && stage === 'practice') {
@@ -825,7 +850,7 @@ function runQuick() {
   const host = app.querySelector('.qz'); if (!host || !quickRun) return;
   const q = Q(), l = q.byId[quickRun.id], r = quickRun;
   const pet = petMount(app.querySelector('#pet-quick'), { size: 76, hideCharge: true, state: r.done ? 'celebrate' : 'idle' });
-  if (pet) setTimeout(() => { try { pet.say(r.done ? (l.check ? 'Теперь я знаю, с чего начать!' : 'Вот это скорость! Идём дальше?') : r.msg, { type: true }); } catch {} }, 150);
+  if (pet) setTimeout(() => { try { pet.say(r.done ? (l.check ? 'Теперь я знаю, с чего начать!' : 'Вот это скорость! Идём дальше?') : r.msg, { type: true, gesture: r.done ? null : r.k === 0 ? 'wave' : 'nod' }); } catch {} }, 150);
   const close = host.querySelector('.qz-close'); if (close) close.onclick = () => { if (!r.done) ymGoal('quick_exit', { level: r.id, k: r.k }); };
   if (r.done) return;
   const N = q.count(l);
@@ -865,7 +890,7 @@ function runQuick() {
     } else {
       r.streak = 0; r.misses++; r.missed = true; sfx('wrong'); ymGoal('quick_wrong', { level: r.id, k: r.k });
       if (tile) { tile.classList.remove('shake'); void tile.offsetWidth; tile.classList.add('shake'); }
-      try { pet && pet.setState('thinking'); pet && pet.say(r.task.hint, { type: true }); } catch {}
+      try { pet && pet.setState('thinking'); pet && pet.say(r.task.hint, { type: true, gesture: 'point' }); } catch {}
       host.querySelector('.qz-streak b').textContent = 0; host.querySelector('.qz-streak').classList.remove('on');
     }
   };
@@ -1697,6 +1722,7 @@ resetBtn.onclick = () => {
   state = fresh(); session = null; for (const k in chats) delete chats[k]; save(); location.hash = 'home'; render();
 };
 addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
+app.addEventListener('click', e => { const h = e.target.closest('[data-bip-history]'); if (h) h.closest('.chat')?.classList.toggle('show-old'); });
 
 // ---------- Скины ----------
 function setSkin(name) {

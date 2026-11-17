@@ -283,7 +283,18 @@
       setState(state);
     }
     var typing = null;
-    function stopTyping() { if (typing !== null) { clearInterval(typing); typing = null; } root.dataset.talking = 'false'; }
+    var talkTimer = null;
+    function stopTyping() { if (typing !== null) { clearInterval(typing); typing = null; } root.dataset.talking = 'false'; delete root.dataset.gesture; }
+    // Говорит без своего облачка (текст показывает страница): рот двигается, тело покачивается, жест — wave / point / nod
+    function talk(ms, gesture) {
+      if (dead) return;
+      if (talkTimer !== null) clearTimeout(talkTimer);
+      var win0 = doc.defaultView;
+      if (win0 && win0.matchMedia && win0.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      root.dataset.talking = 'true';
+      if (gesture) root.dataset.gesture = gesture; else delete root.dataset.gesture;
+      talkTimer = setTimeout(function () { talkTimer = null; if (typing === null) { root.dataset.talking = 'false'; delete root.dataset.gesture; } }, Math.max(300, Math.min(+ms || 1200, 6000)));
+    }
     function say(text, settings) {
       if (dead) return;
       var line = String(text == null ? '' : text).slice(0, 1000);
@@ -295,6 +306,7 @@
         var shown = 0;
         bubble.textContent = '';
         root.dataset.talking = 'true';
+        if (settings.gesture) root.dataset.gesture = settings.gesture;
         typing = setInterval(function () {
           shown = Math.min(line.length, shown + 2);
           bubble.textContent = line.slice(0, shown);
@@ -321,13 +333,14 @@
       dead = true;
       if (celebrateTimer !== null) clearTimeout(celebrateTimer);
       if (typing !== null) clearInterval(typing);
+      if (talkTimer !== null) clearTimeout(talkTimer);
       root.remove();
     }
     setCosmetics(options.cosmetics);
     setState(options.state || 'idle');
     var initial = options.charge || {};
     setCharge(initial.done, initial.goal);
-    return Object.freeze({ setState: setState, setCharge: setCharge, setCosmetics: setCosmetics, say: say, destroy: destroy });
+    return Object.freeze({ setState: setState, setCharge: setCharge, setCosmetics: setCosmetics, say: say, talk: talk, destroy: destroy });
   }
   window.VEKTOR_DROBIK = Object.freeze({ STATES: STATES, COSMETICS: COSMETICS, mount: mount });
 }());

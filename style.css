@@ -1286,3 +1286,30 @@ body.is-focus #app{max-width:820px;padding:10px 20px calc(28px + env(safe-area-i
 }
 /* «Выйти» ребёнку нужен только в профиле — на остальных экранах верхняя строка свободна */
 @media (max-width:760px){body:not([data-page="settings"]) .m-logout{display:none!important}}
+
+/* ================= Урок: Бипыч сам говорит ================= */
+.chat-lesson{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:10px;align-items:start}
+.chat-lesson>.lesson-progress,.chat-lesson>.chat-quick,.chat-lesson>.chat-form,.chat-lesson>.chat-mode{grid-column:1 / -1}
+.chat-lesson>.bip-stage{grid-column:1;align-self:end;position:sticky;bottom:8px}
+.chat-lesson>.chat-log{grid-column:2;max-height:none}
+.chat-lesson .msg.is-old{display:none}
+.chat-lesson.show-old .msg.is-old{display:flex;opacity:.7}
+.chat-lesson .msg-who{display:none}
+.bip-history{justify-self:start;margin:0 0 6px;border:0;background:none;padding:4px 0;color:var(--ink-2);font:inherit;font-size:13px;text-decoration:underline;cursor:pointer}
+.chat-lesson.show-old .bip-history{display:none}
+.chat-lesson .msg.assistant:not(.is-old) .msg-body{position:relative;background:var(--sheet);border:2px solid var(--line);border-radius:20px;padding:14px 16px;font-size:17px;line-height:1.45;
+  box-shadow:0 4px 0 var(--line);animation:bip-say-pop .32s cubic-bezier(.3,1.5,.5,1)}
+.chat-lesson .msg.assistant:not(.is-old) .msg-body::before{content:"";position:absolute;left:-9px;bottom:22px;width:14px;height:14px;background:var(--sheet);border-left:2px solid var(--line);border-bottom:2px solid var(--line);transform:rotate(45deg)}
+.chat-lesson .msg.assistant:not(.is-old) .msg-body>*{animation:bip-say-line .4s ease both}
+.chat-lesson .msg.assistant:not(.is-old) .msg-body>*:nth-child(2){animation-delay:.35s}
+.chat-lesson .msg.assistant:not(.is-old) .msg-body>*:nth-child(3){animation-delay:.7s}
+.chat-lesson .msg.assistant:not(.is-old) .msg-body>*:nth-child(4){animation-delay:1.05s}
+.chat-lesson .msg.assistant:not(.is-old) .msg-body>*:nth-child(n+5){animation-delay:1.4s}
+.chat-lesson .msg.user:not(.is-old){justify-content:flex-end}
+@keyframes bip-say-pop{0%{transform:scale(.85) translateY(8px);opacity:0}100%{transform:none;opacity:1}}
+@keyframes bip-say-line{0%{opacity:0;transform:translateY(6px)}100%{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.chat-lesson .msg-body,.chat-lesson .msg-body>*{animation:none!important}}
+@media (max-width:760px){
+  .chat-lesson{column-gap:6px}
+  .chat-lesson .msg.assistant:not(.is-old) .msg-body{font-size:16px;padding:12px 14px}
+}
