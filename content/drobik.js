@@ -157,6 +157,9 @@
       '<g class="bipych-eyes bipych-eyes-happy">' + happy + '</g>' +
       '<g class="bipych-eyes bipych-eyes-sleep">' + sleeping + '</g>' +
       '<g class="bipych-blush">' + rect(36, 80, 10, 4, p[4]) + rect(88, 80, 10, 4, p[4]) + '</g>' +
+      // рот виден только когда Бипыч говорит: два кадра, закрытый и открытый, сменяются в такт словам
+      '<g class="bipych-mouth"><g class="bipych-mouth-shut">' + rect(60, 84, 14, 3, p[5]) + '</g>' +
+      '<g class="bipych-mouth-open">' + rect(60, 80, 14, 10, p[5]) + rect(63, 85, 8, 4, '#F483AD') + '</g></g>' +
       rect(98, 66, 6, 6, p[4]) + rect(98, 78, 6, 6, p[4]) +
       '<g class="bipych-hand bipych-hand-left">' + rect(16, 78, 12, 16, p[0]) + rect(20, 80, 8, 10, limb) + rect(20, 80, 4, 4, p[2]) + '</g>' +
       '<g class="bipych-hat">' + hat(map.hat, p) + '</g>' +
@@ -279,10 +282,25 @@
       root.dataset.color = map.screen.slice(7);
       setState(state);
     }
+    var typing = null;
+    function stopTyping() { if (typing !== null) { clearInterval(typing); typing = null; } root.dataset.talking = 'false'; }
     function say(text, settings) {
       if (dead) return;
       var line = String(text == null ? '' : text).slice(0, 1000);
-      bubble.textContent = line;
+      stopTyping();
+      var win0 = doc.defaultView;
+      var calm = win0 && win0.matchMedia && win0.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      // «Говорит»: текст печатается в облачке, рот двигается, пока идут буквы
+      if (line && settings && settings.type && !calm) {
+        var shown = 0;
+        bubble.textContent = '';
+        root.dataset.talking = 'true';
+        typing = setInterval(function () {
+          shown = Math.min(line.length, shown + 2);
+          bubble.textContent = line.slice(0, shown);
+          if (shown >= line.length) stopTyping();
+        }, 45);
+      } else bubble.textContent = line;
       bubble.hidden = !line;
       if (line) picture.setAttribute('aria-describedby', bubble.id);
       else picture.removeAttribute('aria-describedby');
@@ -302,6 +320,7 @@
       if (dead) return;
       dead = true;
       if (celebrateTimer !== null) clearTimeout(celebrateTimer);
+      if (typing !== null) clearInterval(typing);
       root.remove();
     }
     setCosmetics(options.cosmetics);

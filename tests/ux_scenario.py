@@ -41,6 +41,36 @@ async def main():
         await pg.reload(); await pg.wait_for_timeout(300)
         pr = await pg.evaluate("state.progress")
         rep('демо-проценты без попыток убраны, настоящие сохранены', pr['concept'] == 0 and pr['add-same'] == 0 and pr['reduce'] == 33 and pr['compare'] == 20, str(pr))
+
+        # лёгкий старт: уровень с плитками, ответ нажатием и перетаскиванием, ошибка без наказания
+        ctx = await b.new_context(viewport={'width': 390, 'height': 844})
+        pg = await ctx.new_page(); pg.on('pageerror', lambda e: errs.append(str(e)))
+        await pg.goto(B); await pg.evaluate("localStorage.setItem('vektor-progress-v3', JSON.stringify({ introDone: true }))")
+        await pg.goto(B + '#home'); await pg.reload(); await pg.wait_for_timeout(400)
+        rep('телефон: новичок стоит на «Сложении», дальше облака', await pg.locator('#path .node-quick.is-current').count() == 1 and await pg.locator('#path .is-fog').count() == 2)
+        rep('телефон: Бипыч в углу, нажатие ведёт в разговор', await pg.locator('.bip-dock [data-bip-chat]').count() == 1)
+        rep('телефон: на главной нет длинных текстов', len((await pg.inner_text('#app')).split()) < 60, str(len((await pg.inner_text('#app')).split())))
+        await pg.goto(B + '#quick/q-add'); await pg.wait_for_timeout(300)
+        rep('старт: в уровне нет клавиатуры, только плитки 1–5', await pg.locator('.qz-tile').count() == 5 and await pg.locator('.qz input').count() == 0)
+        for k in range(5):
+            ans = await pg.evaluate("quickRun.task.answer")
+            if k == 0:
+                wrong = 1 if ans != 1 else 2
+                await pg.click(f'.qz-tile[data-v="{wrong}"]'); await pg.wait_for_timeout(500)
+                rep('старт: ошибка — серия сброшена, Бипыч подсказывает', await pg.evaluate("quickRun.streak === 0 && quickRun.misses === 1") and await pg.locator('.qz-tile.shake').count() == 1)
+            if k == 1:
+                t = await pg.locator(f'.qz-tile[data-v="{ans}"]').bounding_box(); sl = await pg.locator('.qz-slot').bounding_box()
+                await pg.mouse.move(t['x'] + 20, t['y'] + 20); await pg.mouse.down()
+                await pg.mouse.move(sl['x'] + sl['width'] / 2, sl['y'] + sl['height'] / 2, steps=8); await pg.mouse.up()
+            else:
+                await pg.click(f'.qz-tile[data-v="{ans}"]')
+            await pg.wait_for_timeout(800)
+            if k == 1: rep('старт: перетаскивание плитки в клетку засчитано', await pg.evaluate("quickRun.k") == 2)
+        await pg.wait_for_timeout(400)
+        rep('старт: 5 задач — уровень пройден и сохранён', 'Уровень пройден' in await pg.inner_text('#app') and await pg.evaluate("state.quick['q-add'].done === true"))
+        await pg.goto(B + '#home'); await pg.wait_for_timeout(300)
+        rep('старт: на карте следующий уровень — «Умножение»', await pg.locator('#path .is-current a[href="#quick/q-mult"]').count() >= 1)
+        await ctx.close()
         rep('в браузере нет ошибок JavaScript', not errs, '; '.join(errs[:3]))
         await b.close()
     print(f'\nИТОГО: {sum(R)} из {len(R)}')
