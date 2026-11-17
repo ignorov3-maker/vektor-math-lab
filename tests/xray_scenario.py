@@ -143,6 +143,7 @@ async def main():
         rep('Бипыч на главной с целью дня', await pg.locator('#pet-home .bipych').count() == 1)
         await pg.goto(B+'#awards'); await pg.wait_for_timeout(400)
         rep('«Мои жучки»: карточки из state.bugs', await pg.locator('#col-bugs article, #col-bugs .vc-card, #col-bugs [data-key]').count() >= 1)
+        await pg.click('[data-aw-tab=shop]'); await pg.wait_for_timeout(300)
         await pg.locator('#col-shop [data-buy="hat-cap"]').click(); await pg.wait_for_timeout(300)
         rep('мастерская: покупка тратит звёзды', await pg.evaluate("game().stars") == 65 and await pg.evaluate("state.workshop.owned.includes('hat-cap')"))
         await pg.locator('#col-shop [data-equip="hat-cap"]').click(); await pg.wait_for_timeout(300)

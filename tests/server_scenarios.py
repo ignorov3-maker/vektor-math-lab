@@ -101,7 +101,7 @@ async def main():
             await ctx2.close()
 
             # выход: следующий ученик не видит чужой прогресс
-            await pg.click('#logout-btn'); await pg.wait_for_selector('#login-form', timeout=8000)
+            await pg.goto(base + '/#home'); await pg.wait_for_timeout(300); await pg.click('#logout-btn'); await pg.wait_for_selector('#login-form', timeout=8000)
             rep('после выхода прогресс стёрт с устройства', await pg.evaluate("localStorage.getItem('vektor-progress-v3')") is None)
             await login(pg, base, 'ученик2', 'компас1234'); await pg.wait_for_selector('#logout-btn', timeout=8000)
             rep('следующий ученик начинает с нуля', not await pg.evaluate("state.meta.concept && state.meta.concept.practice"))
