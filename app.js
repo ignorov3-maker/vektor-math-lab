@@ -34,7 +34,7 @@ const ROUTE = window.VEKTOR_FRACTIONS.topics.map((t, i) => i); // раздел �
 const DIAG = ['concept', 'reduce', 'compare', 'add-same', 'mult', 'part-of'].map(id => byId[id]);
 const DONE = 80;
 
-const pages = { home: 'Мой путь', map: 'Все темы', diagnostic: 'Диагностика', library: 'Все темы', awards: 'Награды', teacher: 'Отчёт для учителя', settings: 'Профиль', lesson: 'Занятие', warmup: 'Разминка', intro: 'Знакомство' };
+const pages = { home: 'Мой путь', map: 'Все темы', diagnostic: 'Диагностика', library: 'Все темы', awards: 'Награды', teacher: 'Отчёт для учителя', settings: 'Профиль', lesson: 'Занятие', warmup: 'Разминка', intro: 'Знакомство', quick: 'Старт' };
 const STAGES = [['learn', 'Узнать'], ['practice', 'Потренироваться'], ['check', 'Проверить себя']];
 
 /* ================= Состояние ================= */
@@ -78,7 +78,7 @@ document.addEventListener('click', e => {
   b.closest('.mood').innerHTML = '<span>Спасибо!</span>';
 });
 // журнал событий для анализа пилота (раздел 7 ТЗ); без сервера ничего не делает
-const logEvent = (type, data) => { if (window.VEKTOR_SYNC) window.VEKTOR_SYNC.event(type, data); };
+const logEvent = (type, data) => { if (window.VEKTOR_SYNC) window.VEKTOR_SYNC.event(type, data); window.VEKTOR_METRIKA?.goal(type, data); };
 // Разбор жучка (Рентген мышления, шаги 1–4). Своя задача ребёнка — в виде структуры для движка.
 function ownProblem(task, topic) {
   const X = window.VEKTOR_XRAY, expr = X && X.exprOf(task);
@@ -234,7 +234,7 @@ let aiPaused = false; // П-03: ИИ на сервере выключен — д
 const isOnline = () => !aiPaused && T.ready(ai);
 
 function msgHtml(m, k) {
-  return `<div class="msg ${m.role}${m.error ? ' error' : ''}">${m.role === 'assistant' ? '<span class="msg-who">Наставник</span>' : ''}<div class="msg-body">${m.html}${m.lab ? V.labHtml(`lab-msg-${k}`) : ''}</div></div>`;
+  return `<div class="msg ${m.role}${m.error ? ' error' : ''}">${m.role === 'assistant' ? '<span class="msg-who"><i class="bip-dot" aria-hidden="true"></i>Бипыч</span>' : ''}<div class="msg-body">${m.html}${m.lab ? V.labHtml(`lab-msg-${k}`) : ''}</div></div>`;
 }
 
 function quickReplies(i, kind) {
@@ -260,11 +260,11 @@ function chatBox(i, kind) {
   const ph = kind === 'lesson' ? (c.pending ? 'Твой ответ, например 3/4' : 'Ответь или спроси наставника…') : 'Спроси, что непонятно…';
   const steps = kind === 'lesson' && c.beats && !online ? `<div class="lesson-progress"><span>Шаг ${Math.max(1, c.beat + 1)} из ${c.beats.length}</span>${bar(Math.round(Math.max(1, c.beat + 1) / c.beats.length * 100))}</div>` : '';
   return `<div class="chat chat-${kind}" data-chat="${kind}">${steps}
-    <div class="chat-log" aria-live="polite">${c.msgs.filter(m => !m.hidden).map(msgHtml).join('') || (kind === 'task' ? '<p class="muted small chat-empty">Застрял? Спроси наставника — он не скажет ответ, но поможет дойти до него самому.</p>' : '')}</div>
+    <div class="chat-log" aria-live="polite">${c.msgs.filter(m => !m.hidden).map(msgHtml).join('') || (kind === 'task' ? '<p class="muted small chat-empty">Застрял? Спроси Бипыча — он не скажет ответ, но поможет дойти до него самому.</p>' : '')}</div>
     <div class="chat-quick">${quickReplies(i, kind).map(([v, l, main]) => `<button type="button" class="btn ${main ? 'btn-primary' : 'btn-ghost'} btn-sm" data-quick="${esc(v)}">${l}</button>`).join('')}</div>
     ${kind === 'lesson' && c.pending ? `<form class="chat-form chat-answer" autocomplete="off">${answerInput(c.pending.task, 'Проверить')}</form>` : `<form class="chat-form" autocomplete="off"><label class="visually-hidden" for="chat-in-${kind}">Сообщение наставнику</label>
       <input id="chat-in-${kind}" placeholder="${ph}" maxlength="400"${c.busy ? ' disabled' : ''}>${SPEECH ? `<button class="btn btn-ghost chat-mic" type="button" aria-label="Сказать голосом" title="Сказать голосом"${c.busy ? ' disabled' : ''}>${MIC_SVG}</button>` : ''}<button class="btn btn-primary" type="submit"${c.busy ? ' disabled' : ''}>Отправить</button></form>`}
-    <p class="chat-mode small muted">${online && !c.forceOffline ? (SERVER ? 'Наставник не скажет ответ — поможет дойти до него самому.' : `Наставник: ${esc(modelName())}.`) : online ? 'ИИ временно недоступен — урок идёт по конспекту.' : 'Наставник без ИИ — отвечает по конспекту.'} ${online || SERVER ? '' : '<a href="#settings">Подключить ИИ</a>'}</p>
+    <p class="chat-mode small muted">${online && !c.forceOffline ? (SERVER ? 'Бипыч не скажет ответ — поможет дойти до него самому.' : `Наставник: ${esc(modelName())}.`) : online ? 'ИИ временно недоступен — урок идёт по конспекту.' : 'Бипыч без ИИ — отвечает по конспекту.'} ${online || SERVER ? '' : '<a href="#settings">Подключить ИИ</a>'}</p>
   </div>`;
 }
 
@@ -344,7 +344,15 @@ const dayCharge = () => { const g = game(), goal = Math.min(10, Math.max(3, g.go
 function mountPetsAndCollection(page, stage) {
   const g = game(), C = window.VEKTOR_COLLECTION;
   const home = app.querySelector('#pet-home');
-  if (home) { const ch = dayCharge(); petMount(home, { size: 104, state: ch.done >= ch.goal ? 'celebrate' : 'idle', charge: ch }); }
+  if (home) {
+    const ch = dayCharge(), small = innerWidth < 760;
+    const pet = petMount(home, { size: small ? 64 : 84, state: ch.done >= ch.goal ? 'celebrate' : 'happy', charge: ch, hideCharge: small });
+    // Бипыч здоровается: текст печатается в облачке, рот двигается
+    if (pet) {
+      setTimeout(() => { try { pet.say(bipGreeting(currentSpot()), { type: true }); } catch {} }, 350);
+      setTimeout(() => { if (route().page === 'home') try { pet.say(''); } catch {} }, 9000);
+    }
+  }
   if (page === 'lesson' && stage === 'practice') {
     const at = app.querySelector('#answer-form') && app.querySelector('.story');
     if (at && !app.querySelector('.task-pet')) { const d = document.createElement('div'); d.className = 'task-pet'; d.setAttribute('aria-hidden', 'true'); at.before(d); taskPet = petMount(d, { size: 64, state: 'idle', charge: dayCharge() }); }
@@ -489,7 +497,7 @@ async function aiReply(i, kind, hiddenUser) {
     pace: pace(), style: state.settings.style, // имя ученика в ИИ не передаём (Д-06)
   });
   const history = c.msgs.filter(m => m.raw).slice(-14).map(m => ({ role: m.role, content: m.raw }));
-  const msg = { role: 'assistant', html: '<p class="typing">Наставник думает…</p>', raw: null };
+  const msg = { role: 'assistant', html: '<p class="typing">Бипыч думает…</p>', raw: null };
   c.msgs.push(msg); c.busy = true; refreshChat(i, kind);
   const call = () => T.stream(ai, [{ role: 'system', content: sys }, ...history], txt => {
     msg.html = T.render(txt, { streaming: true }).html || '<p class="typing">…</p>'; updateLastMsg(i, kind, msg);
@@ -514,7 +522,7 @@ async function aiReply(i, kind, hiddenUser) {
     }
     if (e.quiet) { aiPaused = true; offlineFallback(i, kind); return; }
     c.forceOffline = true;
-    if (SERVER) c.msgs.push({ role: 'assistant', error: true, html: `<p class="small">${/вопрос/.test(e.message || '') ? esc(e.message) : 'Наставник сейчас не на связи — продолжаем по конспекту.'} <button type="button" class="link" data-retry-ai>Спросить ещё раз</button></p>` });
+    if (SERVER) c.msgs.push({ role: 'assistant', error: true, html: `<p class="small">${/вопрос/.test(e.message || '') ? esc(e.message) : 'Бипыч сейчас не на связи — продолжаем по конспекту.'} <button type="button" class="link" data-retry-ai>Спросить ещё раз</button></p>` });
     else c.msgs.push({ role: 'assistant', error: true, html: `<p class="small"><b>ИИ сейчас не отвечает</b> — ${esc(e.message || 'нет связи')} Продолжаю по конспекту. <button type="button" class="link" data-retry-ai>Попробовать ИИ снова</button></p>` });
     offlineFallback(i, kind);
     return;
@@ -554,8 +562,8 @@ function sfx(kind) {
 /* ================= Знакомство с интерфейсом ================= */
 
 const TOUR = [
-  { sel: '.hero-next [data-continue]', title: 'Главная кнопка', text: 'Всегда ведёт к следующему шагу. Не знаешь, что делать, — жми «Продолжить».' },
-  { sel: '#path .node.is-current .node-btn, #path .node .node-btn', title: 'Твой путь', text: 'Этот кружок — тема, где ты сейчас. Ниже — следующие темы по порядку: зелёный кружок — освоено. Нажми на кружок, чтобы открыть тему.' },
+  { sel: '#path .node.is-current .node-btn, #path .node .node-btn', title: 'Твой путь', text: 'Ты здесь. Жми на кружок — и вперёд. Пройденные уровни станут зелёными, а под облаками ждут новые.' },
+  { sel: '.bip-dock .pet-tap', title: 'Бипыч', text: 'Это Бипыч. Застрял — нажми на него и спроси. Ответ он не скажет, но подскажет, с чего начать.' },
   { sel: '.hud', title: 'Звёзды и огонёк', text: 'Звёзды — за решённые задачи. Огонёк — сколько дней подряд ты занимаешься.' },
   { sel: '.sidebar nav', title: 'Меню', text: () => (innerWidth <= 760 ? 'Внизу экрана — путь, все темы, награды и профиль.' : 'Слева — путь, все темы, награды и профиль.') },
 ];
@@ -694,56 +702,194 @@ function continueTarget() {
   return { i: ns.i, stage: st.next, title: topics[ns.i].title, say: STAGE_SAY[st.next], reason: ns.reason };
 }
 
+/* ================= Главная: карта уровней (mobile first) =================
+   Экран — это сама карта: сверху вниз, как в играх. У текущего уровня стоит Бипыч и говорит
+   одну короткую фразу; дальние уровни спрятаны под облаками и открываются по мере пути. */
+const Q = () => window.VEKTOR_QUICK;
+const quickDone = id => !!(state.quick && state.quick[id] && state.quick[id].done);
+// новичок сначала проходит лёгкий старт; кто уже занимается дробями — старт открыт, но не обязателен
+const fractionsStarted = () => state.attempts.length > 0 || ROUTE.some(i => pct(i) > 0 || meta(i).practice);
+function currentSpot() {
+  const q = Q(), pend = q && q.LEVELS.find(l => !quickDone(l.id));
+  if (pend && !fractionsStarted()) return { kind: 'quick', id: pend.id };
+  return { kind: 'topic', i: continueTarget().i };
+}
+function bipGreeting(cur) {
+  const hour = new Date().getHours(), name = esc(state.settings.name || '');
+  const hi = (hour < 12 ? 'Доброе утро' : hour < 18 ? 'Привет' : 'Добрый вечер') + (name && name !== 'Ученик' ? `, ${name}` : '') + '!';
+  if (state.warmupDay !== today() && warmupPlan().length) return `${hi} Сначала проверим, не вернулись ли жучки — это две минуты.`;
+  if (cur.kind === 'quick') { const l = Q().byId[cur.id]; return `${hi} ${l.say} Жми на кружок!`; }
+  const t = topics[cur.i], ct = continueTarget(), why = ct.stage !== 'review' && nextStep().reason;
+  if (why) return `${hi} ${why}`;
+  return ct.stage === 'review' ? `${hi} Пора повторить «${t.short || t.title}».` : `${hi} Сегодня — «${t.short || t.title}». Жми на кружок!`;
+}
 function home() {
-  const ct = continueTarget(), p = pace(), cur = currentStop();
-  const hour = new Date().getHours();
-  const hello = hour < 12 ? 'Доброе утро' : hour < 18 ? 'Добрый день' : 'Добрый вечер';
-  const firstTime = !state.answers && !state.diag.step;
+  const ct = continueTarget(), p = pace(), cur = currentSpot(), q = Q();
   const x = [0, 1, 2, 1, 0, -1, -2, -1, 0];
-  const nodes = ROUTE.map((i, k) => {
-    const st = status(i), isCur = i === ct.i, due = dueReviews().includes(i), steps = stepStates(i);
-    const sub = st === 'done' ? (due ? 'Пора повторить' : 'Освоено') : isCur ? 'Ты здесь' : st === 'started' ? 'Начато' : 'Можно открыть';
-    return `<li class="node is-${st}${isCur ? ' is-current' : ''}${due ? ' is-due' : ''}${x[k % x.length] > 0 ? ' left' : ''}" style="--x:${x[k % x.length]}">
+  // единая лента уровней: сначала лёгкий старт, потом дроби
+  const seq = [...(q ? q.LEVELS.map(l => ({ kind: 'quick', id: l.id })) : []), ...ROUTE.map(i => ({ kind: 'topic', i }))];
+  const curIdx = Math.max(0, seq.findIndex(n => n.kind === cur.kind && (n.kind === 'quick' ? n.id === cur.id : n.i === cur.i)));
+  const FOG_FROM = curIdx + 3; // видно текущий и два следующих, дальше облака
+  let k = 0, fogged = 0;
+  const nodeHtml = (n, idx) => {
+    const xx = x[idx % x.length];
+    if (idx >= FOG_FROM) { fogged++; return fogged > 2 ? '' : `<li class="node is-fog" style="--x:${xx}" aria-hidden="true"><span class="node-btn fog-btn"><span class="node-face">?</span></span><span class="cloud cloud-a"></span><span class="cloud cloud-b"></span></li>`; }
+    const isCur = idx === curIdx;
+    if (n.kind === 'quick') {
+      const l = q.byId[n.id], done = quickDone(n.id), st = done ? 'done' : isCur ? 'started' : 'todo';
+      return `<li class="node is-${st}${isCur ? ' is-current' : ''} node-quick${xx > 0 ? ' left' : ''}" style="--x:${xx}">
+        ${isCur ? `<a class="node-bubble" href="#quick/${n.id}">Начать</a>` : ''}
+        <a class="node-btn" href="#quick/${n.id}" style="--p:${done ? 100 : 0}" aria-label="${l.title}: ${done ? 'пройдено' : isCur ? 'ты здесь' : 'можно открыть'}"><span class="node-face">${done ? '✓' : l.check ? G.icon('target', 28) : '★'}</span></a>
+        <div class="node-label"><b>${l.short}</b></div></li>`;
+    }
+    const i = n.i, st = status(i), due = dueReviews().includes(i), steps = stepStates(i);
+    const sub = st === 'done' ? (due ? 'Пора повторить' : 'Освоено') : isCur ? 'Ты здесь' : st === 'started' ? 'Начато' : '';
+    return `<li class="node is-${st}${isCur ? ' is-current' : ''}${due ? ' is-due' : ''}${xx > 0 ? ' left' : ''}" style="--x:${xx}">
       ${isCur ? `<button class="node-bubble" data-continue>${ct.stage === 'review' ? 'Повторить' : steps.next === 'learn' && !meta(i).practice ? 'Начать' : 'Продолжить'}</button>` : ''}
-      <button class="node-btn" data-lesson="${i}" style="--p:${pct(i)}" aria-label="${topics[i].title}: ${sub}">
-        <span class="node-face">${st === 'done' && !due ? '✓' : due ? G.icon('repeat', 26) : k + 1}</span>
+      <button class="node-btn" data-lesson="${i}" style="--p:${pct(i)}" aria-label="${topics[i].title}${sub ? ': ' + sub : ''}">
+        <span class="node-face">${st === 'done' && !due ? '✓' : due ? G.icon('repeat', 26) : ROUTE.indexOf(i) + 1}</span>
       </button>
-      <div class="node-label"><b>${topics[i].short || topics[i].title}</b><span>${sub}</span></div>
+      <div class="node-label"><b>${topics[i].short || topics[i].title}</b>${sub ? `<span>${sub}</span>` : ''}</div>
     </li>`;
-  }).join('');
-  return `<div class="page-head home-head"><h1>${hello}, ${esc(state.settings.name)}!</h1></div>
-  ${state.warmupDay !== today() && warmupPlan().length ? `<section class="hero-next hero-warmup" aria-label="Разминка">
-    <div class="hero-text"><p class="hero-kicker">Разминка</p><h2>${window.VEKTOR_TONE.senior() ? 'Проверим разобранные ошибки' : 'Не вернулись ли жучки?'}</h2><p class="muted">${window.VEKTOR_TONE.t('warmupSub')}</p></div>
-    <button class="btn btn-primary btn-big btn-go" data-warmup>${G.icon('rocket', 22)} Начать</button></section>` : ''}
-  ${(state.settings.grade || 5) >= 7 ? `<section class="sheet grade-note"><p><b>Программа ${state.settings.grade} класса скоро появится.</b> А пока проверим фундамент: ошибки в алгебре и геометрии часто растут из дробей 5–6 класса — найдём и закроем такие дыры.</p><a href="#map" class="btn btn-ghost btn-sm">Что будет в ${state.settings.grade} классе</a></section>` : ''}
-  ${!Array.isArray(state.settings.interests) && window.VEKTOR_STORIES && state.answers > 0 ? `<section class="sheet interests-ask" aria-label="Интересы"><h2>Про что сделать следующие задачи?</h2><p class="muted">Выбери 2–3 темы: математика та же, а сюжет — про то, что тебе нравится.</p>${interestPicker([])}<div class="row-actions"><button class="btn btn-primary" data-interests-save>Готово</button><button class="btn btn-ghost" data-interests-skip>Пропустить</button></div></section>` : ''}
-  <section class="hero-next" aria-label="Следующий шаг">
-    <div class="hero-text">
-      <p class="hero-kicker">${ct.stage === 'review' ? 'Повторение' : ct.reason ? 'Сначала повторим' : 'Продолжай отсюда'}</p>
-      <h2>${ct.title}</h2>
-      <p class="muted">${ct.reason || ct.say}</p>
-      ${ct.stage !== 'review' && !topics[ct.i].legacy ? miniSteps(ct.i) : ''}
-    </div>
-    <div class="hero-pet" id="pet-home" aria-hidden="true"></div>
-    <button class="btn btn-primary btn-big btn-go" data-continue>${G.icon('rocket', 22)} Продолжить</button>
-  </section>
+  };
+  const qn = q ? q.LEVELS.length : 0;
+  const chapter = (title, sub) => `<li class="chapter"><b>${title}</b><span>${sub}</span></li>`;
+  const startOpen = qn && (!fractionsStarted() || q.LEVELS.some(l => quickDone(l.id)));
+  const items = [
+    startOpen ? chapter('Старт', 'разминка для ума') : '',
+    ...(startOpen ? seq.slice(0, qn).map((n, idx) => nodeHtml(n, idx)) : []),
+    chapter('Обыкновенные дроби', `${ROUTE.filter(i => pct(i) >= DONE).length} из ${ROUTE.length} освоено`),
+    ...seq.slice(qn).map((n, idx) => nodeHtml(n, idx + qn)),
+  ].join('');
+  const hidden = Math.max(0, seq.length - FOG_FROM - 2);
+  return `${state.warmupDay !== today() && warmupPlan().length ? `<a class="strip strip-warmup" href="#warmup" data-warmup>${G.icon('repeat', 18)}<span><b>${window.VEKTOR_TONE.senior() ? 'Проверим разобранные ошибки' : 'Не вернулись ли жучки?'}</b> 2 минуты</span><span class="strip-go">Начать</span></a>` : ''}
+  ${(state.settings.grade || 5) >= 7 ? `<a class="strip grade-note" href="#map"><span><b>Программа ${state.settings.grade} класса скоро появится.</b> Пока закрываем дыры в дробях.</span></a>` : ''}
+  ${!Array.isArray(state.settings.interests) && window.VEKTOR_STORIES && state.answers > 0 ? `<section class="sheet interests-ask" aria-label="Интересы"><h2>Про что сделать задачи?</h2>${interestPicker([])}<div class="row-actions"><button class="btn btn-primary" data-interests-save>Готово</button><button class="btn btn-ghost" data-interests-skip>Пропустить</button></div></section>` : ''}
+  <h1 class="visually-hidden">Мой путь</h1>
   <div class="layout home-layout">
-    <section class="path-wrap" aria-label="Мой путь по теме «Обыкновенные дроби»">
-      <div class="path-head"><h2>Мой путь: обыкновенные дроби</h2><span class="muted small">${ROUTE.filter(i => pct(i) >= DONE).length} из ${ROUTE.length} тем освоено</span></div>
-      <ol class="path" id="path"><svg class="path-line" aria-hidden="true"></svg>${nodes}
-        <li class="node node-finish" style="--x:0"><span class="finish-flag">${G.icon('flag', 30)}</span><div class="node-label"><b>Финиш</b><span>Покоритель дробей</span></div></li>
+    <section class="path-wrap" aria-label="Мой путь">
+      <ol class="path" id="path"><svg class="path-line" aria-hidden="true"></svg>${items}
+        ${hidden > 0 ? `<li class="fog-bank" aria-label="Ещё ${hidden} уровней скрыты"><span class="cloud cloud-a"></span><span class="cloud cloud-b"></span><span class="cloud cloud-c"></span><b>Ещё ${hidden} ${plural(hidden, 'уровень', 'уровня', 'уровней')} под облаками</b><span>Откроются, когда дойдёшь</span></li>` : `<li class="node node-finish" style="--x:0"><span class="finish-flag">${G.icon('flag', 30)}</span><div class="node-label"><b>Финиш</b><span>Покоритель дробей</span></div></li>`}
       </ol>
     </section>
     <div class="stack side">
-      ${firstTime ? `<div class="sheet note"><h3>Не знаешь, с чего начать?</h3><p>Пройди быстрый тест из 6 задач — и путь подстроится под тебя.</p><button class="btn btn-primary" data-go="diagnostic">Пройти тест</button></div>` : ''}
       ${todayCard()}
-      ${state.attempts.length >= 5 ? `<div class="sheet pace pace-${p}">
-        <h3>Твой темп: ${A.PACE[p].label.toLowerCase()}</h3>
-        <p class="muted small">${A.PACE[p].say}</p>
-      </div>` : ''}
-      ${SERVER ? '' : `<div class="sheet small-note"><h3>Наставник ${isOnline() ? 'на связи' : 'работает по конспекту'}</h3><p class="muted small">${isOnline() ? `Ведёт урок, отвечает на вопросы и рисует дроби (${esc(modelName())}).` : 'Ведёт урок по методичке. Чтобы он отвечал на любые вопросы, подключи ИИ в профиле.'}</p></div>`}
+      ${state.attempts.length >= 5 ? `<div class="sheet pace pace-${p}"><h3>Твой темп: ${A.PACE[p].label.toLowerCase()}</h3><p class="muted small">${A.PACE[p].say}</p></div>` : ''}
     </div>
-  </div>`;
+  </div>
+  <div class="bip-dock"><button class="pet-tap" data-bip-chat aria-label="Поговорить с Бипычем"><span id="pet-home"></span></button></div>`;
+}
+
+/* ================= Лёгкий старт: уровень с плитками =================
+   Экран как в Duolingo: сверху крестик и полоска прогресса, в центре пример с пустой клеткой,
+   снизу плитки. Плитку можно перетащить в клетку или просто нажать на неё. */
+let quickRun = null;
+const quickTask = (l, k) => Q().task(l, k);
+const ymGoal = (name, params) => window.VEKTOR_METRIKA?.goal(name, params);
+function quickPage() {
+  const q = Q(), id = (location.hash.split('/')[1] || ''), l = q && q.byId[id];
+  if (!l) return head('Старт', 'Такого уровня нет.') + '<a class="btn btn-primary" href="#home">К карте</a>';
+  if (!quickRun || quickRun.id !== id) { quickRun = { id, k: 0, streak: 0, best: 0, misses: 0, task: quickTask(l, 0), done: false, msg: l.say, res: {} }; ymGoal(l.check ? 'check_start' : 'quick_start', { level: id }); }
+  const r = quickRun, N = q.count(l);
+  const bar = `<div class="qz-top"><a class="qz-close" href="#home" aria-label="Выйти на карту">✕</a><div class="qz-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${N}" aria-valuenow="${r.k}"><i style="width:${r.k / N * 100}%"></i></div><span class="qz-streak${r.streak >= 2 ? ' on' : ''}" title="Подряд без ошибок">${G.icon('flame', 18)}<b>${r.streak}</b></span></div>`;
+  if (r.done && l.check) {
+    const known = (state.quick[id] && state.quick[id].known) || [], next = q.LEVELS.find(x => !x.check && !quickDone(x.id));
+    return `<section class="qz qz-done">${bar}
+      <div class="qz-center"><div class="qz-pet" id="pet-quick"></div>
+        <h1 class="qz-title">${next ? 'Проверка пройдена!' : 'Ты всё помнишь!'}</h1>
+        <p class="qz-sub">${known.length ? `Уже знаешь: ${known.map(x => q.byId[x].short.toLowerCase()).join(', ')}. Эти уровни засчитаны.` : 'Начнём с самого простого — так быстрее разгонимся.'}</p></div>
+      <div class="qz-foot">${next ? `<a class="btn btn-primary btn-big" href="#quick/${next.id}" data-quick-next>Начнём с: ${next.short}</a>` : `<a class="btn btn-primary btn-big" href="#home">Сразу к дробям</a>`}<a class="btn btn-ghost btn-big" href="#home">На карту</a></div></section>`;
+  }
+  if (r.done) {
+    const next = q.LEVELS.find((x, j) => j > q.LEVELS.findIndex(y => y.id === id) && !quickDone(x.id));
+    return `<section class="qz qz-done">${bar}
+      <div class="qz-center"><div class="qz-pet" id="pet-quick"></div>
+        <h1 class="qz-title">Уровень пройден!</h1>
+        <p class="qz-sub">${r.misses ? `Ошибок: ${r.misses} — и все исправлены.` : 'Ни одной ошибки!'} Лучшая серия: ${r.best} подряд.</p></div>
+      <div class="qz-foot">${next ? `<a class="btn btn-primary btn-big" href="#quick/${next.id}" data-quick-next>Дальше: ${next.short}</a>` : `<a class="btn btn-primary btn-big" href="#home">К дробям</a>`}<a class="btn btn-ghost btn-big" href="#home">На карту</a></div></section>`;
+  }
+  const t = r.task;
+  const parts = t.parts.map(x => `<span>${esc(String(x))}</span>`).join('');
+  return `<section class="qz">${bar}
+    <div class="qz-center">
+      <div class="qz-pet" id="pet-quick"></div>
+      <div class="qz-q" aria-label="${esc(t.parts.join(' '))} ?">${parts}<span class="qz-slot" data-slot aria-label="Пустая клетка для ответа"></span></div>
+    </div>
+    <div class="qz-foot"><p class="qz-help small muted">Перетащи число в клетку или нажми на него</p>
+      <div class="qz-tiles" role="group" aria-label="Варианты ответа">${t.tiles.map(v => `<button class="qz-tile" data-v="${v}">${v}</button>`).join('')}</div></div>
+  </section>`;
+}
+function runQuick() {
+  const host = app.querySelector('.qz'); if (!host || !quickRun) return;
+  const q = Q(), l = q.byId[quickRun.id], r = quickRun;
+  const pet = petMount(app.querySelector('#pet-quick'), { size: 76, hideCharge: true, state: r.done ? 'celebrate' : 'idle' });
+  if (pet) setTimeout(() => { try { pet.say(r.done ? (l.check ? 'Теперь я знаю, с чего начать!' : 'Вот это скорость! Идём дальше?') : r.msg, { type: true }); } catch {} }, 150);
+  const close = host.querySelector('.qz-close'); if (close) close.onclick = () => { if (!r.done) ymGoal('quick_exit', { level: r.id, k: r.k }); };
+  if (r.done) return;
+  const N = q.count(l);
+  const finishLevel = () => {
+    r.done = true; state.quick = state.quick || {};
+    if (l.check) {
+      // уровень засчитан, если все его задачи в проверке решены с первого раза
+      const known = [...new Set(l.plan)].filter(x => r.res[x] && r.res[x].right && !r.res[x].wrong);
+      known.forEach(x => { if (!quickDone(x)) state.quick[x] = { done: true, at: today(), via: 'check' }; });
+      state.quick[r.id] = { done: true, at: today(), known };
+      logEvent('quick_check', { level: r.id, known: known.length, misses: r.misses }); ymGoal('check_done', { known: known.length, misses: r.misses });
+    } else {
+      state.quick[r.id] = { done: true, at: today(), best: r.best };
+      logEvent('quick', { level: r.id, misses: r.misses });
+    }
+    confetti(); sfx('win');
+  };
+  const nextTask = msg => { r.lock = false; r.missed = false; if (r.k >= N) finishLevel(); else { r.task = quickTask(l, r.k); r.msg = msg; } save(); render(); };
+  const mark = ok => { const f = r.task.from; r.res[f] = r.res[f] || { right: 0, wrong: 0 }; r.res[f][ok ? 'right' : 'wrong']++; };
+  const slot = host.querySelector('[data-slot]');
+  const answer = (v, tile) => {
+    if (r.lock) return;
+    if (+v === r.task.answer) {
+      r.lock = true; slot.textContent = v; slot.classList.add('ok'); tile && tile.classList.add('used');
+      r.k++; r.streak++; r.best = Math.max(r.best, r.streak); state.answers = (state.answers || 0) + 1;
+      celebrate(G.solved(game(), today(), { firstTry: !r.missed, hints: 0, wrongBefore: r.missed ? 1 : 0 }), { quiet: true });
+      sfx('ok'); try { pet && pet.setState('happy'); } catch {}
+      if (r.streak === 5) toast(`${G.icon('flame', 18)}<b>5 подряд!</b> Серия без ошибок`, 'toast-stars');
+      if (l.check && !r.missed) mark(true);
+      setTimeout(() => nextTask(['Точно!', 'Есть!', 'Верно!', 'Отлично!'][r.k % 4] + (l.check ? ' Дальше.' : ' Следующий.')), 650);
+    } else if (l.check) {
+      // в проверке не переспрашиваем: показываем верный ответ и идём дальше, без наказания
+      r.lock = true; r.streak = 0; r.misses++; mark(false); ymGoal('quick_wrong', { level: r.id, from: r.task.from, k: r.k });
+      slot.textContent = r.task.answer; slot.classList.add('miss'); tile && tile.classList.add('shake');
+      try { pet && pet.setState('thinking'); pet && pet.say(`Не страшно — вот ответ. Потренируем в уровне «${q.byId[r.task.from].short}».`, { type: true }); } catch {}
+      r.k++; setTimeout(() => nextTask('Следующий вопрос.'), 1700);
+    } else {
+      r.streak = 0; r.misses++; r.missed = true; sfx('wrong'); ymGoal('quick_wrong', { level: r.id, k: r.k });
+      if (tile) { tile.classList.remove('shake'); void tile.offsetWidth; tile.classList.add('shake'); }
+      try { pet && pet.setState('thinking'); pet && pet.say(r.task.hint, { type: true }); } catch {}
+      host.querySelector('.qz-streak b').textContent = 0; host.querySelector('.qz-streak').classList.remove('on');
+    }
+  };
+  host.querySelectorAll('.qz-tile').forEach(tile => {
+    tile.onclick = () => { if (!tile.dataset.dragged) answer(tile.dataset.v, tile); delete tile.dataset.dragged; };
+    // перетаскивание пальцем или мышью: плитка едет за указателем, отпустили над клеткой — ответ
+    tile.onpointerdown = e => {
+      if (r.lock) return;
+      const start = { x: e.clientX, y: e.clientY }; let ghost = null;
+      const move = ev => {
+        const dx = ev.clientX - start.x, dy = ev.clientY - start.y;
+        if (!ghost && Math.hypot(dx, dy) < 8) return;
+        if (!ghost) { ghost = tile.cloneNode(true); ghost.classList.add('qz-ghost'); document.body.append(ghost); tile.classList.add('lifted'); }
+        ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px';
+        const sr = slot.getBoundingClientRect(); slot.classList.toggle('hover', ev.clientX > sr.left - 20 && ev.clientX < sr.right + 20 && ev.clientY > sr.top - 20 && ev.clientY < sr.bottom + 20);
+      };
+      const up = ev => {
+        removeEventListener('pointermove', move); removeEventListener('pointerup', up);
+        if (!ghost) return;
+        tile.dataset.dragged = '1'; ghost.remove(); tile.classList.remove('lifted');
+        const over = slot.classList.contains('hover'); slot.classList.remove('hover');
+        if (over) answer(tile.dataset.v, tile);
+      };
+      addEventListener('pointermove', move); addEventListener('pointerup', up);
+    };
+  });
 }
 
 /* ================= Знакомство: поймай ошибку Бипыча =================
@@ -793,7 +939,7 @@ function introPage() {
       <div class="intro-why"><p><b>${senior ? 'Ошибка:' : 'Я ошибся:'}</b> сложил верх с верхом (1 + 1) и низ с низом (2 + 3). А половина и треть — куски разного размера.</p>
         <p><b>Верно:</b> режем пиццу на 6 кусков. Половина — 3 куска, треть — 2. Вместе ${F(5, 6)}.</p></div>
       <p class="intro-how-line"><span>Так работает Вектор:</span> <b>находим</b> неверное правило → <b>ломаем</b> примером → <b>проверяем через день</b></p>
-      <div class="intro-actions"><button class="btn btn-primary btn-big" data-intro-go="diagnostic">${senior ? 'Проверить себя: 6 задач' : 'Найти моих жучков: 6 задач'}</button><button class="btn btn-ghost btn-big" data-intro-go="home">Сразу к первой теме</button></div>`;
+      <div class="intro-actions"><button class="btn btn-primary btn-big" data-intro-go="quick/q-check">Поехали!</button><button class="btn btn-ghost btn-big" data-intro-go="home">Посмотреть карту</button></div>`;
   return `<section class="intro intro-step-${introStep}" aria-live="polite">
     <div class="intro-card">
       <div class="intro-top">${dots}${introStep < 3 ? '<button class="link small" data-intro-skip>Пропустить</button>' : ''}</div>
@@ -806,7 +952,7 @@ function runIntro() {
   const host = app.querySelector('.intro'); if (!host) return;
   const petEl = app.querySelector('#pet-intro');
   const pet = petEl ? petMount(petEl, { size: introStep === 3 ? 96 : 112, hideCharge: true, state: introStep === 1 ? 'confused' : introStep === 2 ? 'thinking' : 'celebrate' }) : null;
-  const finish = to => { state.introDone = true; save(); introStep = 1; introPick = null; introMiss = false; location.hash = to; };
+  const finish = to => { state.introDone = true; save(); ymGoal('intro_done', { to }); introStep = 1; introPick = null; introMiss = false; location.hash = to; };
   host.querySelectorAll('[data-intro-pick]').forEach(b => b.onclick = () => {
     const v = b.dataset.introPick;
     if (introStep === 1) { introPick = v; introStep = 2; logEvent('intro', { step: 1, pick: v }); render(); return; }
@@ -847,10 +993,11 @@ function week() {
 function drawRoute() {
   const box = document.querySelector('#path'); if (!box) return;
   const svg = box.querySelector('.path-line'), b = box.getBoundingClientRect();
-  const pts = [...box.querySelectorAll('.node-btn, .finish-flag')].map(el => { const r = el.getBoundingClientRect(); return [r.left - b.left + r.width / 2, r.top - b.top + r.height / 2]; });
+  const els = [...box.querySelectorAll('.node-btn, .finish-flag, .fog-bank')];
+  const pts = els.map(el => { const r = el.getBoundingClientRect(); return [r.left - b.left + r.width / 2, r.top - b.top + (el.classList.contains('fog-bank') ? 24 : r.height / 2)]; });
   if (pts.length < 2) return;
   svg.setAttribute('width', b.width); svg.setAttribute('height', b.height);
-  const lastDone = Math.max(-1, ...ROUTE.map((i, k) => pct(i) >= DONE ? k : -1)) + 1; // до текущей темы — сплошная
+  const lastDone = Math.max(0, els.findIndex(el => el.closest('.is-current'))); // до текущего уровня — сплошная
   const seg = (a, z) => pts.slice(a, z + 1).map((p, k) => `${k ? 'L' : 'M'}${p[0]},${p[1]}`).join(' ');
   svg.innerHTML = `<path class="todo" d="${seg(0, pts.length - 1)}"/>${lastDone > 0 ? `<path class="done" d="${seg(0, Math.min(lastDone, pts.length - 1))}"/>` : ''}`;
 }
@@ -973,7 +1120,7 @@ function practiceStage(i) {
       ${t.legacy ? '' : `<div class="sheet streak ${ready ? 'ready' : ''}"><h3>${ready ? 'Можно проверять себя!' : 'Тренировка'}</h3>
         <p class="small muted">${ready ? 'Ты решил достаточно задач. Можешь потренироваться ещё или перейти к проверке.' : `Реши ещё ${need - m.practice} ${plural(need - m.practice, 'задачу', 'задачи', 'задач')} — потом проверка.`}</p>
         <button class="btn ${ready ? 'btn-primary' : 'btn-ghost'}" data-stage="check">Перейти к проверке</button></div>
-      <div class="sheet"><h3>Спроси наставника</h3>${chatBox(i, 'task')}</div>`}
+      <div class="sheet bip-chat" id="bip-chat"><h3><i class="bip-dot" aria-hidden="true"></i>Спроси Бипыча</h3>${chatBox(i, 'task')}</div>`}
     </aside>
   </div>`;
 }
@@ -1169,7 +1316,7 @@ function settingsServer() {
   <div class="layout settings">
     <div class="stack">
       <form class="sheet" id="settings-form">
-        <h2>${esc(s.name)}</h2>
+        <h2 data-ym-private>${esc(s.name)}</h2>
         <p class="muted small">Так тебя видит учитель. Своё имя вписывать не нужно.</p>
         <label class="field">Класс<select name="grade" id="set-grade">${[5, 6, 7, 8, 9].map(n => `<option value="${n}"${s.grade === n ? ' selected' : ''}>${n} класс</option>`).join('')}</select></label>
         <label class="field">Цель дня<select name="goal" id="set-goal">${[3, 5, 10].map(n => `<option value="${n}"${game().goal === n ? ' selected' : ''}>${n} задач в день</option>`).join('')}</select></label>
@@ -1196,7 +1343,7 @@ function settingsServer() {
 const filterState = { map: 'Все', library: 'Все' };
 const route = () => { const [page, arg, stage] = (location.hash.slice(1) || 'home').split('/'); return { page: pages[page] && !(SERVER && page === 'teacher') ? page : 'home', i: Math.min(Math.max(+arg || 0, 0), topics.length - 1), stage }; };
 
-let passwordOffered = false;
+let passwordOffered = false, bipChatFocus = false, ymLesson = '';
 // Первый вход: сначала знакомство «Поймай ошибку Бипыча», а не экскурсия и анкеты
 const needsIntro = () => !state.introDone && !state.answers && !state.diag.step && !state.attempts.length;
 function render() {
@@ -1204,7 +1351,7 @@ function render() {
   petsClear();
   if (window.VEKTOR_TONE) { window.VEKTOR_TONE.setGrade(state.settings.grade); document.body.classList.toggle('age-senior', window.VEKTOR_TONE.senior()); }
   const { page, i, stage } = route();
-  document.body.classList.toggle('is-intro', page === 'intro');
+  document.body.classList.toggle('is-intro', page === 'intro' || page === 'quick');
   const lessonStage = stage || (topics[i].legacy || meta(i).practice ? 'practice' : 'learn');
   document.querySelector('#crumb').textContent = page === 'lesson' ? topics[i].title : pages[page];
   document.title = (page === 'home' ? '' : (page === 'lesson' ? topics[i].title : pages[page]) + ' — ') + 'Вектор';
@@ -1212,7 +1359,7 @@ function render() {
   document.querySelector('#student-name').textContent = state.settings.name;
   { const sm = document.querySelector('.sidebar .profile small'); if (sm) sm.textContent = `Математика, ${state.settings.grade || 5} класс`; }
   document.querySelector('#avatar').textContent = (state.settings.name[0] || 'А').toUpperCase();
-  app.innerHTML = ({ home, map: () => mapPage(filterState.map), diagnostic, library: () => library(filterState.library), awards, teacher, settings, lesson: () => lessonPage(i, lessonStage), warmup: warmupPage, intro: introPage })[page]();
+  app.innerHTML = ({ home, map: () => mapPage(filterState.map), diagnostic, library: () => library(filterState.library), awards, teacher, settings, lesson: () => lessonPage(i, lessonStage), warmup: warmupPage, intro: introPage, quick: quickPage })[page]();
   bind(page, i, lessonStage);
   if(page==='settings'&&SERVER&&window.VEKTOR_PROFILE)window.VEKTOR_PROFILE.mount();
   if(page==='home'&&SERVER&&window.VEKTOR_ASSIGNMENTS)window.VEKTOR_ASSIGNMENTS.mount(topics);
@@ -1220,7 +1367,17 @@ function render() {
   mountPetsAndCollection(page, lessonStage);
   if (page === 'warmup') runWarmup();
   if (page === 'intro') runIntro();
+  if (page === 'quick') runQuick();
+  if (page === 'lesson') { const key = i + '/' + lessonStage; if (key !== ymLesson) { ymLesson = key; ymGoal('lesson_' + lessonStage, { topic: topics[i].id }); } } else ymLesson = '';
   app.querySelectorAll('[data-warmup]').forEach(b => b.onclick = () => { location.hash = 'warmup'; });
+  app.querySelectorAll('[data-bip-chat]').forEach(b => b.onclick = () => {
+    const cur = currentSpot(); ymGoal('bip_tap', { kind: cur.kind });
+    if (cur.kind === 'quick') { location.hash = 'quick/' + cur.id; return; }
+    bipChatFocus = true; session = null; location.hash = `lesson/${cur.i}/practice`;
+  });
+  // на телефоне карта сразу показывает текущий уровень (после сброса прокрутки при смене экрана)
+  if (page === 'home' && innerWidth <= 760) requestAnimationFrame(() => { const cur = app.querySelector('#path .is-current'); if (cur) { const r = cur.getBoundingClientRect(); if (r.bottom > innerHeight * .62) scrollTo({ top: scrollY + r.top - innerHeight * .3, behavior: 'instant' }); } });
+  if (bipChatFocus && app.querySelector('#bip-chat')) { bipChatFocus = false; const c = app.querySelector('#bip-chat'); setTimeout(() => { c.scrollIntoView({ behavior: 'smooth', block: 'start' }); c.querySelector('input, textarea')?.focus({ preventScroll: true }); }, 300); }
   hud();
   if (page === 'home' && state.toured === false && !navigator.webdriver) setTimeout(() => route().page === 'home' && startTour(0), 600);
   // Предложить свой пароль — когда ребёнок уже позанимался, а не в первую минуту
@@ -1490,7 +1647,7 @@ function finishSession(i) {
     if (s.right >= t.check.passScore) {
       const already = m.mastered;
       setPct(i, 100); m.failedChecks = 0;
-      if (!already) { m.mastered = true; m.masteredAt = today(); m.reviewStep = 0; m.reviewDue = addDays(today(), t.review.afterDays[0]); }
+      if (!already) { ymGoal('mastered', { topic: t.id }); m.mastered = true; m.masteredAt = today(); m.reviewStep = 0; m.reviewDue = addDays(today(), t.review.afterDays[0]); }
       if (!already) logEvent('mastery', { topic: t.id });
       if (!already) gameEvents = G.mastered(game(), ROUTE.filter(r => pct(r) >= DONE).length); // Д-02
     } else m.failedChecks++;

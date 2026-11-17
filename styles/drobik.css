@@ -114,3 +114,10 @@
 @keyframes bipych-stardust{0%,100%{opacity:.45;transform:translate(0,0)}50%{opacity:1;transform:translate(-2px,-2px)}}
 @keyframes bipych-scan{0%,100%{opacity:.2;transform:scaleY(.65)}50%{opacity:.6;transform:scaleY(1)}}
 @media(prefers-reduced-motion:reduce){.bipych *,.bipych *::before,.bipych *::after{animation:none!important;transition:none!important}.bipych-confetti,.bipych-spark,.bipych-thought-dot,.bipych-pride-star{opacity:1}}
+
+/* Бипыч говорит: рот виден только во время речи, кадры сменяются в такт */
+.bipych-mouth{display:none}
+.bipych[data-talking="true"] .bipych-mouth{display:inline}
+.bipych[data-talking="true"] .bipych-mouth-open{animation:bipych-talk .24s steps(1) infinite}
+@keyframes bipych-talk{0%{opacity:1}50%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.bipych[data-talking="true"] .bipych-mouth-open{animation:none}}
