@@ -267,7 +267,9 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
     const e = t.explain, beats = [];
     beats.push({ html: `<p>Привет! Сегодня тема «${t.title}».</p><p>Чему научимся: ${t.goal.charAt(0).toLowerCase() + t.goal.slice(1)}</p>` });
     beats.push({ html: `<p>${e.model}</p>${figure(e.figure)}<p class="figure-caption">${e.figureCaption}</p>` });
-    beats.push({ html: '<p>Попробуй сам: в «Лаборатории дробей» рядом с уроком меняй числа и смотри, как меняется дробь на полоске, круге и прямой.</p>' });
+    // лаборатория видна только на компьютере — на телефоне не отправляем ребёнка искать то, чего нет на экране
+    const wide = typeof matchMedia !== 'function' || matchMedia('(min-width: 761px)').matches;
+    if (wide) beats.push({ html: '<p>Попробуй сам: в «Лаборатории дробей» рядом с уроком меняй числа и смотри, как меняется дробь на полоске, круге и прямой.</p>' });
     beats.push({ html: `<p><b>Правило</b></p><div class="rule-body">${e.rule}</div>` });
     e.examples.forEach((x, k) => {
       beats.push({ html: `<p><b>Пример ${k + 1}.</b> ${x.q}</p><p>Подумай, с чего начать. Нажми «Дальше», чтобы увидеть решение.</p>` });

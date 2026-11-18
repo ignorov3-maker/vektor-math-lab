@@ -1,6 +1,6 @@
 import asyncio, pathlib
 from playwright.async_api import async_playwright
-# Первое впечатление ученика: знакомство «Поймай ошибку Бипыча», чистая главная, интересы после первой задачи.
+# Первое впечатление ученика: сразу проверка знаний (Лёгкий старт), чистая главная, интересы после первой задачи.
 # Запуск: python tests/ux_scenario.py
 B = (pathlib.Path(__file__).resolve().parent.parent / 'index.html').as_uri()
 R = []
@@ -15,18 +15,13 @@ async def main():
             await ctx.add_init_script("Object.defineProperty(navigator,'webdriver',{get:()=>false})")
             pg = await ctx.new_page(); pg.on('pageerror', lambda e: errs.append(str(e)))
             await pg.goto(B); await pg.evaluate("localStorage.clear()"); await pg.goto(B + '#home'); await pg.reload(); await pg.wait_for_timeout(400)
-            rep(f'{w}: новый ученик сначала видит знакомство', '#intro' in pg.url and await pg.locator('.intro [data-intro-pick]').count() == 2)
-            rep(f'{w}: в знакомстве нет меню и экскурсии', not await pg.is_visible('.sidebar') and await pg.locator('.tour-tip').count() == 0)
-            await pg.click('[data-intro-pick=right]'); await pg.wait_for_timeout(150)
-            rep(f'{w}: шаг 2 — пример на экране и две пиццы', await pg.locator('.intro-board-small').count() == 1 and await pg.locator('.intro-pizza').count() == 2)
-            await pg.click('[data-intro-pick=maybe]'); await pg.wait_for_timeout(150)
-            rep(f'{w}: неверный выбор — подсказка, а не «неверно»', await pg.locator('.intro-hint').count() == 1 and 'неверно' not in (await pg.inner_text('.intro')).lower())
-            await pg.click('[data-intro-pick=never]'); await pg.wait_for_timeout(300)
-            txt = await pg.inner_text('.intro')
-            rep(f'{w}: шаг 3 — пойман жучок, почему ошибка и как верно', 'Складыватель' in txt and 'разного размера' in txt and 'проверяем через день' in txt)
+            rep(f'{w}: новый ученик сразу попадает в проверку знаний, без отдельного знакомства', '#quick/q-check' in pg.url and await pg.locator('.qz-tile').count() >= 3 and await pg.locator('.intro').count() == 0)
+            rep(f'{w}: в проверке нет меню и экскурсии', not await pg.is_visible('.sidebar') and await pg.locator('.tour-tip').count() == 0)
             rep(f'{w}: нет прокрутки вбок', not await pg.evaluate("document.documentElement.scrollWidth > innerWidth + 1"))
-            await pg.click('[data-intro-go=home]'); await pg.wait_for_timeout(400)
-            rep(f'{w}: после знакомства — главная, знакомство запомнено', pg.url.endswith('#home') and await pg.evaluate("state.introDone === true"))
+            await pg.click('.qz-close'); await pg.wait_for_timeout(400)
+            rep(f'{w}: закрыл проверку — главная, повторно не тащим', pg.url.endswith('#home') and await pg.evaluate("state.introDone === true"))
+            await pg.reload(); await pg.wait_for_timeout(300)
+            rep(f'{w}: после перезагрузки остаётся на главной', pg.url.endswith('#home'))
             home = await pg.inner_text('#app')
             rep(f'{w}: у нового ученика нет «Начато» без попыток', 'Начато' not in home, home[:80])
             rep(f'{w}: интересы спрашиваем после первой задачи, а не сразу', await pg.locator('.interests-ask').count() == 0)

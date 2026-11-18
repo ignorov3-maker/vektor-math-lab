@@ -34,7 +34,7 @@ const ROUTE = window.VEKTOR_FRACTIONS.topics.map((t, i) => i); // раздел �
 const DIAG = ['concept', 'reduce', 'compare', 'add-same', 'mult', 'part-of'].map(id => byId[id]);
 const DONE = 80;
 
-const pages = { home: 'Мой путь', map: 'Все темы', diagnostic: 'Диагностика', library: 'Все темы', awards: 'Награды', teacher: 'Отчёт для учителя', settings: 'Профиль', lesson: 'Занятие', warmup: 'Разминка', intro: 'Знакомство', quick: 'Старт' };
+const pages = { home: 'Мой путь', map: 'Все темы', diagnostic: 'Диагностика', library: 'Все темы', awards: 'Награды', teacher: 'Отчёт для учителя', settings: 'Профиль', lesson: 'Занятие', warmup: 'Разминка', quick: 'Старт' };
 const STAGES = [['learn', 'Узнать'], ['practice', 'Потренироваться'], ['check', 'Проверить себя']];
 
 /* ================= Состояние ================= */
@@ -931,78 +931,6 @@ function runQuick() {
   });
 }
 
-/* ================= Знакомство: поймай ошибку Бипыча =================
-   Первая минута — не экскурсия и не анкета, а маленькая победа: ребёнок находит
-   чужую ошибку, видит, как её ломает простой пример, и узнаёт, как работает Вектор. */
-let introStep = 1, introPick = null, introMiss = false;
-const INTRO_BUG = 'add-diff:add-denominators';
-// Пицца: круг на n кусков, закрашенные группы — [сколько кусков, цвет]. Подписей внутри нет: их даёт текст рядом.
-function introPizza(n, groups, label) {
-  const R = 52, C = 60, pt = a => `${(C + R * Math.sin(a)).toFixed(1)} ${(C - R * Math.cos(a)).toFixed(1)}`;
-  const step = 2 * Math.PI / n; let k = 0;
-  const wedges = groups.flatMap(([cnt, col]) => Array.from({ length: cnt }, () => { const a = k++ * step;
-    return `<path d="M${C} ${C} L${pt(a)} A${R} ${R} 0 0 1 ${pt(a + step)} Z" fill="${col}"/>`; })).join('');
-  const cuts = Array.from({ length: n }, (_, m) => `<line x1="${C}" y1="${C}" x2="${pt(m * step).replace(' ', '" y2="')}" />`).join('');
-  return `<svg class="intro-pizza" viewBox="0 0 120 120" role="img" aria-label="${label}"><circle cx="${C}" cy="${C}" r="${R + 4}" fill="#E9B872"/><circle cx="${C}" cy="${C}" r="${R}" fill="#FFF3D6"/>${wedges}<g stroke="#C98B3A" stroke-width="1.5">${cuts}</g><circle cx="${C}" cy="${C}" r="${R}" fill="none" stroke="#C98B3A" stroke-width="1.5"/></svg>`;
-}
-function introPage() {
-  const senior = window.VEKTOR_TONE.senior(), F = V.f;
-  const bug = window.VEKTOR_BUGS && window.VEKTOR_BUGS.byKey[INTRO_BUG];
-  // пример всегда перед глазами; у каждой дроби свой цвет — те же цвета на пиццах
-  const sum = (big) => `<div class="intro-board${big ? '' : ' intro-board-small'}" role="img" aria-label="Одна вторая плюс одна третья равно две пятых"><span class="ib-half">${F(1, 2)}</span><span>+</span><span class="ib-third">${F(1, 3)}</span><span>=</span><span class="ib-bip">${F(2, 5)}</span></div>`;
-  const dots = `<ol class="intro-dots" aria-label="Шаг ${introStep} из 3">${[1, 2, 3].map(k => `<li class="${k < introStep ? 'is-done' : k === introStep ? 'is-now' : ''}"></li>`).join('')}</ol>`;
-  const HALF = 'var(--intro-half)', THIRD = 'var(--intro-third)', BIP = 'var(--intro-bip)';
-  let body;
-  if (introStep === 1) body = `
-      <h1 class="intro-title">${senior ? 'Проверь решение одноклассника' : 'Я съел половину пиццы, а потом ещё треть. Посчитал, сколько всего:'}</h1>
-      ${senior ? '<p class="intro-text">Половина пиццы и ещё треть — сколько это вместе? Он посчитал так:</p>' : ''}
-      ${sum(true)}
-      <p class="intro-text">${senior ? 'Здесь всё верно?' : 'Верно я посчитал?'}</p>
-      <div class="intro-actions"><button class="btn btn-primary btn-big" data-intro-pick="wrong">${senior ? 'Есть ошибка' : 'Тут ошибка'}</button><button class="btn btn-ghost btn-big" data-intro-pick="right">Всё верно</button></div>`;
-  else if (introStep === 2) body = `
-      ${sum(false)}
-      <h1 class="intro-title">${introPick === 'wrong' ? (senior ? 'Верно, ошибка есть. Докажем на пицце.' : 'Зоркий глаз! Давай проверим на пицце.') : 'Давай проверим на пицце.'}</h1>
-      <div class="intro-pizzas">
-        <figure>${introPizza(6, [[3, HALF], [2, THIRD]], 'Пицца: закрашена половина и ещё треть — почти вся')}
-          <figcaption><b>Сколько съели</b><span><i class="dot dot-half"></i>половина <i class="dot dot-third"></i>и ещё треть</span></figcaption></figure>
-        <figure>${introPizza(5, [[2, BIP]], 'Пицца на пять кусков, закрашены два — меньше половины')}
-          <figcaption><b>Что вышло у ${senior ? 'него' : 'Бипыча'}</b><span><i class="dot dot-bip"></i>2 куска из 5</span></figcaption></figure>
-      </div>
-      <p class="intro-text">${senior ? 'Слева съедено больше половины пиццы. А по его ответу — меньше половины.' : 'Слева видно: съели больше половины пиццы. А у меня вышло меньше половины!'} Может такое быть?</p>
-      ${introMiss ? `<p class="intro-hint" role="status">Посмотри на левую пиццу: целая половина и ещё кусок. Это точно больше, чем ${F(2, 5)} на правой.</p>` : ''}
-      <div class="intro-actions"><button class="btn btn-primary btn-big" data-intro-pick="never">Нет, съели больше</button><button class="btn btn-ghost btn-big" data-intro-pick="maybe">Может</button></div>`;
-  else body = `
-      <div class="intro-trophy">${window.VEKTOR_TONE.art(bug, { size: 88, status: 'beaten' })}</div>
-      <h1 class="intro-title">${senior ? 'Ты нашёл неверное правило' : 'Ты поймал первого жучка!'}</h1>
-      ${senior ? '' : `<p class="intro-text">Это ${esc(bug ? bug.kidName : 'Складыватель')} — он живёт у многих.</p>`}
-      <div class="intro-why"><p><b>${senior ? 'Ошибка:' : 'Я ошибся:'}</b> сложил верх с верхом (1 + 1) и низ с низом (2 + 3). А половина и треть — куски разного размера.</p>
-        <p><b>Верно:</b> режем пиццу на 6 кусков. Половина — 3 куска, треть — 2. Вместе ${F(5, 6)}.</p></div>
-      <p class="intro-how-line"><span>Так работает Вектор:</span> <b>находим</b> неверное правило → <b>ломаем</b> примером → <b>проверяем через день</b></p>
-      <div class="intro-actions"><button class="btn btn-primary btn-big" data-intro-go="quick/q-check">Поехали!</button><button class="btn btn-ghost btn-big" data-intro-go="home">Посмотреть карту</button></div>`;
-  return `<section class="intro intro-step-${introStep}" aria-live="polite">
-    <div class="intro-card">
-      <div class="intro-top">${dots}${introStep < 3 ? '<button class="link small" data-intro-skip>Пропустить</button>' : ''}</div>
-      ${senior || introStep !== 1 ? '' : '<div class="intro-pet" id="pet-intro" aria-hidden="true"></div>'}
-      <div class="intro-body">${body}</div>
-    </div>
-  </section>`;
-}
-function runIntro() {
-  const host = app.querySelector('.intro'); if (!host) return;
-  const petEl = app.querySelector('#pet-intro');
-  const pet = petEl ? petMount(petEl, { size: introStep === 3 ? 96 : 112, hideCharge: true, state: introStep === 1 ? 'confused' : introStep === 2 ? 'thinking' : 'celebrate' }) : null;
-  const finish = to => { state.introDone = true; save(); ymGoal('intro_done', { to }); introStep = 1; introPick = null; introMiss = false; location.hash = to; };
-  host.querySelectorAll('[data-intro-pick]').forEach(b => b.onclick = () => {
-    const v = b.dataset.introPick;
-    if (introStep === 1) { introPick = v; introStep = 2; logEvent('intro', { step: 1, pick: v }); render(); return; }
-    if (v === 'maybe') { introMiss = true; sfx('wrong'); render(); return; }
-    introStep = 3; sfx('win'); confetti(); logEvent('intro', { step: 2, miss: introMiss }); render();
-  });
-  host.querySelectorAll('[data-intro-go]').forEach(b => b.onclick = () => finish(b.dataset.introGo));
-  const sk = host.querySelector('[data-intro-skip]'); if (sk) sk.onclick = () => { logEvent('intro', { skip: introStep }); finish('home'); };
-  if (pet && introStep === 3) try { pet.setState('celebrate'); } catch {}
-}
-
 // Три точки шагов темы: ✓ готово, ● сейчас, ○ потом
 function miniSteps(i) {
   const st = stepStates(i);
@@ -1391,14 +1319,15 @@ const filterState = { map: 'Все', library: 'Все' };
 const route = () => { const [page, arg, stage] = (location.hash.slice(1) || 'home').split('/'); return { page: pages[page] && !(SERVER && page === 'teacher') ? page : 'home', i: Math.min(Math.max(+arg || 0, 0), topics.length - 1), stage }; };
 
 let passwordOffered = false, bipChatFocus = false, ymLesson = '', awardsTab = 'rank';
-// Первый вход: сначала знакомство «Поймай ошибку Бипыча», а не экскурсия и анкеты
-const needsIntro = () => !state.introDone && !state.answers && !state.diag.step && !state.attempts.length;
+// Первый вход: сразу «Проверка знаний» (Лёгкий старт), без отдельного знакомства.
+// Флаг introDone ставится один раз — закрыл проверку крестиком, больше туда не тащим.
+const needsIntro = () => !state.introDone && !state.answers && !state.diag.step && !state.attempts.length && !(state.quick && Object.keys(state.quick).length);
 function render() {
-  if (route().page === 'home' && needsIntro() && !navigator.webdriver) { history.replaceState(null, '', '#intro'); }
+  if (route().page === 'home' && needsIntro() && !navigator.webdriver && window.VEKTOR_QUICK) { state.introDone = true; save(); ymGoal('first_start'); history.replaceState(null, '', '#quick/q-check'); }
   petsClear();
   if (window.VEKTOR_TONE) { window.VEKTOR_TONE.setGrade(state.settings.grade); document.body.classList.toggle('age-senior', window.VEKTOR_TONE.senior()); }
   const { page, i, stage } = route();
-  document.body.classList.toggle('is-intro', page === 'intro' || page === 'quick');
+  document.body.classList.toggle('is-intro', page === 'quick');
   document.body.classList.toggle('is-focus', page === 'lesson');
   document.body.classList.remove('bip-open');
   document.body.dataset.page = page;
@@ -1410,14 +1339,13 @@ function render() {
   document.querySelector('#student-name').textContent = state.settings.name;
   { const sm = document.querySelector('.sidebar .profile small'); if (sm) sm.textContent = `Математика, ${state.settings.grade || 5} класс`; }
   document.querySelector('#avatar').textContent = (state.settings.name[0] || 'А').toUpperCase();
-  app.innerHTML = ({ home, map: () => mapPage(filterState.map), diagnostic, library: () => library(filterState.library), awards, teacher, settings, lesson: () => lessonPage(i, lessonStage), warmup: warmupPage, intro: introPage, quick: quickPage })[page]();
+  app.innerHTML = ({ home, map: () => mapPage(filterState.map), diagnostic, library: () => library(filterState.library), awards, teacher, settings, lesson: () => lessonPage(i, lessonStage), warmup: warmupPage, quick: quickPage })[page]();
   bind(page, i, lessonStage);
   if(page==='settings'&&SERVER&&window.VEKTOR_PROFILE)window.VEKTOR_PROFILE.mount();
   if(page==='home'&&SERVER&&window.VEKTOR_ASSIGNMENTS)window.VEKTOR_ASSIGNMENTS.mount(topics);
   bindInterests(app);
   mountPetsAndCollection(page, lessonStage);
   if (page === 'warmup') runWarmup();
-  if (page === 'intro') runIntro();
   if (page === 'quick') runQuick();
   if (page === 'lesson') { const key = i + '/' + lessonStage; if (key !== ymLesson) { ymLesson = key; ymGoal('lesson_' + lessonStage, { topic: topics[i].id }); } } else ymLesson = '';
   app.querySelectorAll('[data-warmup]').forEach(b => b.onclick = () => { location.hash = 'warmup'; });
