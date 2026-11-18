@@ -41,11 +41,11 @@ async def main():
         await pg.evaluate("localStorage.clear()"); await pg.reload(); await pg.wait_for_timeout(200)
 
         # 2. XSS через имя
-        await pg.goto(B+'#settings'); await pg.fill('#set-name','<img src=x onerror=window.__x=1>'); await pg.click('#settings-form button[type=submit]')
+        await pg.goto(B+'#settings'); await pg.fill('#set-name','<img src=x onerror=window.__x=1>'); await pg.dispatch_event('#settings-form','change'); await pg.wait_for_timeout(100)
         for h in ['home','teacher','settings']:
             await pg.goto(B+'#'+h); await pg.wait_for_timeout(150)
         rep('имя с HTML не выполняется', not await pg.evaluate("window.__x===1") and await pg.locator('img[src=x]').count()==0)
-        await pg.fill('#set-name','Маша'); await pg.click('#settings-form button[type=submit]')
+        await pg.fill('#set-name','Маша'); await pg.dispatch_event('#settings-form','change'); await pg.wait_for_timeout(100)
 
         # 3. Новый ученик: диагностика
         await pg.goto(B+'#diagnostic'); await pg.wait_for_timeout(150)
@@ -61,6 +61,8 @@ async def main():
             q=pg.locator('.chat-lesson [data-quick]')
             labels=[await q.nth(k).get_attribute('data-quick') for k in range(await q.count())]
             if 'go-practice' in labels: break
+            if await pg.locator('.chat-lesson .ask-tile').count():  # вопрос в уроке: ребёнок выбирает ответ плиткой
+                j=await pg.evaluate("getChat(2,'lesson').ask.correct"); await pg.click(f'.chat-lesson .ask-tile[data-ask="{j}"]'); continue
             if 'solution' in labels:
                 ans=await pg.evaluate("getChat(2,'lesson').pending.task.answer")
                 if await pg.locator('.chat-answer .choice').count(): await pg.click(f'.chat-answer .choice[value="{ans}"]')
@@ -69,6 +71,7 @@ async def main():
             await pg.click('.chat-lesson [data-quick="Дальше"]')
         rep('офлайн-урок проходится до кнопки тренировки', 'go-practice' in labels)
         rep('задача в уроке проверена кодом', 'Верно!' in await pg.text_content('.chat-lesson .chat-log'))
+        rep('в уроке живые картинки и вопросы с плитками', await pg.locator('.chat-lesson .figure.scene').count()>=1 and await pg.locator('.chat-lesson .msg.user').count()>=2)
         rep('«Дальше» не засоряет переписку', 'Дальше' not in [t.strip() for t in await pg.locator('.chat-lesson .msg.user').all_inner_texts()])
         rep('правило — по пунктам', await pg.locator('.chat-lesson .rule-list li').count()>=2)
         await pg.fill('#chat-in-lesson','покажи правило'); await pg.click('.chat-lesson .chat-form button[type=submit]')
@@ -130,7 +133,9 @@ async def main():
         rep('проверка подключения', 'Работает' in await pg.inner_text('#ai-status'))
         rep('ключ не попал в адрес страницы', 'sk-or' not in pg.url)
         MOCK['mode']='reasoning400'; MOCK['calls'].clear()
-        await pg.goto(B+'#lesson/6/learn'); await pg.click('[data-learn-tab=tutor]'); await pg.wait_for_timeout(800)
+        await pg.goto(B+'#lesson/6/learn'); await pg.click('[data-learn-tab=tutor]'); await pg.wait_for_timeout(300)
+        rep('урок идёт по сценарию даже с ИИ: на старте ИИ не вызывается', len(MOCK['calls'])==0 and await pg.locator('.chat-lesson .msg.assistant').count()>=1)
+        await pg.click('.chat-lesson [data-quick="Не понял, объясни по-другому"]'); await pg.wait_for_timeout(800)
         rep('модель без отключения рассуждений: повтор запроса', len(MOCK['calls'])==2 and MOCK['calls'][1]['reasoning'].get('enabled') is None and '<svg' in await pg.inner_html('.chat-lesson .chat-log'), str([c.get('reasoning') for c in MOCK['calls']]))
         rep('тег [[готово]] даёт кнопку тренировки', await pg.locator('[data-quick="go-practice"]').count()==1)
         MOCK['mode']='midstream'; await pg.fill('#chat-in-lesson','ещё'); await pg.click('.chat-lesson .chat-form button[type=submit]'); await pg.wait_for_timeout(2600)
@@ -162,7 +167,7 @@ async def main():
         # 14b. Удобство: путь, «Продолжить», шаги, клеточки дроби
         await pg.goto(B); await pg.evaluate("localStorage.removeItem('vektor-progress-v3')"); await pg.reload(); await pg.wait_for_timeout(300)
         rep('карта новичка: лёгкий старт, дальше облака', await pg.locator('#path .node-quick.is-current').count()==1 and await pg.locator('#path .is-fog').count()==2 and await pg.locator('#path .fog-bank').count()==1)
-        await pg.evaluate("() => { state.quick = Object.fromEntries(VEKTOR_QUICK.LEVELS.map(l => [l.id, {done:true, at:today(), best:5}])); save(); render(); }"); await pg.wait_for_timeout(200)
+        await pg.evaluate("() => { state.quick = Object.fromEntries(VEKTOR_QUICK.LEVELS.map(l => [l.id, {done:true, at:today(), best:5}])); state.settings.interests = []; save(); render(); }"); await pg.wait_for_timeout(200)
         rep('после старта текущий уровень — первая тема дробей', await pg.locator('#path .is-current [data-lesson="0"]').count()==1)
         await pg.click('#path .is-current [data-continue]', force=True); await pg.wait_for_timeout(200)
         rep('«Продолжить» ведёт в урок первой темы', (await pg.evaluate("location.hash")).startswith('#lesson/0/learn'))
@@ -208,7 +213,7 @@ async def main():
         rep('экран наград: звание и достижение', 'Новичок' in await pg.inner_text('#app') and await pg.locator('.badge-card.on').count()==1)
         await pg.goto(B+'#home'); await pg.wait_for_timeout(200)
         rep('цель дня на главной', '1/5' in (await pg.inner_text('.goal-ring')).replace('\n',''))
-        await pg.goto(B+'#settings'); await pg.select_option('#set-goal','3'); await pg.click('#settings-form button[type=submit]')
+        await pg.goto(B+'#settings'); await pg.select_option('#set-goal','3'); await pg.dispatch_event('#settings-form','change'); await pg.wait_for_timeout(100)
         rep('цель дня меняется в настройках', await pg.evaluate("game().goal")==3)
         rep('нет ошибок JavaScript', not errs, '; '.join(errs[:3]))
         await b.close()

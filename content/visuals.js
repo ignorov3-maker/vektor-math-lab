@@ -8,6 +8,7 @@
 
   const f = (a, b) => `<span class="frac"><span>${a}</span><span>${b}</span></span>`;
   const W = 300;
+  const SCENES = ['pizza', 'cake', 'pizzas', 'choco', 'chocopair', 'chocogrid', 'people', 'groups'];
   const esc = s => String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const positive=n=>Number.isFinite(n)&&n>0&&n<=1000000;
   const num=n=>Number.isFinite(n)?String(Math.round(n*1000)/1000):'?';
@@ -28,6 +29,11 @@
       case 'mixed': return `${fig.whole} целых и ${fig.n}/${fig.d}`;
       case 'grid': return `сетка ${fig.rows} на ${fig.cols}, закрашено ${fig.r*fig.c} клеток`;
       case 'labeled': return `дробь ${fig.n}/${fig.d}, числитель ${fig.n}, знаменатель ${fig.d}`;
+      case 'pizza': case 'cake': return `${fig.type === 'cake' ? 'торт' : 'пицца'} из ${fig.parts} кусков, осталось ${fig.have}`;
+      case 'choco': return `шоколадка из ${(fig.cols || fig.parts) * (fig.rows || 1)} долек, ${fig.have} на месте`;
+      case 'people': return `${fig.total} человек, выделено ${fig.mark}`;
+      case 'icons': return `${fig.total} штук, выделено ${fig.mark}`;
+      case 'groups': return `${fig.groups} кучек по ${fig.per} конфет, взяли ${fig.take}`;
       default:return '';
     }
   }
@@ -102,10 +108,118 @@
     return s;
   }
 
+  /* ---------- Живые картинки: пицца, торт, шоколадка, ребята, конфеты ----------
+     Ребёнок видит настоящую вещь, а не «полоску 3/5». Цвета — как у еды, одинаковые во всех оформлениях. */
+  const P = n => n.toFixed(1);
+  const wedge = (cx, cy, r, a1, a2) => {
+    const p = a => `${P(cx + r * Math.cos(a))},${P(cy + r * Math.sin(a))}`;
+    return `M${cx},${cy} L${p(a1)} A${r},${r} 0 ${a2 - a1 > Math.PI ? 1 : 0} 1 ${p(a2)} Z`;
+  };
+  const ang = (k, n) => (k / n) * 2 * Math.PI - Math.PI / 2;
+  // круглая еда: на тарелке parts кусков, есть have штук; mark — сколько из них подсвечены (для «съели»)
+  function roundFood(kind, parts, have, cx, cy, r, { mark = 0 } = {}) {
+    const cake = kind === 'cake';
+    const crust = cake ? '#F1D3A1' : '#E3A857', top = cake ? '#F6A6C1' : '#FAD06C', edge = cake ? '#D9A066' : '#B97A2E';
+    let s = `<circle cx="${cx}" cy="${cy}" r="${r + 7}" fill="#FFFFFF" stroke="#D9DEE5" stroke-width="2"/>`;
+    for (let k = 0; k < parts; k++) {
+      const a1 = ang(k, parts), a2 = ang(k + 1, parts), mid = (a1 + a2) / 2;
+      if (k >= have) { s += `<path d="${wedge(cx, cy, r, a1, a2)}" fill="#F3F4F6" stroke="#C3C9D2" stroke-width="1.5" stroke-dasharray="4 4"/>`; continue; }
+      const hot = k >= have - mark;
+      s += `<path d="${parts === 1 ? `M${cx - r},${cy} a${r},${r} 0 1 0 ${2 * r},0 a${r},${r} 0 1 0 ${-2 * r},0` : wedge(cx, cy, r, a1, a2)}" fill="${crust}" stroke="${edge}" stroke-width="1.5"/>`;
+      s += `<path d="${parts === 1 ? `M${cx - r * .84},${cy} a${r * .84},${r * .84} 0 1 0 ${2 * r * .84},0 a${r * .84},${r * .84} 0 1 0 ${-2 * r * .84},0` : wedge(cx, cy, r * .84, a1 + .04, a2 - .04)}" fill="${top}"/>`;
+      const dot = (rr, da, size) => { const a = parts === 1 ? da : mid + da * (a2 - a1); return `<circle cx="${P(cx + rr * Math.cos(a))}" cy="${P(cy + rr * Math.sin(a))}" r="${P(size)}"`; };
+      if (cake) s += `${dot(r * .6, 0, r * .085)} fill="#D7263D"/>${dot(r * .38, .18, r * .035)} fill="#FFFFFF"/>`;
+      else if (parts <= 12) s += `${dot(r * .58, 0, r * .1)} fill="#D9534F"/>${parts <= 6 ? `${dot(r * .32, .2, r * .07)} fill="#D9534F"/>` : ''}${dot(r * .45, -.25, r * .03)} fill="#4E9A46"/>`;
+      if (hot && mark) s += `<path d="${wedge(cx, cy, r, a1, a2)}" fill="none" stroke="#1E7358" stroke-width="3"/>`;
+    }
+    if (parts > 1) for (let k = 0; k < parts; k++) { const a = ang(k, parts); s += `<line x1="${cx}" y1="${cy}" x2="${P(cx + r * Math.cos(a))}" y2="${P(cy + r * Math.sin(a))}" stroke="#FFFFFF" stroke-width="2"/>`; }
+    return s;
+  }
+  // шоколадка cols×rows; have — сколько долек на месте (по порядку), split — первые split долек тёмные, остальные молочные; eaten — последние из имеющихся зачёркнуты
+  function chocoBar(cols, rows, have, x, y, w, h, { split = null, crossed = 0, label = null, gridOn = null } = {}) {
+    const cw = w / cols, ch = h / rows;
+    let s = `<rect x="${x - 3}" y="${y - 3}" width="${w + 6}" height="${h + 6}" rx="6" fill="#5A321D"/>`;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      const k = r * cols + c, px = x + c * cw, py = y + r * ch;
+      const on = gridOn ? gridOn(r, c) : k < have;
+      if (on === 'half') { s += `<rect x="${P(px + 1.5)}" y="${P(py + 1.5)}" width="${P(cw - 3)}" height="${P(ch - 3)}" rx="3" fill="#B98563"/>`; continue; }
+      if (!on) { s += `<rect x="${P(px + 1.5)}" y="${P(py + 1.5)}" width="${P(cw - 3)}" height="${P(ch - 3)}" rx="3" fill="#F3EAE3" stroke="#C9B3A3" stroke-dasharray="4 3"/>`; continue; }
+      const gone = !gridOn && k >= have - crossed;
+      const dark = split == null || k < split;
+      const fill = gone ? '#EADBD0' : dark ? '#6B3E26' : '#B0774A', hi = gone ? '#F3EAE3' : dark ? '#87533A' : '#C99067';
+      s += `<rect x="${P(px + 1.5)}" y="${P(py + 1.5)}" width="${P(cw - 3)}" height="${P(ch - 3)}" rx="3" fill="${fill}"/><rect x="${P(px + 5)}" y="${P(py + 5)}" width="${P(Math.max(2, cw - 10))}" height="${P(Math.max(2, ch - 10))}" rx="2" fill="${hi}"/>`;
+      if (gone) s += `<path d="M${P(px + 6)} ${P(py + 6)}L${P(px + cw - 6)} ${P(py + ch - 6)}M${P(px + cw - 6)} ${P(py + 6)}L${P(px + 6)} ${P(py + ch - 6)}" stroke="#A2867A" stroke-width="2" stroke-linecap="round"/>`;
+    }
+    if (label) s += `<text x="${x + w / 2}" y="${y - 10}" text-anchor="middle" fill="#4F5D72" font-size="14" font-weight="700">${esc(label)}</text>`;
+    return s;
+  }
+  function person(x, y, on, s = 1) {
+    const c = on ? '#1E7358' : '#C3C9D2', c2 = on ? '#2E9B6F' : '#DDE1E7';
+    return `<circle cx="${P(x)}" cy="${P(y + 7 * s)}" r="${P(6.5 * s)}" fill="${c}"/><path d="M${P(x - 9 * s)} ${P(y + 30 * s)}q0-14 ${P(9 * s)}-14q${P(9 * s)} 0 ${P(9 * s)} 14z" fill="${c2}"/>`;
+  }
+  function candy(x, y, on) {
+    const c = on ? '#E46A5E' : '#D5DAE1', w = on ? '#F6B3AA' : '#E8EBEF';
+    return `<path d="M${P(x - 13)} ${P(y - 5)}l6 5-6 5zM${P(x + 13)} ${P(y - 5)}l-6 5 6 5z" fill="${w}"/><ellipse cx="${P(x)}" cy="${P(y)}" rx="8" ry="6.5" fill="${c}"/>`;
+  }
+  function scene(fig) {
+    const wrap = (vw, vh, label, inner, max = vw) => `<div class="figure scene"><svg viewBox="0 0 ${vw} ${vh}" width="${vw}" height="${vh}" role="img" aria-label="${esc(label)}" style="width:${max}px;max-width:100%;height:auto">${inner}</svg></div>`;
+    const tag = (x, y, t) => `<text x="${x}" y="${y}" text-anchor="middle" fill="#4F5D72" font-size="15" font-weight="700">${esc(t)}</text>`;
+    switch (fig.type) {
+      case 'pizza': case 'cake': {
+        const name = fig.type === 'cake' ? 'Торт' : 'Пицца';
+        return wrap(190, 190, `${name}: ${fig.parts} кусков, осталось ${fig.have}`, roundFood(fig.type, fig.parts, fig.have, 95, 95, 82, { mark: fig.mark || 0 }), 170);
+      }
+      case 'pizzas': { // несколько пицц рядом: [{parts, have, label}]
+        const it = fig.items, r = it.length > 2 ? 46 : 62, cell = 2 * r + 30, vh = 2 * r + 18 + (it.some(x => x.label) ? 26 : 0);
+        const inner = it.map((x, j) => roundFood(fig.food || 'pizza', x.parts, x.have, 15 + r + j * cell, r + 9, r, { mark: x.mark || 0 }) + (x.label ? tag(15 + r + j * cell, 2 * r + 38, x.label) : '')).join('');
+        return wrap(it.length * cell, vh, it.map(x => `${x.parts} кусков, есть ${x.have}`).join('; '), inner, Math.min(330, it.length * cell));
+      }
+      case 'choco': {
+        const cols = fig.cols || fig.parts, rows = fig.rows || 1, cw = Math.min(54, 300 / cols), w = cw * cols, h = rows * (rows > 1 ? 34 : 46), top = fig.label ? 26 : 6;
+        return wrap(w + 12, h + top + 8, `Шоколадка из ${cols * rows} долек, ${fig.have} на месте`, chocoBar(cols, rows, fig.have, 6, top, w, h, fig), Math.min(320, w + 12));
+      }
+      case 'chocopair': { // две одинаковые шоколадки, нарезанные по-разному: a=[взяли, долек], b=[взяли, долек]
+        const w = 288, h = 40;
+        const inner = chocoBar(fig.a[1], 1, fig.a[0], 6, 8 + (fig.la ? 18 : 0), w, h) + (fig.la ? tag(150, 18, fig.la) : '') +
+          chocoBar(fig.b[1], 1, fig.b[0], 6, 70 + (fig.la ? 36 : 0), w, h) + (fig.lb ? tag(150, 98, fig.lb) : '');
+        return wrap(300, fig.la ? 160 : 118, `Две одинаковые шоколадки: ${fig.a[0]} из ${fig.a[1]} и ${fig.b[0]} из ${fig.b[1]}`, inner, 320);
+      }
+      case 'chocogrid': { // умножение: отломили rows части по одной стороне и cols по другой
+        const cw = 44, ch = 34;
+        const on = (r, c) => (c < fig.c ? (r < fig.r ? true : 'half') : false); // столбцы c — что было, строки r — какую часть от этого взяли
+        return wrap(fig.cols * cw + 12, fig.rows * ch + 12, `Шоколадка ${fig.rows} на ${fig.cols}, выделено ${fig.r * fig.c} долек`, chocoBar(fig.cols, fig.rows, 0, 6, 6, fig.cols * cw, fig.rows * ch, { gridOn: on }), 260);
+      }
+      case 'people': { // total ребят, mark из них выделены
+        const per = fig.total <= 8 ? fig.total : Math.ceil(fig.total / Math.ceil(fig.total / 8)), rows = Math.ceil(fig.total / per), gx = 34, gy = 42;
+        let s = ''; for (let k = 0; k < fig.total; k++) s += person(20 + (k % per) * gx, 4 + Math.floor(k / per) * gy, k < fig.mark);
+        return wrap(per * gx + 6, rows * gy + 2, `${fig.total} человек, выделено ${fig.mark}`, s, Math.min(320, per * gx + 6));
+      }
+      case 'groups': { // groups кучек по per штук (конфеты или ребята), take кучек взяли
+        const kid = fig.icon === 'person', cols = fig.per <= 4 ? 2 : 3, gr = Math.ceil(fig.per / cols), sx = kid ? 26 : 30, sy = kid ? 38 : 22;
+        const bw = cols * sx + 12, bh = gr * sy + 12, perRow = Math.min(fig.groups, Math.floor(330 / (bw + 8)));
+        let s = '';
+        for (let g = 0; g < fig.groups; g++) {
+          const bx = 4 + (g % perRow) * (bw + 8), by = 4 + Math.floor(g / perRow) * (bh + 10), on = g < fig.take;
+          s += `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="10" fill="${on ? '#FFF1BF' : '#FFFFFF'}" stroke="${on ? '#E2B33C' : '#C3C9D2'}" stroke-width="2"${on ? '' : ' stroke-dasharray="5 4"'}/>`;
+          for (let k = 0; k < fig.per; k++) {
+            const cx = bx + 6 + sx / 2 + (k % cols) * sx, cy = by + 6 + Math.floor(k / cols) * sy;
+            s += kid ? person(cx, cy + 2, on, .95) : candy(cx, cy + sy / 2, on);
+          }
+        }
+        const rowsN = Math.ceil(fig.groups / perRow), vw = perRow * (bw + 8), vh = rowsN * (bh + 10);
+        return wrap(vw, vh, `${fig.groups * fig.per} ${kid ? 'человек' : 'конфет'}: ${fig.groups} равных групп по ${fig.per}, выделено ${fig.take}`, s, Math.min(330, vw));
+      }
+    }
+    return '';
+  }
+
   // Рисунок по описанию { type, ... } → HTML
   function figure(fig) {
     if (!fig) return '';
     if(['triangle','right_triangle','circle_geo','angle','coord','graph'].includes(fig.type))return geometry(fig);
+    if (SCENES.includes(fig.type)) return scene(fig);
+    // значки интереса ребёнка (мячи, ракеты…): total штук, первые mark выделены. Значок — готовая картинка из VEKTOR_ART
+    if (fig.type === 'icons') return `<div class="figure icons" role="img" aria-label="${fig.total} штук, выделено ${fig.mark}">${Array.from({ length: fig.total }, (_, k) => `<span class="ic${k < fig.mark ? ' on' : ''}">${fig.icon}</span>`).join('')}</div>`;
     const wrap = (vw, vh, label, inner) => `<div class="figure"><svg viewBox="0 0 ${vw} ${vh}" width="${vw}" height="${vh}" role="img" aria-label="${label}">${inner}</svg></div>`;
     switch (fig.type) {
       case 'labeled': return labeled(fig.n, fig.d);
@@ -155,7 +269,7 @@
   function figureFromTag(tag) {
     let t = tag.trim().toLowerCase().replace(/ё/g, 'е');
     // синонимы, которые модель иногда пишет вместо названий из списка
-    t = t.replace(/^(дробь|доля|полоса)\s/, 'полоска ').replace(/^(торт|пирог)\s/, 'круг ').replace(/^(отрезок|луч|числовая прямая)\s/, 'прямая ').replace(/^(сравни|сравнение)\s/, 'сравнить ');
+    t = t.replace(/^(дробь|доля|полоса)\s/, 'полоска ').replace(/^(пирог)\s/, 'торт ').replace(/^(отрезок|луч|числовая прямая)\s/, 'прямая ').replace(/^(сравни|сравнение)\s/, 'сравнить ');
     let m;
     const tokens=t.split(/\s+/),kind=tokens.shift(),numbers=tokens.map(v=>v==='?'?null:Number(v));let geo=null;
     if(['triangle','треугольник'].includes(kind)&&numbers.length===3)geo={type:'triangle',a:numbers[0],b:numbers[1],c:numbers[2],showAngles:true};
@@ -166,8 +280,9 @@
     if(['graph','график'].includes(kind)&&['linear','quadratic'].includes(tokens[0]))geo={type:'graph',kind:tokens[0],a:Number(tokens[1]),b:Number(tokens[2]),c:tokens[3]==null?0:Number(tokens[3])};
     if(geo)return geometry(geo)?geo:null;
     if ((m = t.match(new RegExp(`^(подпиши|подписи|подписанная|части)\\s+${FR}$`))) && ok(+m[2], +m[3]) && +m[3] > 0) return { type: 'labeled', n: +m[2], d: +m[3] };
+    if ((m = t.match(new RegExp(`^(пицца|торт|шоколадка|шоколад)\\s+${FR}$`))) && ok(+m[2], +m[3], 12) && +m[2] <= +m[3] && +m[3] > 0) return { type: m[1] === 'пицца' ? 'pizza' : m[1] === 'торт' ? 'cake' : 'choco', parts: +m[3], have: +m[2] };
     if ((m = t.match(new RegExp(`^(полоска|bar)\\s+${FR}$`))) && ok(+m[2], +m[3]) && +m[2] <= +m[3]) return { type: 'bar', parts: +m[3], shaded: +m[2] };
-    if ((m = t.match(new RegExp(`^(круг|пицца|circle)\\s+${FR}$`))) && ok(+m[2], +m[3], 16) && +m[2] <= +m[3]) return { type: 'circle', parts: +m[3], shaded: +m[2] };
+    if ((m = t.match(new RegExp(`^(круг|circle)\\s+${FR}$`))) && ok(+m[2], +m[3], 16) && +m[2] <= +m[3]) return { type: 'circle', parts: +m[3], shaded: +m[2] };
     if ((m = t.match(new RegExp(`^(прямая|line)\\s+${FR}$`))) && ok(+m[2], +m[3], 16)) return { type: 'line', n: +m[2], d: +m[3] };
     if ((m = t.match(new RegExp(`^(сравнить|compare)\\s+${FR}\\s+${FR}$`))) && ok(+m[2], +m[3]) && ok(+m[4], +m[5]) && +m[2] <= +m[3] && +m[4] <= +m[5]) return { type: 'pair', a: [+m[2], +m[3]], b: [+m[4], +m[5]] };
     if ((m = t.match(new RegExp(`^(прямоугольник|умножение|grid)\\s+${FR}\\s+${FR}$`))) && +m[3] <= 8 && +m[5] <= 8 && +m[2] <= +m[3] && +m[4] <= +m[5]) return { type: 'grid', rows: +m[3], cols: +m[5], r: +m[2], c: +m[4] };

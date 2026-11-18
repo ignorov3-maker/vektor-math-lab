@@ -965,41 +965,12 @@ body.landing #app { max-width: none; padding: 0; }
 .ld-rules s::before, .bs-rule s::before { content: "✗ "; color: var(--red-pen, #D2493D); text-decoration: none; display: inline-block; margin-right: 2px; }
 @media (max-width: 600px) { .grade-tabs .gt-s { display: none; } .grade-tabs button { min-width: 48px; } .grade-tabs::before { content: "Класс"; align-self: center; padding: 0 6px 0 10px; color: var(--ink-2); font-size: 14px; } }
 
-/* ---------- Знакомство: поймай ошибку Бипыча ---------- */
+/* ---------- Полноэкранные уровни «Лёгкого старта»: без меню и шапки ---------- */
 body.is-intro .sidebar,body.is-intro main>header,body.is-intro footer,body.is-intro .skin-switch{display:none!important}
 body.is-intro main{margin-left:0;padding-bottom:0}
 body.is-intro #app{max-width:none;padding:0}
-.intro{min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:24px 16px}
-.intro-card{width:min(560px,100%);background:var(--sheet);border:var(--border-w) solid var(--line);border-radius:20px;padding:24px 28px 28px;box-shadow:0 18px 50px rgba(30,43,64,.10);display:grid;gap:4px;justify-items:center;text-align:center;animation:intro-in .35s ease both}
-.intro-top{width:100%;display:flex;align-items:center;justify-content:space-between;min-height:32px}
-.intro-dots{display:flex;gap:6px;list-style:none;margin:0;padding:0}
-.intro-dots li{width:28px;height:6px;border-radius:3px;background:var(--tint);transition:background .3s}
-.intro-dots li.is-done{background:var(--done-line)}
-.intro-dots li.is-now{background:var(--green)}
-.intro-pet{min-height:120px;display:grid;place-items:end center}
-.intro-body{display:grid;gap:16px;justify-items:center;width:100%}
-.intro-title{font:800 clamp(22px,5.2vw,28px)/1.2 var(--font-display);margin:4px 0 0;letter-spacing:-.01em;text-wrap:balance}
-.intro-text{margin:0;color:var(--ink-2);font-size:17px;max-width:44ch;text-wrap:pretty}
-.intro-text .frac{font-size:.9em;color:var(--ink)}
-.intro-board{display:flex;align-items:center;justify-content:center;gap:14px;font:800 40px/1 var(--font-display);padding:18px 26px;border-radius:14px;background:var(--paper);border:1.5px dashed var(--dash)}
-.intro-board .frac{font-size:1em}
-.intro-board>span{color:var(--ink-2);font-weight:700}
-.intro-board .frac:last-child{color:var(--margin)}
-.intro-figure{width:100%;display:grid;justify-items:center}
-.intro-figure .figure svg{max-width:100%;height:auto}
-.intro-hint{margin:0;padding:10px 14px;border-radius:10px;background:var(--amber-soft);color:var(--amber-ink);font-size:15px;animation:intro-shake .35s ease}
-.intro-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;width:100%;margin-top:4px}
-.intro-actions .btn{flex:1 1 200px;justify-content:center}
-.intro-trophy{display:grid;place-items:center;width:120px;height:120px;border-radius:50%;background:var(--green-soft);animation:intro-pop .5s cubic-bezier(.3,1.6,.5,1) both}
-.intro-how{list-style:none;counter-reset:how;margin:0;padding:0;display:grid;gap:8px;text-align:left;width:100%}
-.intro-how li{counter-increment:how;display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:start;padding:10px 12px;border-radius:10px;background:var(--paper);font-size:15px;color:var(--ink-2)}
-.intro-how li::before{content:counter(how);display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--green);color:var(--on-accent);font-weight:800;font-size:14px}
-.intro-how b{color:var(--ink)}
-@keyframes intro-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 @keyframes intro-pop{from{transform:scale(.6);opacity:0}to{transform:none;opacity:1}}
 @keyframes intro-shake{0%,100%{transform:none}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
-@media (max-width:480px){.intro-card{padding:18px 18px 22px;border-radius:16px}.intro-board{font-size:34px;gap:10px;padding:14px 18px}.intro-actions .btn{flex-basis:100%}}
-@media (prefers-reduced-motion:reduce){.intro-card,.intro-trophy,.intro-hint{animation:none}}
 
 /* ---------- Ошибка с узнанным правилом: одна главная кнопка ---------- */
 .feedback.fb-bug{background:color-mix(in srgb,var(--margin) 9%,var(--sheet));border-left-color:var(--margin);animation:fb-in .25s ease both}
@@ -1048,31 +1019,6 @@ body.is-intro #app{max-width:none;padding:0}
 .ld-foot-links{display:flex;gap:18px;flex-wrap:wrap}
 @media (max-width:900px){.ld-two{grid-template-columns:1fr;padding:40px 0}.ld-two-card{padding:22px}}
 
-/* Знакомство: пример с пиццей — у каждой дроби свой цвет, тот же на картинке */
-.intro{--intro-half:#2E9B6F;--intro-third:#F2B233;--intro-bip:#E46A5E}
-.intro-board .ib-half .frac{color:var(--intro-half)}
-.intro-board .ib-third .frac{color:var(--intro-third)}
-.intro-board .ib-bip .frac{color:var(--intro-bip)}
-.intro-board>span{display:inline-flex}
-.intro-board>span:not([class]){color:var(--ink-2);font-weight:700}
-.intro-board-small{font-size:26px;padding:10px 18px;gap:10px}
-.intro-pizzas{display:grid;grid-template-columns:1fr 1fr;gap:14px;width:100%}
-.intro-pizzas figure{margin:0;display:grid;justify-items:center;gap:8px;padding:12px 8px;border-radius:14px;background:var(--paper)}
-.intro-pizza{width:min(150px,100%);height:auto;animation:intro-pop .45s cubic-bezier(.3,1.5,.5,1) both}
-.intro-pizzas figure:nth-child(2) .intro-pizza{animation-delay:.15s}
-.intro-pizzas figcaption{display:grid;gap:2px;font-size:14px;color:var(--ink-2);text-align:center}
-.intro-pizzas figcaption b{color:var(--ink);font-size:15px}
-.intro .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin:0 4px 0 2px;vertical-align:baseline}
-.intro .dot-half{background:var(--intro-half)}.intro .dot-third{background:var(--intro-third)}.intro .dot-bip{background:var(--intro-bip)}
-.intro-why{display:grid;gap:8px;text-align:left;width:100%}
-.intro-why p{margin:0;padding:10px 14px;border-radius:10px;background:var(--paper);font-size:15px;color:var(--ink-2)}
-.intro-why b{color:var(--ink)}
-.intro-why .frac{color:var(--ink);font-size:.95em}
-.intro-how-line{margin:0;font-size:14px;color:var(--ink-2);line-height:1.5;text-wrap:balance}
-.intro-how-line span{display:block;font-weight:700;color:var(--green)}
-.intro-how-line b{color:var(--ink)}
-@media (max-width:480px){.intro-board-small{font-size:22px}.intro-pizzas{gap:10px}.intro-pizzas figure{padding:10px 4px}}
-@media (prefers-reduced-motion:reduce){.intro-pizza{animation:none}}
 
 /* ================= Mobile first: карта уровней ================= */
 .strip{display:flex;align-items:center;gap:10px;padding:10px 14px;margin:0 0 12px;border-radius:14px;background:var(--sheet);border:1px solid var(--line);color:var(--ink);text-decoration:none;font-size:14px;line-height:1.3}
@@ -1151,7 +1097,7 @@ a.node-bubble{text-decoration:none}
 .bip-dock{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:calc(24px + env(safe-area-inset-bottom));z-index:40}
 .bip-dock .bipych-bubble{position:absolute;right:calc(100% + 6px);bottom:18px;margin:0;width:max-content;max-width:min(230px,62vw);font-size:14px;line-height:1.35;text-align:left;box-shadow:0 8px 20px rgba(30,43,64,.12)}
 .bip-dock .bipych-bubble::after{left:auto;right:-6px;top:auto;bottom:14px;transform:rotate(-45deg)}
-@media (max-width:760px){.bip-dock{bottom:calc(76px + env(safe-area-inset-bottom));right:10px}}
+@media (max-width:760px){.bip-dock{bottom:calc(76px + env(safe-area-inset-bottom));right:10px}.bip-dock .bipych-bubble{max-width:min(200px,56vw);font-size:13.5px}}
 .qz-tile{flex:1 1 0;max-width:64px;min-width:48px}
 .qz-tiles{flex-wrap:nowrap}
 /* облако ровно над закрытым кружком */
@@ -1217,6 +1163,9 @@ body.is-focus #app{max-width:820px;padding:10px 20px calc(28px + env(safe-area-i
   .bip-chat h3{display:flex;align-items:center;gap:8px}
   .bc-close{display:grid;place-items:center;margin-left:auto;width:36px;height:36px;border:0;border-radius:50%;background:var(--tint);color:var(--ink-2);font-size:18px;cursor:pointer}
   .lesson .answer .btn-primary,.lesson form.answer button[type=submit]{width:100%;min-height:54px;font-size:18px}
+  /* Бипыч стоит в правом нижнем углу: кнопка «Проверить» не уходит под него, а страницу можно докрутить выше него */
+  .lesson-practice .answer .btn-primary,.lesson-practice form.answer button[type=submit]{width:calc(100% - 66px)}
+  body.is-focus .lesson-practice{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
   .lesson .ready-strip{flex-direction:column;align-items:stretch;text-align:center}
 }
 
@@ -1310,9 +1259,28 @@ body.is-focus #app{max-width:820px;padding:10px 20px calc(28px + env(safe-area-i
 @keyframes bip-say-line{0%{opacity:0;transform:translateY(6px)}100%{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.chat-lesson .msg-body,.chat-lesson .msg-body>*{animation:none!important}}
 @media (max-width:760px){
-  .chat-lesson{column-gap:6px}
-  .chat-lesson .msg.assistant:not(.is-old) .msg-body{font-size:16px;padding:12px 14px}
+  /* телефон: Бипыч над облачком, облачко на всю ширину — текст не сжимается в узкую колонку */
+  .chat-lesson{grid-template-columns:minmax(0,1fr);column-gap:0}
+  .chat-lesson>.bip-stage{grid-column:1;position:static;justify-self:start;margin:0 0 -2px 14px;height:62px;overflow:visible}
+  .chat-lesson>.chat-log{grid-column:1}
+  .chat-lesson .msg.assistant:not(.is-old) .msg-body{font-size:16px;padding:12px 14px;width:100%}
+  .chat-lesson .msg.assistant:not(.is-old) .msg-body::before{left:30px;top:-9px;bottom:auto;border-bottom:0;border-top:2px solid var(--line);transform:rotate(45deg)}
+  .chat-lesson .msg.assistant:not(.is-old){width:100%}
+  /* «Весь разговор» — справа от Бипыча, а не между ним и облачком */
+  .chat-lesson>.chat-log{position:relative;overflow:visible}
 }
+
+/* Вопрос внутри урока: крупные плитки ответа, как в «Лёгком старте» */
+.ask-choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:10px;width:100%}
+.ask-tile{min-height:64px;padding:8px 10px;border-radius:16px;border:2px solid var(--line);border-bottom-width:5px;background:var(--sheet);color:var(--ink);font:800 22px/1.15 var(--font-display);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;animation:next-in .3s ease both;transition:transform .1s,border-color .15s}
+.ask-tile .frac{font-size:1em}
+@media (hover:hover){.ask-tile:hover{border-color:var(--green)}}
+.ask-tile:active{transform:translateY(3px);border-bottom-width:2px}
+.ask-tile.is-off{opacity:.4;border-color:var(--warn-line,var(--line));cursor:default;text-decoration:line-through}
+/* живые картинки: пицца, шоколадка, ребята — без рамок, по центру облачка */
+.figure.scene{margin:10px 0 6px}
+.figure.scene svg{width:auto}
+.msg-body .figure.scene{margin:10px 0 4px}
 
 /* ================= Разговор с Бипычем: просто, как в мессенджере ================= */
 /* поле ввода — одна «таблетка»: микрофон, пока пусто; стрелка «отправить», когда есть текст */
@@ -1367,3 +1335,34 @@ body.is-focus #app{max-width:820px;padding:10px 20px calc(28px + env(safe-area-i
 .lesson-bar .step.on .step-bar{transition:--fill .4s}
 @media (max-width:760px){.lesson .lesson-progress{display:none}}
 @media (prefers-reduced-motion:reduce){.chip,.chat-next,.chat-send,.chat .msg.user .msg-body{animation:none;opacity:1}}
+
+/* телефон: «Весь разговор» — справа от Бипыча, а не между ним и облачком */
+@media (max-width:760px){
+  .chat-lesson .bip-history{position:absolute!important;right:0;top:-46px!important;margin:0!important}
+}
+
+/* телефон, тренировка: прогресс один — полоска шага вверху; второй счётчик «Решено N из 3» не дублируем */
+@media (max-width:760px){
+  .lesson-practice .task-progress{display:none}
+}
+
+/* Интересы: один раз, нижней шторкой поверх карты */
+.int-sheet-wrap{position:fixed;inset:0;z-index:70;display:flex;align-items:flex-end;justify-content:center;background:rgba(20,30,40,.35);animation:int-fade .2s ease both}
+.int-sheet{width:min(560px,100%);max-height:88vh;overflow:auto;background:var(--sheet);border-radius:24px 24px 0 0;padding:10px 18px calc(18px + env(safe-area-inset-bottom));box-shadow:0 -12px 40px rgba(20,30,40,.25);animation:int-up .3s cubic-bezier(.2,1.2,.4,1) both}
+.int-grip{display:block;width:44px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 12px}
+.int-sheet h2{font:800 20px/1.25 var(--font-display);margin:0 0 4px}
+.int-sheet p{margin:0 0 12px}
+.int-sheet .interests{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.int-sheet .int-chip span{flex-direction:column;gap:4px;padding:8px 2px;font-size:12px;min-height:0;text-align:center}
+.int-sheet .row-actions{margin-top:14px;display:flex;flex-direction:column;gap:8px}
+.int-sheet .row-actions .btn{width:100%;justify-content:center}
+@media (min-width:761px){.int-sheet-wrap{align-items:center}.int-sheet{border-radius:24px}}
+@keyframes int-up{from{transform:translateY(100%)}to{transform:none}}
+@keyframes int-fade{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.int-sheet,.int-sheet-wrap{animation:none}}
+
+/* задачи про интересы: ряд значков (мячи, ракеты…), выделенные — в цветной плашке */
+.figure.icons{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;max-width:300px;margin:10px auto 6px}
+.figure.icons .ic{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;border:2px dashed var(--line);opacity:.45}
+.figure.icons .ic.on{opacity:1;border:2px solid #E2B33C;background:#FFF1BF}
+.figure.icons svg{width:28px;height:28px}
