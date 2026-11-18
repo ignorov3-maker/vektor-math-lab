@@ -1097,7 +1097,7 @@ a.node-bubble{text-decoration:none}
 .bip-dock{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:calc(24px + env(safe-area-inset-bottom));z-index:40}
 .bip-dock .bipych-bubble{position:absolute;right:calc(100% + 6px);bottom:18px;margin:0;width:max-content;max-width:min(230px,62vw);font-size:14px;line-height:1.35;text-align:left;box-shadow:0 8px 20px rgba(30,43,64,.12)}
 .bip-dock .bipych-bubble::after{left:auto;right:-6px;top:auto;bottom:14px;transform:rotate(-45deg)}
-@media (max-width:760px){.bip-dock{bottom:calc(76px + env(safe-area-inset-bottom));right:10px}}
+@media (max-width:760px){.bip-dock{bottom:calc(76px + env(safe-area-inset-bottom));right:10px}.bip-dock .bipych-bubble{max-width:min(200px,56vw);font-size:13.5px}}
 .qz-tile{flex:1 1 0;max-width:64px;min-width:48px}
 .qz-tiles{flex-wrap:nowrap}
 /* облако ровно над закрытым кружком */
@@ -1259,9 +1259,28 @@ body.is-focus #app{max-width:820px;padding:10px 20px calc(28px + env(safe-area-i
 @keyframes bip-say-line{0%{opacity:0;transform:translateY(6px)}100%{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.chat-lesson .msg-body,.chat-lesson .msg-body>*{animation:none!important}}
 @media (max-width:760px){
-  .chat-lesson{column-gap:6px}
-  .chat-lesson .msg.assistant:not(.is-old) .msg-body{font-size:16px;padding:12px 14px}
+  /* телефон: Бипыч над облачком, облачко на всю ширину — текст не сжимается в узкую колонку */
+  .chat-lesson{grid-template-columns:minmax(0,1fr);column-gap:0}
+  .chat-lesson>.bip-stage{grid-column:1;position:static;justify-self:start;margin:0 0 -2px 14px;height:62px;overflow:visible}
+  .chat-lesson>.chat-log{grid-column:1}
+  .chat-lesson .msg.assistant:not(.is-old) .msg-body{font-size:16px;padding:12px 14px;width:100%}
+  .chat-lesson .msg.assistant:not(.is-old) .msg-body::before{left:30px;top:-9px;bottom:auto;border-bottom:0;border-top:2px solid var(--line);transform:rotate(45deg)}
+  .chat-lesson .msg.assistant:not(.is-old){width:100%}
+  /* «Весь разговор» — справа от Бипыча, а не между ним и облачком */
+  .chat-lesson>.chat-log{position:relative;overflow:visible}
 }
+
+/* Вопрос внутри урока: крупные плитки ответа, как в «Лёгком старте» */
+.ask-choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:10px;width:100%}
+.ask-tile{min-height:64px;padding:8px 10px;border-radius:16px;border:2px solid var(--line);border-bottom-width:5px;background:var(--sheet);color:var(--ink);font:800 22px/1.15 var(--font-display);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;animation:next-in .3s ease both;transition:transform .1s,border-color .15s}
+.ask-tile .frac{font-size:1em}
+@media (hover:hover){.ask-tile:hover{border-color:var(--green)}}
+.ask-tile:active{transform:translateY(3px);border-bottom-width:2px}
+.ask-tile.is-off{opacity:.4;border-color:var(--warn-line,var(--line));cursor:default;text-decoration:line-through}
+/* живые картинки: пицца, шоколадка, ребята — без рамок, по центру облачка */
+.figure.scene{margin:10px 0 6px}
+.figure.scene svg{width:auto}
+.msg-body .figure.scene{margin:10px 0 4px}
 
 /* ================= Разговор с Бипычем: просто, как в мессенджере ================= */
 /* поле ввода — одна «таблетка»: микрофон, пока пусто; стрелка «отправить», когда есть текст */
@@ -1316,3 +1335,34 @@ body.is-focus #app{max-width:820px;padding:10px 20px calc(28px + env(safe-area-i
 .lesson-bar .step.on .step-bar{transition:--fill .4s}
 @media (max-width:760px){.lesson .lesson-progress{display:none}}
 @media (prefers-reduced-motion:reduce){.chip,.chat-next,.chat-send,.chat .msg.user .msg-body{animation:none;opacity:1}}
+
+/* телефон: «Весь разговор» — справа от Бипыча, а не между ним и облачком */
+@media (max-width:760px){
+  .chat-lesson .bip-history{position:absolute!important;right:0;top:-46px!important;margin:0!important}
+}
+
+/* телефон, тренировка: прогресс один — полоска шага вверху; второй счётчик «Решено N из 3» не дублируем */
+@media (max-width:760px){
+  .lesson-practice .task-progress{display:none}
+}
+
+/* Интересы: один раз, нижней шторкой поверх карты */
+.int-sheet-wrap{position:fixed;inset:0;z-index:70;display:flex;align-items:flex-end;justify-content:center;background:rgba(20,30,40,.35);animation:int-fade .2s ease both}
+.int-sheet{width:min(560px,100%);max-height:88vh;overflow:auto;background:var(--sheet);border-radius:24px 24px 0 0;padding:10px 18px calc(18px + env(safe-area-inset-bottom));box-shadow:0 -12px 40px rgba(20,30,40,.25);animation:int-up .3s cubic-bezier(.2,1.2,.4,1) both}
+.int-grip{display:block;width:44px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 12px}
+.int-sheet h2{font:800 20px/1.25 var(--font-display);margin:0 0 4px}
+.int-sheet p{margin:0 0 12px}
+.int-sheet .interests{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.int-sheet .int-chip span{flex-direction:column;gap:4px;padding:8px 2px;font-size:12px;min-height:0;text-align:center}
+.int-sheet .row-actions{margin-top:14px;display:flex;flex-direction:column;gap:8px}
+.int-sheet .row-actions .btn{width:100%;justify-content:center}
+@media (min-width:761px){.int-sheet-wrap{align-items:center}.int-sheet{border-radius:24px}}
+@keyframes int-up{from{transform:translateY(100%)}to{transform:none}}
+@keyframes int-fade{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.int-sheet,.int-sheet-wrap{animation:none}}
+
+/* задачи про интересы: ряд значков (мячи, ракеты…), выделенные — в цветной плашке */
+.figure.icons{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;max-width:300px;margin:10px auto 6px}
+.figure.icons .ic{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;border:2px dashed var(--line);opacity:.45}
+.figure.icons .ic.on{opacity:1;border:2px solid #E2B33C;background:#FFF1BF}
+.figure.icons svg{width:28px;height:28px}

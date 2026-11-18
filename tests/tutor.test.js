@@ -73,6 +73,6 @@ const sseBody = parts => parts.map(p => 'data: ' + JSON.stringify(p) + '\n\n').j
   ok(fin === 'length' && !/дроб$/.test(txt) && txt.endsWith('остаётся.'), 'обрыв по лимиту обрезается до конца предложения: ' + txt);
   globalThis.fetch = async () => new Response('data: ' + JSON.stringify({ choices: [{ delta: { content: 'При' } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [{ delta: { content: 'вет! 3/5' } }] }) + '\n\ndata: [DONE]\n\n', { status: 200 });
   ok(await T.stream({ mode: 'key', key: testKey, model: 'm' }, [], () => {}) === 'Привет! 3/5', 'склейка кусков потока');
-  ok(V.figureFromTag('дробь 2/7')?.type === 'bar' && V.figureFromTag('торт 3/8')?.type === 'circle', 'синонимы тегов');
+  ok(V.figureFromTag('дробь 2/7')?.type === 'bar' && V.figureFromTag('торт 3/8')?.type === 'cake' && V.figureFromTag('пицца 5/8')?.type === 'pizza', 'синонимы тегов');
   console.log(fails ? `ошибок: ${fails}` : 'tutor tests: ok'); process.exit(fails ? 1 : 0);
 })();

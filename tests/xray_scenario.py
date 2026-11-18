@@ -121,7 +121,7 @@ async def main():
         await pg.goto(B+'#settings'); rep('класс есть в профиле', await pg.locator('#set-grade').count()==1)
 
         # задачи про интересы: выбор на главной → сюжеты про футбол в тренировке
-        await pg.evaluate("() => { state.settings.grade = 5; delete state.settings.interests; localStorage.setItem('vektor-progress-v3', JSON.stringify(state)); }")
+        await pg.evaluate("() => { state.settings.grade = 5; delete state.settings.interests; state.quick = { 'q-add': { done: true }, 'q-mult': { done: true } }; localStorage.setItem('vektor-progress-v3', JSON.stringify(state)); }")
         await pg.goto(B+'#home'); await pg.reload(); await pg.wait_for_timeout(300)
         rep('интересы: на главной предлагают выбрать', await pg.locator('.interests-ask .int-chip').count() == 12)
         for k in ['football', 'games', 'animals', 'space']: await pg.locator(f'.interests-ask label:has(input[value={k}])').click()
