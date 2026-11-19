@@ -43,6 +43,10 @@ r = T.render('Ты съел 3/8 шоколадки.\n[[шоколадка съе
 ok(r.html.includes('5 на месте'), 'съел 3/8 → 5 долек на месте, 3 зачёркнуты');
 r = T.render('Сравни 2/3 и 4/6.\n[[шоколадка 2/3 4/6]]');
 ok(r.html.includes('Две одинаковые шоколадки'), 'две шоколадки тегом');
+r = T.render('пицца 2 1/3\nНа картинке 2 целые пиццы и ещё 1/3.');
+ok((r.html.match(/<svg/g) || []).length === 1 && !r.html.includes('пицца 2'), 'тег без скобок отдельной строкой → картинка');
+r = T.render('Возьми пицца 3/8 и посмотри.');
+ok(!r.html.includes('<svg'), 'слово «пицца» внутри фразы — не картинка');
 ok(!T.systemPrompt({ topic: window.VEKTOR_FRACTIONS.topics[0], mode: 'lesson' }).includes('[[круг 3/8]]'), 'prompt has no copyable concrete tag');
 
 // промпт

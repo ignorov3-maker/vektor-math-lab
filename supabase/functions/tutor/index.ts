@@ -126,7 +126,8 @@ export function buildChat(body: any): { messages: Msg[]; mode: 'lesson' | 'task'
   let total = 0;
   for (const x of h) {
     if (!x || typeof x !== 'object' || !['user', 'assistant'].includes(x.role) || typeof x.content !== 'string') return null;
-    const content = clip(x.content, x.role === 'user' ? HISTORY.user : HISTORY.assistant).trim();
+    // в репликах Бипыча теги картинок оставляем: без скобок модель начинает писать «пицца 7/3» простым текстом
+    const content = (x.role === 'user' ? clip(x.content, HISTORY.user) : scrub(String(x.content)).slice(0, HISTORY.assistant)).trim();
     if (!content) continue;
     total += content.length; if (total > HISTORY.total) return null;
     history.push({ role: x.role, content });

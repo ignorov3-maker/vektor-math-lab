@@ -256,17 +256,11 @@ function quickReplies(i, kind) {
     : [['Дай подсказку', 'Подсказка'], ['Покажи картинку', 'Картинка'], ['Повтори правило', 'Правило']];
 }
 
-// Игровая зона урока: пицца из текущего шага, ребёнок тыкает в куски — дробь собирается на глазах.
-// Берём первую дробь из последней реплики Бипыча; во время вопросов с ответом не показываем, чтобы не подсказывать.
+// Игровая зона урока: пицца, которую ребёнок режет и собирает сам. Только на своём шаге урока
+// («Попробуй руками»), где она про саму тему, — а не после каждой реплики.
 function playFrac(c) {
   const last = [...c.msgs].reverse().find(m => m.role === 'assistant' && !m.hidden && !m.error);
-  if (!last || /class="figure|<svg/.test(String(last.html || ''))) return null;
-  const src = String(last.html || last.text || '').replace(/<span class="frac"><span>(\d+)<\/span><span>(\d+)<\/span><\/span>/g, ' $1/$2 ').replace(/<[^>]+>/g, ' ');
-  for (const m of src.matchAll(/(?<![\d/])(\d{1,2})\s*\/\s*(\d{1,2})(?![\d/])/g)) {
-    const n = +m[1], d = +m[2];
-    if (d >= 2 && d <= 24 && n >= 1 && n <= d) return { n, d };
-  }
-  return null;
+  return last && last.play ? last.play : null;
 }
 function playHtml(i, c) {
   if (c.ask || c.pending || c.busy) return '';
@@ -297,7 +291,7 @@ document.addEventListener('click', e => {
   const box = el.closest('[data-play]'); if (!box) return;
   const i = +box.dataset.play, c = getChat(i, 'lesson'); if (!c.play) return;
   if (el.dataset.playSlice != null) { const j = +el.dataset.playSlice; c.play.sel = c.play.sel.includes(j) ? c.play.sel.filter(x => x !== j) : [...c.play.sel, j]; }
-  else { c.play.d = Math.min(24, Math.max(2, c.play.d + +el.dataset.playD)); c.play.sel = c.play.sel.filter(x => x < c.play.d); }
+  else { c.play.d = Math.min(24, Math.max(2, c.play.d + +el.dataset.playD)); c.play.sel = []; }
   const was = c.play.sel.length * +c.play.key.split('/')[1] === c.play.n * c.play.d;
   const tmp = document.createElement('div'); tmp.innerHTML = playHtml(i, c); const nb = tmp.firstElementChild;
   if (nb) box.replaceWith(nb);
@@ -552,7 +546,7 @@ function nextBeat(i) {
     c.pending = { task: b.task, tries: 0 };
     c.msgs.push({ role: 'assistant', stage: true, html: `<p><b>Проверь себя.</b> ${b.task.story}</p>${figure(b.task.figure)}<p class="chat-q">${b.task.question}</p>${b.task.choices ? `<p class="small muted">Напиши знак: &lt;, &gt; или =</p>` : ''}` });
   } else {
-    c.msgs.push({ role: 'assistant', stage: true, html: b.html, lab: b.lab, raw: T.plain(b.html) });
+    c.msgs.push({ role: 'assistant', stage: true, html: b.html, lab: b.lab, play: b.play, raw: T.plain(b.html) });
     if (b.ask) c.ask = { ...b.ask, order: shuffleIdx(b.ask.choices.length), off: [], tries: 0 };
     if (b.done) c.done = true;
   }

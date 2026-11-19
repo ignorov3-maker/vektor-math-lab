@@ -299,6 +299,8 @@
     if ((m = t.match(new RegExp(`^(прямая|line)\\s+${FR}$`))) && ok(+m[2], +m[3], 16)) return { type: 'line', n: +m[2], d: +m[3] };
     if ((m = t.match(new RegExp(`^(сравнить|compare)\\s+${FR}\\s+${FR}$`))) && ok(+m[2], +m[3]) && ok(+m[4], +m[5]) && +m[2] <= +m[3] && +m[4] <= +m[5]) return { type: 'pair', a: [+m[2], +m[3]], b: [+m[4], +m[5]] };
     if ((m = t.match(new RegExp(`^(прямоугольник|умножение|grid)\\s+${FR}\\s+${FR}$`))) && +m[3] <= 8 && +m[5] <= 8 && +m[2] <= +m[3] && +m[4] <= +m[5]) return { type: 'grid', rows: +m[3], cols: +m[5], r: +m[2], c: +m[4] };
+    // «пицца 2 1/3» — целые и ещё дробь: тоже смешанное число
+    if ((m = t.match(new RegExp(`^(?:пицца|торт|круг|полоска|шоколадка)\\s+(\\d)\\s+${FR}$`))) && +m[2] < +m[3] && +m[3] <= 12) return { type: 'mixed', whole: +m[1], n: +m[2], d: +m[3] };
     if ((m = t.match(new RegExp(`^(смешанное|mixed)\\s+(\\d)\\s+${FR}$`))) && +m[3] < +m[4] && +m[4] <= 12) return { type: 'mixed', whole: +m[2], n: +m[3], d: +m[4] };
     return null;
   }
