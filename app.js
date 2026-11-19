@@ -1126,7 +1126,7 @@ function lessonPage(i, stage) {
       <i class="step-bar" aria-hidden="true"${id === 'practice' && id === stage ? ` style="--fill:${Math.max(6, Math.round(Math.min(m.practice, need) / need * 100))}%"` : ''}></i><span class="step-t"><b>${name}</b></span>
     </button></li>`).join('')}</ol>`;
   const req = (t.requires || []).map(id => byId[id]).filter(x => x != null && pct(x) < DONE);
-  const reqHtml = req.length && stage === 'learn' ? `<p class="requires small">Пригодится тема ${req.map(r => `<button class="link" data-lesson="${r}">«${topics[r].title}»</button>`).join(' и ')} — её можно повторить в любой момент.</p>` : '';
+  const reqHtml = req.length && stage === 'learn' ? `<p class="requires small">Опирается на ${req.map(r => `<button class="link" data-lesson="${r}">«${topics[r].title}»</button>`).join(' и ')}</p>` : '';
   const body = stage === 'learn' ? learnStage(i) : stage === 'check' ? checkStage(i, 'check') : stage === 'review' ? checkStage(i, 'review') : practiceStage(i);
   const learnTabs = stage === 'learn' && !t.legacy ? `<div class="lb-tabs" role="group" aria-label="Как изучать">
       <button data-learn-tab="tutor" aria-pressed="${learnTab === 'tutor'}" aria-label="Урок с Бипычем" title="Урок с Бипычем">${G.icon('chat', 20)}</button>
