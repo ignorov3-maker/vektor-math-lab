@@ -7,7 +7,7 @@ import argparse, asyncio, concurrent.futures, datetime, http.server, json, math,
 import statistics, subprocess, threading, time, urllib.error, urllib.parse, urllib.request
 
 ROOT=pathlib.Path(__file__).resolve().parent.parent
-SQL_FILES=['schema.sql','test.sql','admin.sql','teacher.sql','pulse.sql','ai.sql','guard.sql','accounts.sql','plans.sql','parent.sql','tutor_cabinet.sql','audit.sql','pilot_report.sql']
+SQL_FILES=['schema.sql','test.sql','admin.sql','teacher.sql','pulse.sql','ai.sql','guard.sql','accounts.sql','plans.sql','parent.sql','tutor_cabinet.sql','audit.sql','pilot_report.sql','security_fix.sql']
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self,*args,**kwargs): return None
 HTTP=urllib.request.build_opener(NoRedirect)

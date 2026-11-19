@@ -546,8 +546,8 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
     let d; try { d = await rpc('vektor_teacher_student', { p_token: sess.token, p_login: login }); } catch (e) { if (ui.drawer === login) $('drawer-host').querySelector('.sub').textContent = e.message; return; }
     if (ui.drawer !== login) return;
     const c = d.cur, n = need({ ...s, ...d, flags: d.flags });
-    const errs = []; Object.entries(d.topics || {}).forEach(([tid, t]) => Object.entries(t.errors || {}).forEach(([id, k]) => { const tt = mistakeTitle(tid, id); if (tt) errs.push({ tid, tt, k }); }));
-    (d.last || []).forEach(a => { const tt = a.mistake && mistakeTitle(a.topic, a.mistake); if (!tt) return; const e = errs.find(x => x.tid === a.topic && x.tt === tt); if (!e) errs.push({ tid: a.topic, tt, k: 1, recent: 1 }); else if (e.recent) e.k++; });
+    const errs = []; Object.entries(d.topics || {}).forEach(([tid, t]) => Object.entries(t.errors || {}).forEach(([id, k]) => { const tt = mistakeTitle(tid, id); k = Math.max(0, Math.floor(Number(k)) || 0); if (tt && k && TI[tid]) errs.push({ tid, tt, k }); }));
+    (d.last || []).forEach(a => { const tt = a.mistake && TI[a.topic] && mistakeTitle(a.topic, a.mistake); if (!tt) return; const e = errs.find(x => x.tid === a.topic && x.tt === tt); if (!e) errs.push({ tid: a.topic, tt, k: 1, recent: 1 }); else if (e.recent) e.k++; });
     errs.sort((a, b) => b.k - a.k);
     const curT = c && TI[c.topic];
     $('drawer-host').querySelector('.drawer').innerHTML = `<button class="x-close" data-close aria-label="Закрыть">×</button>
@@ -555,7 +555,7 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
       <p class="sub">${label(login) ? esc(login) + ' · ' : ''}${esc(d.class || '')} · ${ago(d.last_seen)}${curT && now - c.at < 900 ? ` · тема ${curT.n}, ${Math.max(1, Math.round((now - c.since) / 60))} мин` : ''}</p>
       ${n ? `<div class="flagbox" style="background:var(--red-soft);color:var(--red)"><b>Нужна помощь:</b> ${esc(n.why.join(' · '))}</div>` : ''}
       <div class="dstrip" aria-label="Темы">${TOPICS.map(t => cell((d.topics || {})[t.id], `Тема ${t.n}. ${t.title}`)).join('')}</div>
-      <h4>Частые ошибки</h4>${errs.length ? `<ul>${errs.slice(0, 5).map(e => `<li>${esc(e.tt)} <span class="muted">(тема ${TI[e.tid].n})</span> — ${e.k} ${plural(e.k, 'раз', 'раза', 'раз')}</li>`).join('')}</ul>` : '<p class="muted small">Типичных ошибок не замечено.</p>'}
+      <h4>Частые ошибки</h4>${errs.length ? `<ul>${errs.slice(0, 5).map(e => `<li>${esc(e.tt)} <span class="muted">(тема ${esc(TI[e.tid] ? TI[e.tid].n : '?')})</span> — ${Number(e.k) || 0} ${plural(e.k, 'раз', 'раза', 'раз')}</li>`).join('')}</ul>` : '<p class="muted small">Типичных ошибок не замечено.</p>'}
       <h4>Последние ответы</h4>${(d.last || []).length ? d.last.map(a => `<div class="ans"><span class="q" title="${esc(a.q)}">${TI[a.topic] ? TI[a.topic].n + '. ' : ''}${esc(String(a.q || '').slice(0, 70))}</span><span>«${esc(a.a)}» <b class="${a.ok ? 'ok' : 'bad'}">${a.ok ? '✓' : '✗'}</b></span></div>`).join('') : '<p class="muted small">Ответов пока нет.</p>'}
       <h4>Сегодня</h4><p style="margin:0">Решено верно: ${d.today || 0} · подсказок: ${d.hints_today || 0} · вопросов наставнику: ${d.ai_today || 0}</p>
       <h4>Сигналы ИИ</h4>${(d.flags || []).length ? d.flags.map(f => `<div class="flagbox">«${esc(f.t)}» <span class="small">${new Date(f.at * 1000).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span></div>`).join('') : '<p class="muted small">Нет.</p>'}

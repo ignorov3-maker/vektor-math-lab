@@ -77,6 +77,7 @@ jobs:
           run ux_scenario
           run e2e_scenarios && grep -q "ИТОГО: \([0-9]*\) из \1$" e2e_scenarios.log
           run supabase_scenarios
+          run security_audit
           run codex_pilot
 
       - name: Нагрузка на изолированной БД и заглушке модели
