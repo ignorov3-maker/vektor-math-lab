@@ -85,7 +85,7 @@
       ${L ? '<h2 id="login-title">Вход для ученика</h2>' : '<h1 id="login-title">Вход в «Вектор»</h1>'}
       <p class="muted">Логин и пароль написаны на твоей бумажке.</p>
       <form id="login-form" novalidate>
-        <label>Логин<input name="login" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="ученик1" required></label>
+        <label>Логин<input name="login" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="например, 5а-7" required></label>
         <label>Пароль<input name="password" type="password" autocomplete="current-password" autocapitalize="none" spellcheck="false" placeholder="слово и 4 цифры" required></label>
         <label class="show-pass"><input type="checkbox" id="show-pass"> Показать пароль</label>
         <p class="feedback ${msg ? 'bad' : ''}" id="login-msg" role="alert">${msg ? esc(msg) : ''}</p>
