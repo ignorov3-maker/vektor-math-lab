@@ -29,8 +29,10 @@
       case 'mixed': return `${fig.whole} целых и ${fig.n}/${fig.d}`;
       case 'grid': return `сетка ${fig.rows} на ${fig.cols}, закрашено ${fig.r*fig.c} клеток`;
       case 'labeled': return `дробь ${fig.n}/${fig.d}, числитель ${fig.n}, знаменатель ${fig.d}`;
-      case 'pizza': case 'cake': return `${fig.type === 'cake' ? 'торт' : 'пицца'} из ${fig.parts} кусков, осталось ${fig.have}`;
-      case 'choco': return `шоколадка из ${(fig.cols || fig.parts) * (fig.rows || 1)} долек, ${fig.have} на месте`;
+      case 'pizza': case 'cake': return `${fig.type === 'cake' ? 'торт' : 'пицца'} из ${fig.parts} кусков, ${fig.eaten ? `съели ${fig.parts - fig.have}, осталось ${fig.have}` : `осталось ${fig.have}`}`;
+      case 'choco': return `шоколадка из ${(fig.cols || fig.parts) * (fig.rows || 1)} долек, ${fig.eaten ? `съели ${fig.parts - fig.have} (зачёркнуты), осталось ${fig.have}` : `${fig.have} на месте`}`;
+      case 'pizzas': return `${fig.items.length} ${fig.food === 'cake' ? 'торта' : 'пиццы'} рядом: ` + fig.items.map(x => `${x.have} из ${x.parts}`).join(' и ');
+      case 'chocopair': return `две одинаковые шоколадки: ${fig.a[0]} из ${fig.a[1]} и ${fig.b[0]} из ${fig.b[1]}`;
       case 'people': return `${fig.total} человек, выделено ${fig.mark}`;
       case 'icons': return `${fig.total} штук, выделено ${fig.mark}`;
       case 'groups': return `${fig.groups} кучек по ${fig.per} конфет, взяли ${fig.take}`;
@@ -283,6 +285,14 @@
     // дробь больше единицы на «вещи» или полоске (7/5) — рисуем смешанным числом: целые и остаток
     if ((m = t.match(new RegExp(`^(пицца|торт|шоколадка|шоколад|полоска|bar|круг|circle)\\s+${FR}$`))) && +m[3] > 1 && +m[3] <= 12 && +m[2] > +m[3] && +m[2] / +m[3] < 10)
       return { type: 'mixed', whole: Math.floor(+m[2] / +m[3]), n: +m[2] % +m[3], d: +m[3] };
+    // «съели a из b»: на месте b − a, съеденные куски видны пустыми или зачёркнутыми
+    if ((m = t.match(new RegExp(`^(пицца|торт|шоколадка|шоколад)\\s+(?:съел|съела|съели|съеденные|съедено)\\s+${FR}$`))) && ok(+m[2], +m[3], 12) && +m[2] <= +m[3] && +m[3] > 0)
+      return { type: m[1] === 'пицца' ? 'pizza' : m[1] === 'торт' ? 'cake' : 'choco', parts: +m[3], have: +m[3] - +m[2], eaten: true };
+    // две вещи рядом: [[пицца 2/4 4/8]] — две пиццы, [[шоколадка 2/3 4/6]] — две шоколадки
+    if ((m = t.match(new RegExp(`^(пицца|торт)\\s+${FR}\\s+${FR}$`))) && ok(+m[2], +m[3], 12) && ok(+m[4], +m[5], 12) && +m[2] <= +m[3] && +m[4] <= +m[5])
+      return { type: 'pizzas', food: m[1] === 'торт' ? 'cake' : 'pizza', items: [{ parts: +m[3], have: +m[2], label: `${m[2]}/${m[3]}` }, { parts: +m[5], have: +m[4], label: `${m[4]}/${m[5]}` }] };
+    if ((m = t.match(new RegExp(`^(шоколадка|шоколад)\\s+${FR}\\s+${FR}$`))) && ok(+m[2], +m[3], 12) && ok(+m[4], +m[5], 12) && +m[2] <= +m[3] && +m[4] <= +m[5])
+      return { type: 'chocopair', a: [+m[2], +m[3]], b: [+m[4], +m[5]], la: `${m[2]} из ${m[3]}`, lb: `${m[4]} из ${m[5]}` };
     if ((m = t.match(new RegExp(`^(пицца|торт|шоколадка|шоколад)\\s+${FR}$`))) && ok(+m[2], +m[3], 12) && +m[2] <= +m[3] && +m[3] > 0) return { type: m[1] === 'пицца' ? 'pizza' : m[1] === 'торт' ? 'cake' : 'choco', parts: +m[3], have: +m[2] };
     if ((m = t.match(new RegExp(`^(полоска|bar)\\s+${FR}$`))) && ok(+m[2], +m[3]) && +m[2] <= +m[3]) return { type: 'bar', parts: +m[3], shaded: +m[2] };
     if ((m = t.match(new RegExp(`^(круг|circle)\\s+${FR}$`))) && ok(+m[2], +m[3], 16) && +m[2] <= +m[3]) return { type: 'circle', parts: +m[3], shaded: +m[2] };

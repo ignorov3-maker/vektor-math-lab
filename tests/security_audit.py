@@ -30,7 +30,7 @@ async def main():
     try:
         psql("do $$ begin create role anon nologin; exception when duplicate_object then null; end $$;"
              "do $$ begin create role authenticated nologin; exception when duplicate_object then null; end $$;")
-        for f in ('schema.sql', 'test.sql', 'admin.sql', 'teacher.sql', 'pulse.sql', 'ai.sql', 'guard.sql', 'accounts.sql', 'plans.sql', 'parent.sql', 'tutor_cabinet.sql', 'audit.sql', 'pilot_report.sql', 'security_fix.sql', 'pilot_adults.sql', 'login_keys.sql', 'sandbox.sql'):
+        for f in ('schema.sql', 'test.sql', 'admin.sql', 'teacher.sql', 'pulse.sql', 'ai.sql', 'guard.sql', 'accounts.sql', 'plans.sql', 'parent.sql', 'tutor_cabinet.sql', 'audit.sql', 'pilot_report.sql', 'security_fix.sql', 'pilot_adults.sql', 'login_keys.sql', 'sandbox.sql', 'teacher_card.sql'):
             subprocess.run(['psql', f'{ss.PG} dbname={ss.DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase' / f)], check=True, capture_output=True)
         psql("select count(*) from vk_seed(80, '5А:1-28,5Б:29-56,5В:57-80')")
         psql("update vk_students set pass_hash = extensions.crypt('зоолог5679', extensions.gen_salt('bf', 8)) where login in ('ученик1','ученик2','ученик3');"

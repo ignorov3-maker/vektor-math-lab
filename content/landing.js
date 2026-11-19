@@ -12,7 +12,7 @@
     return `<div class="ld">
   <div class="ld-top" role="banner">
     <span class="ld-brand"><svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7"/><path d="M9 23 23 9M13 9h10v10" stroke-width="3.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>вектор</span>
-    <nav class="ld-nav" aria-label="Разделы страницы"><a href="#ld-how">Как это работает</a><a href="#ld-family">Родителям</a><a href="#ld-all">5–9 класс</a><a href="#ld-teacher">Учителю</a><a class="ld-nav-cta" href="parent.html">Кабинет родителя</a></nav>
+    <nav class="ld-nav" aria-label="Разделы страницы"><a href="#ld-how">Как это работает</a><a href="#ld-family">Родителям</a><a href="#ld-all">5–9 класс</a><a href="#ld-teacher">Учителю</a><a class="ld-nav-cta" href="#adult-entry">Вход для взрослых</a></nav>
   </div>
 
   <section class="ld-hero">
@@ -117,6 +117,13 @@
 
   // Бипыч ловит жучка в тетради — после того как «рентген» прошёл по записи
   function mount(el) {
+    // ссылки по странице не трогают адрес: в приложении «#…» — это переходы между экранами
+    el.addEventListener('click', e => {
+      const a = e.target.closest && e.target.closest('a[href^="#"]'); if (!a) return;
+      const to = el.querySelector(a.getAttribute('href')); if (!to) return;
+      e.preventDefault(); to.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (to.id === 'adult-entry') { to.classList.remove('rs-flash'); void to.offsetWidth; to.classList.add('rs-flash'); }
+    });
     const host = el.querySelector('[data-ld-pet]'), D = root.VEKTOR_DROBIK;
     if (!host || !D) return null;
     const reduce = root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches;
