@@ -66,12 +66,9 @@ begin
   end if;
   return new;
 end $$;
-drop trigger if exists vk_login_keys_revoke on vk_students;
-create trigger vk_login_keys_revoke after update of pass_hash on vk_students for each row execute function vk_login_keys_revoke();
-drop trigger if exists vk_login_keys_revoke on vk_teachers;
-create trigger vk_login_keys_revoke after update of pass_hash on vk_teachers for each row execute function vk_login_keys_revoke();
-drop trigger if exists vk_login_keys_revoke on vk_adults;
-create trigger vk_login_keys_revoke after update of pass_hash on vk_adults for each row execute function vk_login_keys_revoke();
+create or replace trigger vk_login_keys_revoke after update of pass_hash on vk_students for each row execute function vk_login_keys_revoke();
+create or replace trigger vk_login_keys_revoke after update of pass_hash on vk_teachers for each row execute function vk_login_keys_revoke();
+create or replace trigger vk_login_keys_revoke after update of pass_hash on vk_adults for each row execute function vk_login_keys_revoke();
 
 revoke execute on function vk_login_key(text, text), vk_login_keys_revoke(), vektor_key_login(text, text) from public, anon, authenticated;
 grant execute on function vektor_key_login(text, text) to anon, authenticated;
