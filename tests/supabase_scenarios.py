@@ -82,7 +82,7 @@ async def main():
         psql("do $$ begin create role anon nologin; exception when duplicate_object then null; end $$;"
              "do $$ begin create role authenticated nologin; exception when duplicate_object then null; end $$;")
         subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase/schema.sql')], check=True, capture_output=True)
-        for f in ('test.sql', 'admin.sql', 'teacher.sql', 'pulse.sql', 'ai.sql', 'guard.sql', 'accounts.sql', 'plans.sql', 'parent.sql', 'tutor_cabinet.sql', 'audit.sql', 'pilot_report.sql', 'security_fix.sql', 'pilot_adults.sql'):
+        for f in ('test.sql', 'admin.sql', 'teacher.sql', 'pulse.sql', 'ai.sql', 'guard.sql', 'accounts.sql', 'plans.sql', 'parent.sql', 'tutor_cabinet.sql', 'audit.sql', 'pilot_report.sql', 'security_fix.sql', 'pilot_adults.sql', 'login_keys.sql'):
             subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase' / f)], check=True, capture_output=True)
         rep('схема накатывается повторно', True)
         rep('vk_seed: 80 профилей с паролями', psql("select count(*) from vk_seed(80, '5А:1-28,5Б:29-56,5В:57-80') where password ~ '^[а-я]+[0-9]{4}$'") == '80')
@@ -434,6 +434,31 @@ async def main():
             and psql("select count(*) from vk_export_events where data::text like '%ученик%'") == '0')
         rep('сброс пароля сохраняет прогресс', psql("select vk_reset('ученик1') ~ '^[а-я]+[0-9]{4}$'") == 't'
             and psql("select (state->'meta'->'concept'->>'practice') from vk_students where login='ученик1'") == '1')
+        # Вход по QR-коду (login_keys.sql)
+        psql("select vk_adult('родитель7', 'parent'); select vk_adult_link_login('родитель7', 'ученик2')")
+        ks = {r: psql(f"select vk_login_key('{r}', '{l}')") for r, l in (('student', 'ученик2'), ('teacher', 'uchitel'), ('parent', 'родитель7'))}
+        rep('QR: ключ — 32 hex-символа, в базе только хеш', all(re.fullmatch(r'[0-9a-f]{32}', k) for k in ks.values())
+            and psql(f"select count(*) from vk_login_keys where key_hash = {lit(ks['student'])}") == '0')
+        try: psql("set role anon; select vk_login_key('student', 'ученик3')"); rep('QR: anon не выдаёт ключи', False)
+        except RuntimeError: rep('QR: anon не выдаёт ключи', True)
+        r = json.loads(psql(f"set role anon; select vektor_key_login({lit('0' * 32)}, null)::text"))
+        rep('QR: чужой ключ не пускает', 'token' not in r)
+        async with async_playwright() as p2:
+            b2 = await p2.chromium.launch()
+            for role, url in (('student', '/'), ('teacher', '/teacher.html'), ('parent', '/parent.html')):
+                c2 = await b2.new_context(); q = await c2.new_page()
+                await q.goto(f"{base}/#k={ks[role]}"); await q.wait_for_timeout(2500)
+                ok = q.url.split('#')[0].rstrip('/').endswith(url.rstrip('/')) and ks[role] not in q.url
+                if role == 'student': ok = ok and await q.locator('#logout-btn').count() == 1
+                if role == 'teacher': ok = ok and await q.evaluate("!!sessionStorage.getItem('vektor-teacher')")
+                if role == 'parent': ok = ok and await q.evaluate("(JSON.parse(localStorage.getItem('vektor-adult'))||{}).role === 'parent'")
+                rep(f'QR: {role} одним сканом попадает в свой кабинет, ключ убран из адреса', ok, q.url)
+                await c2.close()
+            psql("select vk_reset('ученик2')")
+            c2 = await b2.new_context(); q = await c2.new_page()
+            await q.goto(f"{base}/#k={ks['student']}"); await q.wait_for_timeout(2000)
+            rep('QR: после нового пароля старый QR не пускает', await q.locator('#logout-btn').count() == 0 and 'не действует' in await q.inner_text('body'))
+            await b2.close()
         srv.shutdown(); fn.terminate()
     finally:
         psql(f'drop database if exists {DB} with (force)', db='postgres')
