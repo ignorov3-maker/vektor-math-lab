@@ -256,6 +256,50 @@ function quickReplies(i, kind) {
     : [['Дай подсказку', 'Подсказка'], ['Покажи картинку', 'Картинка'], ['Повтори правило', 'Правило']];
 }
 
+// Игровая зона урока: пицца из текущего шага, ребёнок тыкает в куски — дробь собирается на глазах.
+// Берём первую дробь из последней реплики Бипыча; во время вопросов с ответом не показываем, чтобы не подсказывать.
+function playFrac(c) {
+  const last = [...c.msgs].reverse().find(m => m.role === 'assistant' && !m.hidden && !m.error);
+  if (!last || /class="figure|<svg/.test(String(last.html || ''))) return null;
+  const src = String(last.html || last.text || '').replace(/<span class="frac"><span>(\d+)<\/span><span>(\d+)<\/span><\/span>/g, ' $1/$2 ').replace(/<[^>]+>/g, ' ');
+  for (const m of src.matchAll(/(?<![\d/])(\d{1,2})\s*\/\s*(\d{1,2})(?![\d/])/g)) {
+    const n = +m[1], d = +m[2];
+    if (d >= 2 && d <= 12 && n >= 1 && n <= d) return { n, d };
+  }
+  return null;
+}
+function playHtml(i, c) {
+  if (c.ask || c.pending || c.busy) return '';
+  const f = playFrac(c); if (!f) return '';
+  const key = f.n + '/' + f.d;
+  if (!c.play || c.play.key !== key) c.play = { key, n: f.n, d: f.d, sel: [] };
+  const { n, d, sel } = c.play, k = sel.length, R = 64, C = 72;
+  const pt = a => [C + R * Math.sin(a), C - R * Math.cos(a)].map(v => v.toFixed(1)).join(' ');
+  const slices = Array.from({ length: d }, (_, j) => {
+    const a0 = j / d * 2 * Math.PI, a1 = (j + 1) / d * 2 * Math.PI, on = sel.includes(j), mid = (a0 + a1) / 2;
+    const dot = on ? `<circle cx="${(C + R * .58 * Math.sin(mid)).toFixed(1)}" cy="${(C - R * .58 * Math.cos(mid)).toFixed(1)}" r="${Math.max(3.5, 9 - d / 2)}" class="pz-dot"/>` : '';
+    return `<g class="pz-slice${on ? ' on' : ''}" data-play-slice="${j}" role="button" tabindex="0" aria-pressed="${on}" aria-label="Кусок ${j + 1}"><path d="M${C} ${C} L${pt(a0)} A${R} ${R} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${pt(a1)} Z"/>${dot}</g>`;
+  }).join('');
+  const say = k === 0 ? `Тыкай в куски — собери ${n}/${d}` : k === n ? `Да! ${k} из ${d} — это и есть ${n}/${d}` : `Взял ${k} из ${d}${k < n ? ' — ещё ' + (n - k) : ' — это уже больше'}`;
+  return `<div class="play${k === n ? ' is-done' : ''}" data-play="${i}">
+    <svg viewBox="0 0 144 144" class="pz" aria-label="Пицца из ${d} кусков"><circle cx="${C}" cy="${C}" r="${R + 5}" class="pz-crust"/>${slices}</svg>
+    <div class="play-side"><div class="play-frac" aria-live="polite"><span class="pf-n">${k}</span><span class="pf-d">${d}</span></div>
+      <div class="play-cut"><button type="button" data-play-d="-1" aria-label="Меньше кусков"${d <= 2 ? ' disabled' : ''}>−</button><span>кусков</span><button type="button" data-play-d="1" aria-label="Больше кусков"${d >= 12 ? ' disabled' : ''}>+</button></div></div>
+    <p class="play-say">${say}</p></div>`;
+}
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-play-slice],[data-play-d]'); if (!el) return;
+  const box = el.closest('[data-play]'); if (!box) return;
+  const i = +box.dataset.play, c = getChat(i, 'lesson'); if (!c.play) return;
+  if (el.dataset.playSlice != null) { const j = +el.dataset.playSlice; c.play.sel = c.play.sel.includes(j) ? c.play.sel.filter(x => x !== j) : [...c.play.sel, j]; }
+  else { c.play.d = Math.min(12, Math.max(2, c.play.d + +el.dataset.playD)); c.play.sel = c.play.sel.filter(x => x < c.play.d); }
+  const was = c.play.sel.length === c.play.n;
+  const tmp = document.createElement('div'); tmp.innerHTML = playHtml(i, c); const nb = tmp.firstElementChild;
+  if (nb) box.replaceWith(nb);
+  if (!was && c.play.sel.length === c.play.n && c.play.d === +c.play.key.split('/')[1]) logEvent('play', { topic: topics[i] && topics[i].id, frac: c.play.key });
+});
+document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.closest && e.target.closest('[data-play-slice]')) { e.preventDefault(); e.target.closest('[data-play-slice]').dispatchEvent(new MouseEvent('click', { bubbles: true })); } });
+
 function chatBox(i, kind) {
   const c = getChat(i, kind), online = isOnline();
   const ph = kind === 'lesson' ? (c.pending ? 'Твой ответ, например 3/4' : 'Ответь или спроси Бипыча…') : 'Спроси, что непонятно…';
@@ -268,6 +312,7 @@ function chatBox(i, kind) {
   return `<div class="chat chat-${kind}" data-chat="${kind}">${steps}
     ${kind === 'lesson' ? '<div class="bip-stage" aria-hidden="true"><span class="bip-stage-pet"></span></div>' : ''}
     <div class="chat-log" aria-live="polite">${older}${vis.map((m, k) => msgHtml(m, k, k < lastA && !m.error)).join('') || (kind === 'task' ? '<p class="muted small chat-empty">Застрял? Спроси Бипыча — он не скажет ответ, но поможет дойти до него самому.</p>' : '')}</div>
+    ${kind === 'lesson' ? playHtml(i, c) : ''}
     <div class="chat-quick">${kind === 'lesson' && c.ask ? `<div class="ask-choices" role="group" aria-label="Выбери ответ">${c.ask.order.map(j => `<button type="button" class="ask-tile${c.ask.off.includes(j) ? ' is-off' : ''}" data-ask="${j}"${c.ask.off.includes(j) ? ' disabled' : ''}>${c.ask.choices[j]}</button>`).join('')}</div>` : ''}${rest.length ? `<div class="chat-chips">${rest.map(([v, l], n) => `<button type="button" class="chip" style="--n:${n}" data-quick="${esc(v)}">${l}</button>`).join('')}</div>` : ''}${main.map(([v, l]) => `<button type="button" class="btn btn-primary chat-next" data-quick="${esc(v)}">${l}</button>`).join('')}</div>
     ${kind === 'lesson' && c.pending ? `<form class="chat-form chat-answer" autocomplete="off">${answerInput(c.pending.task, 'Проверить')}</form>` : `<form class="chat-form" autocomplete="off"><label class="visually-hidden" for="chat-in-${kind}">Сообщение наставнику</label>
       <div class="composer"><input id="chat-in-${kind}" placeholder="${ph}" maxlength="400"${c.busy ? ' disabled' : ''}>${SPEECH ? `<button class="composer-btn chat-mic" type="button" aria-label="Сказать голосом" title="Сказать голосом"${c.busy ? ' disabled' : ''}>${MIC_SVG}</button>` : ''}<button class="composer-btn chat-send" type="submit" aria-label="Отправить" title="Отправить"${c.busy ? ' disabled' : ''}>${SEND_SVG}</button></div></form>`}
@@ -281,6 +326,8 @@ function refreshChat(i, kind) {
   const tmp = document.createElement('div'); tmp.innerHTML = chatBox(i, kind);
   const nb = tmp.firstElementChild, log = nb.querySelector('.chat-log');
   box.querySelector('.chat-log').replaceWith(log);
+  const oldPlay = box.querySelector('.play'), newPlay = nb.querySelector('.play');
+  if (oldPlay && newPlay) oldPlay.replaceWith(newPlay); else if (oldPlay) oldPlay.remove(); else if (newPlay) box.querySelector('.chat-quick').before(newPlay);
   box.querySelector('.chat-quick').replaceWith(nb.querySelector('.chat-quick'));
   box.querySelector('.chat-form').replaceWith(nb.querySelector('.chat-form'));
   box.querySelector('.chat-mode').replaceWith(nb.querySelector('.chat-mode'));
@@ -595,6 +642,10 @@ async function aiReply(i, kind, hiddenUser) {
       c.forceOffline = true;
       c.msgs.push({ role: 'assistant', html: `<p>${esc(e.message)}</p>` });
       offlineFallback(i, kind); return;
+    }
+    if (e.session) {
+      c.msgs.push({ role: 'assistant', error: true, html: `<p>${esc(e.message)}</p><button type="button" class="btn btn-primary" data-relogin>Войти снова</button>` });
+      return;
     }
     if (e.quiet) { aiPaused = true; offlineFallback(i, kind); return; }
     c.forceOffline = true;
@@ -1720,3 +1771,9 @@ setSkin(savedSkin || 'notebook');
 
 let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(drawRoute, 100); });
 render();
+// Сессия ученика закончилась — один шаг к экрану входа (прогресс уже на сервере)
+document.addEventListener('click', e => {
+  if (!e.target.closest('[data-relogin]')) return;
+  try { localStorage.removeItem('vektor-session'); } catch {}
+  location.hash = ''; location.reload();
+});

@@ -1366,3 +1366,39 @@ body.is-focus #app{max-width:820px;padding:10px 20px calc(28px + env(safe-area-i
 .figure.icons .ic{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;border:2px dashed var(--line);opacity:.45}
 .figure.icons .ic.on{opacity:1;border:2px solid #E2B33C;background:#FFF1BF}
 .figure.icons svg{width:28px;height:28px}
+
+/* ---------- Игровая зона урока: пицца, которую можно «съесть» по кускам ---------- */
+.chat-lesson>.play{grid-column:1 / -1}
+.play{display:grid;grid-template-columns:auto 1fr;grid-template-areas:"pz side" "say say";align-items:center;gap:6px 18px;margin:14px 0 6px;padding:14px 16px;border:2px dashed var(--line);border-radius:22px;background:color-mix(in srgb,var(--sheet) 70%,transparent)}
+.play .pz{grid-area:pz;width:150px;height:150px;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.pz-crust{fill:#E9B872;stroke:#C98F45;stroke-width:2}
+.pz-slice path{fill:#FFF4DD;stroke:#C98F45;stroke-width:1.6;transition:fill .15s,transform .15s;transform-origin:72px 72px;cursor:pointer}
+.pz-slice.on path{fill:#FFC94D}
+.pz-slice:active path{transform:scale(.96)}
+.pz-slice:focus-visible{outline:none}.pz-slice:focus-visible path{stroke:var(--green);stroke-width:3}
+.pz-dot{fill:#D9534F;pointer-events:none}
+.play-side{grid-area:side;display:flex;flex-direction:column;align-items:center;gap:10px}
+.play-frac{display:inline-flex;flex-direction:column;align-items:center;font:800 40px/1 var(--font-display);color:var(--ink)}
+.play-frac .pf-n{padding:0 .2em 4px;border-bottom:4px solid currentColor;min-width:1.2em;text-align:center;color:var(--green);transition:transform .15s}
+.play-frac .pf-d{padding-top:4px}
+.play.is-done .pf-n{animation:play-pop .4s ease}
+@keyframes play-pop{50%{transform:scale(1.35)}}
+.play-cut{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-2)}
+.play-cut button{width:30px;height:30px;border-radius:50%;border:1.5px solid var(--line);background:var(--sheet);font-size:18px;line-height:1;color:var(--ink);cursor:pointer}
+.play-cut button:disabled{opacity:.35;cursor:default}
+.play-say{grid-area:say;margin:0;text-align:center;font-size:15px;font-weight:600;color:var(--ink-2)}
+.play.is-done{border-style:solid;border-color:var(--green);background:color-mix(in srgb,var(--green) 8%,var(--sheet))}
+.play.is-done .play-say{color:var(--green)}
+@media (prefers-reduced-motion:reduce){.play,.play .pf-n,.pz-slice path{animation:none!important;transition:none!important}}
+
+/* Телефон: урок на весь экран, кнопки внизу под большим пальцем, пустое место занимает игровая зона */
+@media (max-width:760px){
+  .lesson-learn{min-height:100dvh;display:flex;flex-direction:column}
+  .lesson-learn>.layout,.lesson-learn .tutor-lesson{flex:1;display:flex;flex-direction:column;min-height:0}
+  .lesson-learn .chat-lesson{flex:1;display:flex;flex-direction:column}
+  .lesson-learn .chat-lesson>.play{flex:1 0 auto;align-content:center;margin:12px 0}
+  .lesson-learn .chat-lesson>.chat-quick{margin-top:auto;width:100%}
+  .lesson-learn .chat-lesson>.chat-form{position:sticky;bottom:0;z-index:3;padding:8px 0 calc(8px + env(safe-area-inset-bottom));background:linear-gradient(to top,var(--paper) 70%,transparent)}
+  .lesson-learn .chat-lesson>.chat-mode{font-size:12px;text-align:center;margin:2px 0 0}
+  .play .pz{width:min(46vw,170px);height:min(46vw,170px)}
+}
