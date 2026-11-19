@@ -82,7 +82,7 @@ async def main():
         psql("do $$ begin create role anon nologin; exception when duplicate_object then null; end $$;"
              "do $$ begin create role authenticated nologin; exception when duplicate_object then null; end $$;")
         subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase/schema.sql')], check=True, capture_output=True)
-        for f in ('test.sql', 'admin.sql', 'teacher.sql', 'pulse.sql', 'ai.sql', 'guard.sql', 'accounts.sql', 'plans.sql', 'parent.sql', 'tutor_cabinet.sql', 'audit.sql', 'pilot_report.sql', 'security_fix.sql'):
+        for f in ('test.sql', 'admin.sql', 'teacher.sql', 'pulse.sql', 'ai.sql', 'guard.sql', 'accounts.sql', 'plans.sql', 'parent.sql', 'tutor_cabinet.sql', 'audit.sql', 'pilot_report.sql', 'security_fix.sql', 'pilot_adults.sql'):
             subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase' / f)], check=True, capture_output=True)
         rep('схема накатывается повторно', True)
         rep('vk_seed: 80 профилей с паролями', psql("select count(*) from vk_seed(80, '5А:1-28,5Б:29-56,5В:57-80') where password ~ '^[а-я]+[0-9]{4}$'") == '80')
@@ -94,6 +94,19 @@ async def main():
         # anon не читает таблицы и не вызывает служебные функции
         from pilot_scenarios import run as pilot_scenarios
         pilot_scenarios(psql, rep)
+        # Взрослые пилота по логину без регистрации (pilot_adults.sql)
+        pw = psql("select vk_adult('родитель1', 'parent')")
+        rep('vk_adult: пароль-слово для родителя', bool(re.fullmatch(r'[а-я]+[0-9]{4}', pw)))
+        rep('vk_adult: повторный вызов не меняет пароль', psql("select vk_adult('родитель1', 'parent') is null") == 't')
+        rep('vk_adult_link_login: привязка ученика', psql("select vk_adult_link_login('родитель1', 'ученик1')") == 't')
+        r = json.loads(psql(f"set role anon; select vektor_adult_login({lit('  Родитель1 ')}, {lit(pw)}, null)::text"))
+        rep('родитель входит по логину', 'token' in r and r.get('role') == 'parent', str(r)[:80])
+        kids = json.loads(psql(f"set role anon; select vektor_parent_children({lit(r.get('token', ''))})::text"))
+        rep('родитель видит только своего ребёнка', len(kids if isinstance(kids, list) else kids.get('children', [])) == 1, str(kids)[:100])
+        for fn in ("vk_adult('х1', 'parent')", "vk_adult_link_login('родитель1', 'ученик2')"):
+            try: psql(f"set role anon; select {fn}"); rep('anon не создаёт взрослых и связи: ' + fn, False)
+            except RuntimeError: rep('anon не создаёт взрослых и связи: ' + fn.split('(')[0], True)
+        psql("delete from vk_links; delete from vk_sessions where role='parent'; delete from vk_adults")
         try: psql('set role anon; select count(*) from vk_students'); rep('anon не читает таблицы', False)
         except RuntimeError: rep('anon не читает таблицы', True)
         try: psql("set role anon; select * from vk_seed(1)"); rep('anon не создаёт профили', False)
