@@ -13,7 +13,7 @@ async def main():
     server=None
     try:
         S.psql("do $$begin create role anon nologin;exception when duplicate_object then null;end$$;do $$begin create role authenticated nologin;exception when duplicate_object then null;end$$;do $$begin create role service_role nologin;exception when duplicate_object then null;end$$;")
-        for name in ['schema.sql','test.sql','admin.sql','teacher.sql','pulse.sql','ai.sql','guard.sql','accounts.sql','plans.sql','parent.sql','tutor_cabinet.sql','audit.sql','pilot_report.sql','security_fix.sql','pilot_adults.sql','login_keys.sql']:
+        for name in ['schema.sql','test.sql','admin.sql','teacher.sql','pulse.sql','ai.sql','guard.sql','accounts.sql','plans.sql','parent.sql','tutor_cabinet.sql','audit.sql','pilot_report.sql','security_fix.sql','pilot_adults.sql','login_keys.sql','sandbox.sql']:
             S.psql((ROOT/'supabase'/name).read_text(encoding='utf-8'))
         S.psql("insert into vk_adults(role,email,email_verified_at,pass_hash) values('parent','parent@example.invalid',now(),extensions.crypt('DemoPass123',extensions.gen_salt('bf',4))),('tutor','tutor@example.invalid',now(),extensions.crypt('DemoPass123',extensions.gen_salt('bf',4)));select vk_teacher('admin-demo','DemoPass123','Администратор','',true);insert into vk_classes(name) values('Демо-класс');")
         headers=json.loads((ROOT/'vercel.json').read_text(encoding='utf-8'))['headers'][0]['headers']

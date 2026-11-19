@@ -82,7 +82,7 @@ async def main():
         psql("do $$ begin create role anon nologin; exception when duplicate_object then null; end $$;"
              "do $$ begin create role authenticated nologin; exception when duplicate_object then null; end $$;")
         subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase/schema.sql')], check=True, capture_output=True)
-        for f in ('test.sql', 'admin.sql', 'teacher.sql', 'pulse.sql', 'ai.sql', 'guard.sql', 'accounts.sql', 'plans.sql', 'parent.sql', 'tutor_cabinet.sql', 'audit.sql', 'pilot_report.sql', 'security_fix.sql', 'pilot_adults.sql', 'login_keys.sql'):
+        for f in ('test.sql', 'admin.sql', 'teacher.sql', 'pulse.sql', 'ai.sql', 'guard.sql', 'accounts.sql', 'plans.sql', 'parent.sql', 'tutor_cabinet.sql', 'audit.sql', 'pilot_report.sql', 'security_fix.sql', 'pilot_adults.sql', 'login_keys.sql', 'sandbox.sql'):
             subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase' / f)], check=True, capture_output=True)
         rep('схема накатывается повторно', True)
         rep('vk_seed: 80 профилей с паролями', psql("select count(*) from vk_seed(80, '5А:1-28,5Б:29-56,5В:57-80') where password ~ '^[а-я]+[0-9]{4}$'") == '80')
@@ -107,6 +107,31 @@ async def main():
             try: psql(f"set role anon; select {fn}"); rep('anon не создаёт взрослых и связи: ' + fn, False)
             except RuntimeError: rep('anon не создаёт взрослых и связи: ' + fn.split('(')[0], True)
         psql("delete from vk_links; delete from vk_sessions where role='parent'; delete from vk_adults")
+        # Песочница для команды (sandbox.sql)
+        subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'tools' / 'demo' / 'seed.sql')], check=True, capture_output=True)
+        psql("select vk_demo_seed('демо-пароль-1')")
+        psql("insert into vk_events(event_id, student_id, type, data, ts_server) select 'old' || g || s.id, s.id, 'attempt', '{\"topic\":\"concept\",\"ok\":false}', now() - interval '20 days' + g * interval '1 minute' from vk_students s, generate_series(1, 5) g where s.login in ('демо1', 'демо2', 'демо3'); update vk_students set state = '{\"meta\":{}}' where login = 'демо1'")
+        rep('песочница создаётся', psql("select vk_sandbox_seed('общий-пароль-1')").startswith('ok'))
+        def slogin(l):
+            return json.loads(psql(f"set role anon; select vektor_login({lit(l)}, {lit('общий-пароль-1')}, null)::text"))
+        r1 = slogin('тест-новичок'); tk = r1.get('token', '')
+        psql(f"set role anon; select vektor_sync({lit(tk)}, {lit({'meta': {'concept': {'practice': 3}}})}, {lit([{'id': 'sbxevent01', 'type': 'attempt', 'data': {'topic': 'concept', 'ok': True}}])})")
+        r2 = slogin('тест-новичок')
+        rep('тест-новичок: при новом входе прогресс и события обнулены', r2.get('state') is None and psql("select count(*) from vk_events e join vk_students s on s.id = e.student_id where s.login = 'тест-новичок'") == '0', str(r2)[:80])
+        r3 = slogin('тест-прогресс')
+        rep('тест-прогресс: есть прогресс и история бота', r3.get('state') is not None and int(psql("select count(*) from vk_events e join vk_students s on s.id = e.student_id where s.login = 'тест-прогресс'")) >= 5)
+        rep('тест1…тест5 созданы, общий класс «Песочница»', psql("select count(*) from vk_students s join vk_classes c on c.id = s.class_id where c.name = 'Песочница'") == '7')
+        r = json.loads(psql(f"set role anon; select vektor_teacher_login('тест-учитель', {lit('общий-пароль-1')}, null)::text"))
+        rep('тест-учитель: урок ботов сдвинут к «сейчас»', 'token' in r and psql("select max(ts_server) > now() - interval '3 minutes' from vk_events e join vk_students s on s.id = e.student_id join vk_classes c on c.id = s.class_id where c.name = 'Демо'") == 't')
+        rep('тест-учитель видит «Демо» и «Песочницу»', psql("select array_length(class_ids, 1) from vk_teachers where login = 'тест-учитель'") == '2')
+        r = json.loads(psql(f"set role anon; select vektor_adult_login('тест-репетитор', {lit('общий-пароль-1')}, null)::text"))
+        st = json.loads(psql(f"set role anon; select vektor_tutor_students({lit(r.get('token', ''))})::text"))
+        rep('тест-репетитор: 7 учеников, группа и задание', len(st if isinstance(st, list) else st.get('students', [])) == 7
+            and psql("select count(*) from vk_tutor_assignments a join vk_adults d on d.id = a.tutor_id where d.email = 'тест-репетитор'") == '1', str(st)[:100])
+        psql("delete from vk_tutor_assignments; delete from vk_tutor_groups; delete from vk_links; delete from vk_sessions where role in ('parent','tutor'); delete from vk_adults; "
+             "delete from vk_sessions where role = 'student' and user_id in (select s.id from vk_students s join vk_classes c on c.id = s.class_id where c.name in ('Демо', 'Песочница')); "
+             "delete from vk_students where class_id in (select id from vk_classes where name in ('Демо', 'Песочница')); delete from vk_sessions where role = 'teacher' and user_id in (select id from vk_teachers where login in ('демо-учитель', 'тест-учитель')); "
+             "delete from vk_teachers where login in ('демо-учитель', 'тест-учитель'); delete from vk_classes where name in ('Демо', 'Песочница')")
         try: psql('set role anon; select count(*) from vk_students'); rep('anon не читает таблицы', False)
         except RuntimeError: rep('anon не читает таблицы', True)
         try: psql("set role anon; select * from vk_seed(1)"); rep('anon не создаёт профили', False)
