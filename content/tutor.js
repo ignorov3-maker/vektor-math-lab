@@ -124,7 +124,8 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
     return `Ошибка подключения (${status}). ${body ? String(body).slice(0, 120) : ''}`;
   }
 
-  async function stream(cfg, messages, onText, { maxTokens = 600, signal, onFinish, mode, data, topic } = {}) {
+  // payload — запрос к серверу «Вектора»: только режим, тема, данные задачи и реплики. Промпт, модель и лимиты сервер берёт сам.
+  async function stream(cfg, messages, onText, { maxTokens = 600, signal, onFinish, mode, data, payload } = {}) {
     const own = cfg.mode === 'vektor', proxy = cfg.mode === 'proxy';
     const SBC = window.VEKTOR_CONFIG || {};
     const url = own ? SBC.supabaseUrl.replace(/\/+$/, '') + '/functions/v1/tutor' : proxy ? cfg.proxy.trim() : OPENROUTER_URL;
@@ -141,13 +142,18 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
     // Рассуждения модели выключаем: наставнику нужен быстрый короткий ответ.
     // Если модель не умеет выключать рассуждения (400), повторяем запрос без этого параметра.
     const send = async withReasoningOff => {
-      const body = { model: cfg.model || DEFAULT_CFG.model, messages, stream: true, ...(token ? { token } : {}), ...(topic ? {topic} : {}), ...(mode ? { mode, data } : {}), max_tokens: withReasoningOff ? maxTokens : maxTokens + 600, temperature: 0.4 };
+      // сервер «Вектора»: никаких модели, токенов и системного промпта в запросе
+      if (own) return fetchOrFail({ token, ...(mode ? { mode, data } : payload) });
+      const body = { model: cfg.model || DEFAULT_CFG.model, messages, stream: true, max_tokens: withReasoningOff ? maxTokens : maxTokens + 600, temperature: 0.4 };
       if (withReasoningOff) body.reasoning = { enabled: false }; else body.reasoning = { exclude: true };
+      return fetchOrFail(body);
+    };
+    const fetchOrFail = async body => {
       try { return await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal }); }
       catch (e) { if (e.name === 'AbortError') throw e; throw new TutorError('Нет связи с сервером ИИ. Мешать может слабый интернет, VPN или блокировщик рекламы.'); }
     };
     let res = await send(true);
-    if (res.status === 400) {
+    if (res.status === 400 && !own) {
       let msg = ''; try { msg = (await res.clone().json()).error?.message || ''; } catch {}
       if (/reason|think/i.test(msg)) res = await send(false);
     }
@@ -324,5 +330,17 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
     return stream({ mode: 'vektor' }, [{ role: 'user', content: '.' }], onText, { ...opts, maxTokens: 300, mode: 'explain_more', data });
   }
 
-  window.VEKTOR_TUTOR = { MODELS, DEFAULT_CFG, loadCfg, saveCfg, ready, systemPrompt, stream, testConnection, render, lessonBeats, localAnswer, plain, TutorError, classify, explainMore, serverReady };
+  // Запрос разговора к серверу «Вектора»: только то, что нужно, с обрезкой длины. Имени и логина ученика здесь нет (Д-06).
+  function serverPayload({ topic, mode, task, attempts = [], mistake, pace = 'normal', style = 'visual', history = [] }) {
+    const cut = (v, n) => String(v == null ? '' : v).slice(0, n);
+    return {
+      mode: mode === 'lesson' ? 'lesson' : 'task', topic: topic.id, pace, style,
+      task: task ? { text: cut(plain(`${task.story} ${task.question}`), 400), figure: task.figure ? cut(window.VEKTOR_VISUALS.describe(task.figure), 200) : '',
+        answer: cut(task.answer, 40), solution: cut(plain(task.solution), 400) } : null,
+      attempts: attempts.slice(-6).map(a => cut(a, 40)), mistake: mistake || null,
+      history: history.filter(m => m.role === 'user' || m.role === 'assistant').slice(-14).map(m => ({ role: m.role, content: cut(m.content, m.role === 'user' ? 600 : 1500) })),
+    };
+  }
+
+  window.VEKTOR_TUTOR = { serverPayload, MODELS, DEFAULT_CFG, loadCfg, saveCfg, ready, systemPrompt, stream, testConnection, render, lessonBeats, localAnswer, plain, TutorError, classify, explainMore, serverReady };
 })();

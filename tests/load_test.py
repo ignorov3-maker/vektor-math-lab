@@ -112,7 +112,7 @@ async def run(base,accounts,duration):
             a=n+1;b=i%9+1;answer=a+b
             event={'id':'load-'+secrets.token_hex(12),'type':'attempt','data':{'topic':'concept','question':f'{a}+{b}','answer':str(answer),'ok':answer==a+b,'sec':1},'ts':int(time.time()*1000)}
             await call('sync','/rest/v1/rpc/vektor_sync',{'p_token':token,'p_state':{'answers':n+1,'meta':{}},'p_events':[event]})
-            if i<20 and n==4:await call('ai','/functions/v1/tutor',{'token':token,'topic':'concept','messages':[{'role':'user','content':'Объясни сложение 1/2 и 1/3'}]})
+            if i<20 and n==4:await call('ai','/functions/v1/tutor',{'token':token,'mode':'lesson','topic':'concept','history':[{'role':'user','content':'Объясни сложение 1/2 и 1/3'}]})
             await asyncio.sleep(duration*.2/10)
     await asyncio.gather(*(student(i,a) for i,a in enumerate(accounts)))
     report={'test_only':True,'model':'stub','students':100,'tasks_per_student':10,'duration_target_seconds':duration,'elapsed_seconds':time.perf_counter()-started,

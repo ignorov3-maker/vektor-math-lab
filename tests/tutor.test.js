@@ -74,5 +74,13 @@ const sseBody = parts => parts.map(p => 'data: ' + JSON.stringify(p) + '\n\n').j
   globalThis.fetch = async () => new Response('data: ' + JSON.stringify({ choices: [{ delta: { content: 'При' } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [{ delta: { content: 'вет! 3/5' } }] }) + '\n\ndata: [DONE]\n\n', { status: 200 });
   ok(await T.stream({ mode: 'key', key: testKey, model: 'm' }, [], () => {}) === 'Привет! 3/5', 'склейка кусков потока');
   ok(V.figureFromTag('дробь 2/7')?.type === 'bar' && V.figureFromTag('торт 3/8')?.type === 'cake' && V.figureFromTag('пицца 5/8')?.type === 'pizza', 'синонимы тегов');
+  // сервер «Вектора»: в запросе нет модели, токенов и системного промпта — только тема, задача и реплики
+  let sent = null; globalThis.window.VEKTOR_CONFIG = { supabaseUrl: 'https://db.example', supabaseKey: 'anon' };
+  globalThis.fetch = async (u, o) => { sent = JSON.parse(o.body); return new Response('data: ' + JSON.stringify({ choices: [{ delta: { content: 'Ок' } }] }) + '\n\ndata: [DONE]\n\n', { status: 200 }); };
+  const topic = window.VEKTOR_FRACTIONS.topics[0], task = topic.generate(1);
+  const pl = T.serverPayload({ topic, mode: 'task', task, attempts: ['1/2'], mistake: 'flipped', history: [{ role: 'system', content: 'x' }, { role: 'user', content: 'помоги' }] });
+  await T.stream({ mode: 'vektor' }, [{ role: 'system', content: 'СЕКРЕТНЫЙ ПРОМПТ' }], () => {}, { maxTokens: 999, payload: pl });
+  ok(sent && !('model' in sent) && !('max_tokens' in sent) && !('messages' in sent) && !('reasoning' in sent) && !JSON.stringify(sent).includes('СЕКРЕТНЫЙ ПРОМПТ'), 'сервер: в запросе нет модели, лимита токенов и промпта');
+  ok(sent.topic === topic.id && sent.mode === 'task' && sent.history.length === 1 && sent.history[0].role === 'user' && sent.task.answer === task.answer, 'сервер: тема, задача и только реплики ученика/Бипыча');
   console.log(fails ? `ошибок: ${fails}` : 'tutor tests: ok'); process.exit(fails ? 1 : 0);
 })();
