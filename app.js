@@ -720,7 +720,7 @@ function startTour(k = 0) {
     const r = el.getBoundingClientRect();
     // подсветка — только видимая часть элемента
     const hr = { l: Math.max(m / 2, r.left - pad), t: Math.max(m / 2, r.top - pad), r: Math.min(W - m / 2, r.right + pad), b: Math.min(H - m / 2, r.bottom + pad) };
-    Object.assign(hole.style, { left: hr.l + 'px', top: hr.t + 'px', width: Math.max(0, hr.r - hr.l) + 'px', height: Math.max(0, hr.b - hr.t) + 'px' });
+    Object.assign(hole.style, { transform: `translate3d(${hr.l}px,${hr.t}px,0)`, width: Math.max(0, hr.r - hr.l) + 'px', height: Math.max(0, hr.b - hr.t) + 'px' });
     const tw = Math.min(360, W - 2 * m); tip.style.width = tw + 'px'; tip.classList.remove('sheet-top', 'sheet-bottom');
     const th = tip.offsetHeight;
     const clampX = x => Math.max(m, Math.min(W - tw - m, x));
@@ -778,15 +778,20 @@ function toast(html, kind = '') {
 function confetti() {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const c = document.createElement('canvas'); c.className = 'confetti'; c.setAttribute('aria-hidden', 'true');
-  const W = c.width = innerWidth, H = c.height = innerHeight, ctx = c.getContext('2d');
+  // чёткий холст на экранах с высокой плотностью; движение считаем по времени, а не по кадрам —
+  // на 120 Гц конфетти летит с той же скоростью, только плавнее
+  const W = innerWidth, H = innerHeight, dpr = Math.min(devicePixelRatio || 1, 2);
+  c.width = W * dpr; c.height = H * dpr; c.style.width = W + 'px'; c.style.height = H + 'px';
+  const ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
   document.body.appendChild(c);
   const css = getComputedStyle(document.documentElement);
   const colors = ['--green', '--marker', '--pie', '--margin', '--green-soft'].map(v => css.getPropertyValue(v).trim() || '#1E7358');
   const parts = Array.from({ length: 140 }, () => ({ x: W / 2 + (Math.random() - .5) * W * .3, y: H * .35, vx: (Math.random() - .5) * 14, vy: -Math.random() * 13 - 4, r: Math.random() * 6 + 4, a: Math.random() * 6, va: (Math.random() - .5) * .3, c: colors[Math.floor(Math.random() * colors.length)] }));
-  const t0 = performance.now();
+  const t0 = performance.now(); let last = t0;
   (function frame(t) {
+    const k = Math.min((t - last) / (1000 / 60), 3); last = t; // 1 = кадр при 60 Гц
     ctx.clearRect(0, 0, W, H);
-    for (const p of parts) { p.vy += .42; p.x += p.vx; p.y += p.vy; p.a += p.va; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.fillStyle = p.c; ctx.fillRect(-p.r / 2, -p.r / 4, p.r, p.r / 2); ctx.restore(); }
+    for (const p of parts) { p.vy += .42 * k; p.x += p.vx * k; p.y += p.vy * k; p.a += p.va * k; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.fillStyle = p.c; ctx.fillRect(-p.r / 2, -p.r / 4, p.r, p.r / 2); ctx.restore(); }
     if (t - t0 < 1800) requestAnimationFrame(frame); else c.remove();
   })(t0);
 }
@@ -1005,19 +1010,20 @@ function runQuick() {
     // перетаскивание пальцем или мышью: плитка едет за указателем, отпустили над клеткой — ответ
     tile.onpointerdown = e => {
       if (r.lock) return;
-      const start = { x: e.clientX, y: e.clientY }; let ghost = null;
+      const start = { x: e.clientX, y: e.clientY }; let ghost = null, sr = null, over = false;
+      // плитку двигаем через transform (видеокарта, без пересчёта страницы) — плавно и на 120 Гц
       const move = ev => {
         const dx = ev.clientX - start.x, dy = ev.clientY - start.y;
         if (!ghost && Math.hypot(dx, dy) < 8) return;
-        if (!ghost) { ghost = tile.cloneNode(true); ghost.classList.add('qz-ghost'); document.body.append(ghost); tile.classList.add('lifted'); }
-        ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px';
-        const sr = slot.getBoundingClientRect(); slot.classList.toggle('hover', ev.clientX > sr.left - 20 && ev.clientX < sr.right + 20 && ev.clientY > sr.top - 20 && ev.clientY < sr.bottom + 20);
+        if (!ghost) { ghost = tile.cloneNode(true); ghost.classList.add('qz-ghost'); document.body.append(ghost); tile.classList.add('lifted'); sr = slot.getBoundingClientRect(); }
+        ghost.style.transform = `translate3d(${ev.clientX}px,${ev.clientY}px,0) translate(-50%,-50%) scale(1.08)`;
+        const now = ev.clientX > sr.left - 20 && ev.clientX < sr.right + 20 && ev.clientY > sr.top - 20 && ev.clientY < sr.bottom + 20;
+        if (now !== over) { over = now; slot.classList.toggle('hover', over); }
       };
       const up = ev => {
         removeEventListener('pointermove', move); removeEventListener('pointerup', up);
         if (!ghost) return;
-        tile.dataset.dragged = '1'; ghost.remove(); tile.classList.remove('lifted');
-        const over = slot.classList.contains('hover'); slot.classList.remove('hover');
+        tile.dataset.dragged = '1'; ghost.remove(); tile.classList.remove('lifted'); slot.classList.remove('hover');
         if (over) answer(tile.dataset.v, tile);
       };
       addEventListener('pointermove', move); addEventListener('pointerup', up);

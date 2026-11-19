@@ -571,7 +571,7 @@ code{font-size:.9em;background:var(--tint);padding:1px 5px;border-radius:4px}
 .switch input{width:20px;height:20px;accent-color:var(--green)}
 
 /* — Знакомство с интерфейсом — */
-.tour-hole{position:fixed;z-index:40;border-radius:16px;box-shadow:0 0 0 9999px rgba(15,20,40,.62);pointer-events:none;transition:all .25s}
+.tour-hole{position:fixed;left:0;top:0;z-index:40;border-radius:16px;box-shadow:0 0 0 9999px rgba(15,20,40,.62);pointer-events:none;will-change:transform;transition:transform .25s,width .25s,height .25s}
 .tour-tip{position:fixed;z-index:41;background:var(--sheet);color:var(--ink);border-radius:16px;padding:18px 20px;box-shadow:0 20px 50px -20px rgba(0,0,0,.6)}
 .tour-tip.sheet-top,.tour-tip.sheet-bottom{left:8px!important;right:8px;width:auto!important;max-width:520px;margin:0 auto}
 .tour-tip .row-actions{flex-wrap:wrap}
@@ -1089,7 +1089,7 @@ a.node-bubble{text-decoration:none}
 .qz-tile.lifted{opacity:.35}
 .qz-tile.used{background:var(--green-soft);border-color:var(--green)}
 .qz-tile.shake{animation:intro-shake .35s ease;border-color:var(--margin)}
-.qz-ghost{position:fixed;z-index:999;transform:translate(-50%,-50%) scale(1.08);pointer-events:none;box-shadow:0 12px 24px rgba(30,43,64,.2)}
+.qz-ghost{position:fixed;left:0;top:0;z-index:999;margin:0;will-change:transform;transition:none;pointer-events:none;box-shadow:0 12px 24px rgba(30,43,64,.2)}
 .qz-done .qz-title{font:800 30px/1.15 var(--font-display);margin:0;text-align:center}
 .qz-done .qz-sub{margin:0;color:var(--ink-2);text-align:center}
 .qz-done .qz-foot .btn{width:100%;justify-content:center}
