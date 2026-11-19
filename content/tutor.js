@@ -161,7 +161,9 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
       let t = ''; try { t = (await res.json()).error?.message || ''; } catch {}
       const err = new TutorError(own && t && res.status !== 402 ? t : errorFor(res.status, t));
       // П-03: на сервере «Вектора» ИИ выключен или нет ключа — тихо работаем по конспекту, без сообщений об ошибке
-      if (own && (res.status === 503 || res.status === 401 || res.status === 402)) err.quiet = true;
+      if (own && (res.status === 503 || res.status === 402)) err.quiet = true;
+      // сессия закончилась (вошли с другого устройства и сменили пароль, учитель или родитель выдал новый) — говорим прямо
+      if (own && res.status === 401) { err.session = true; err.message = 'Ты вошёл в «Вектор» на другом устройстве или сменил пароль — войди здесь снова, и я отвечу.'; }
       throw err;
     }
     if (!res.body) throw new TutorError('Браузер не поддерживает потоковые ответы.');
