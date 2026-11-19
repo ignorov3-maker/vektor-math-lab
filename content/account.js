@@ -24,6 +24,7 @@
     test_answer: (b, t) => ['vektor_test_answer', { p_token: t, p_n: b.n, p_answer: b.answer, p_sec: b.sec ?? null }],
     test_finish: (b, t) => ['vektor_test_finish', { p_token: t }],
     push_get: (b, t) => ['vektor_push_get', { p_token: t }],
+    key_login: b => ['vektor_key_login', { p_key: b.key, p_device: deviceId() }],
   };
   function deviceId() {
     let id = ls.get('vektor-device');
@@ -210,6 +211,17 @@
   async function boot() {
     if (/^#student_(email|reset)=/.test(location.hash)) {location.replace('parent.html?student=1'+location.hash);return;}
     if (!(await hasServer())) { window.VEKTOR_SYNC = null; loadApp(); return; }
+    // Вход по QR-коду с бумажки: #k=<ключ>. Ключ сразу убираем из адреса, роль решает, в какой кабинет вести.
+    const qr = /^#k=([0-9a-f]{32})$/.exec(location.hash);
+    if (qr) {
+      history.replaceState(null, '', location.pathname + location.search);
+      try {
+        const r = await call('key_login', { key: qr[1] });
+        if (r.role === 'teacher') { sessionStorage.setItem('vektor-teacher', JSON.stringify({ token: r.token, name: r.name || r.login, login: r.login })); location.replace('teacher.html'); return; }
+        if (r.role === 'parent' || r.role === 'tutor') { localStorage.setItem('vektor-adult', JSON.stringify({ token: r.token, role: r.role, name: r.name })); location.replace(r.role === 'tutor' ? 'tutor.html' : 'parent.html'); return; }
+        startSession(r); return;
+      } catch (err) { loginScreen(err.status ? err.message : 'Нет связи с сервером. Проверь интернет и попробуй ещё раз.'); return; }
+    }
     const sess = ls.get(SESS);
     if(CFG.maintenance&&!sess){loginScreen('Технические работы. Вход скоро вернётся.');return;}
     if (!sess || !sess.token) { ls.del(KEY); loginScreen(); return; }
