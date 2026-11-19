@@ -27,7 +27,7 @@
     document.getElementById('phase').textContent = Object.prototype.hasOwnProperty.call(labels, slide.kind) ? labels[slide.kind] : 'Разбираемся вместе';
     title.textContent = String(data.title || 'Разберёмся вместе');
     content.replaceChildren(safe(slide.html));
-    document.getElementById('question').textContent = String(slide.question || '');
+    document.getElementById('question').replaceChildren(safe(slide.question || ''));
     document.getElementById('question').hidden = false;
     answer.replaceChildren(safe(slide.answerHtml)); answer.hidden = true;
     reveal.hidden = !slide.answerHtml; reveal.textContent = 'Показать ответ'; reveal.setAttribute('aria-expanded', 'false');
@@ -40,7 +40,6 @@
   function showAnswer() {
     if (!slides.length || !slides[index].answerHtml) return;
     answer.hidden = !answer.hidden;
-    document.getElementById('question').hidden = !answer.hidden;
     reveal.textContent = answer.hidden ? 'Показать ответ' : 'Скрыть ответ'; reveal.setAttribute('aria-expanded', String(!answer.hidden));
   }
   if (!slides.length) {

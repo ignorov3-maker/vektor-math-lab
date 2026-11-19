@@ -11,6 +11,12 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { createRequire } from 'node:module';
+
+// настоящие задачи и неверные правила — из движка приложения, чтобы учитель видел в карточке живые ответы
+const require_ = createRequire(import.meta.url);
+require_('../../content/rational.js'); require_('../../content/bugs.js');
+const BUGS = globalThis.VEKTOR_BUGS;
 
 const arg = (name, def) => { const i = process.argv.indexOf('--' + name); return i > 0 ? process.argv[i + 1] : def; };
 const FAST = process.argv.includes('--fast');
@@ -76,7 +82,11 @@ async function bot(k) {
     const ok = plan.bug && !found ? false : Math.random() < plan.skill || (found && Math.random() < 0.5);
     const m = state.meta[plan.topic]; state.answers++;
     if (ok) m.practice++;
+    const b = plan.bug && BUGS.byKey[plan.bug], p = (b && !ok && b.trap(2)) || BUGS.gen[plan.topic](2);
+    const wrong = b ? b.wrong(p) : null, given = ok ? p.answer : wrong != null ? String(wrong) : '1/2';
+    if (!ok && b) { m.errors = m.errors || {}; m.errors[plan.bug.split(':')[1]] = (m.errors[plan.bug.split(':')[1]] || 0) + 1; }
     ev('attempt', { topic: plan.topic, mode: 'practice', level: 2, ok, try: 1, hints: ok ? 0 : 1, sec: Math.round(rnd(20, 90)),
+      question: String(p.text).slice(0, 200), answer: given.slice(0, 40), right: String(p.answer).slice(0, 40),
       mistake: !ok && plan.bug ? plan.bug.split(':')[1] : null });
     stats.attempts++;
     if (!ok && plan.bug && !found) {

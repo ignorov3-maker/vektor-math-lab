@@ -35,6 +35,9 @@ button{font:inherit;color:inherit}
 .live i{width:8px;height:8px;border-radius:50%;background:var(--online)}
 .live.off{color:var(--red);font-weight:600}.live.off i{background:var(--red)}
 .who{font-size:13px;color:var(--muted)}
+.menu{position:relative}.menu summary{list-style:none;cursor:pointer}.menu summary::-webkit-details-marker{display:none}
+.menu-pop{position:absolute;right:0;top:calc(100% + 6px);display:flex;flex-direction:column;gap:6px;background:var(--sheet);border:1px solid var(--line);border-radius:12px;padding:8px;box-shadow:0 12px 30px -10px rgba(30,43,64,.35);z-index:30;min-width:220px}
+.menu-pop .btn{justify-content:flex-start;text-align:left;width:100%}
 main{padding:14px 20px 40px;max-width:1500px;margin:0 auto}
 
 /* вход */
@@ -123,10 +126,18 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
 .drawer h4{margin:16px 0 6px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 .drawer ul{margin:0;padding-left:18px}.drawer li{margin:3px 0}
 .x-close{position:absolute;top:12px;right:14px;border:0;background:none;font-size:26px;line-height:1;color:var(--muted);cursor:pointer;padding:4px 8px}
-.dstrip{display:flex;gap:4px}.dstrip .c{flex:1;min-width:0}
-.ans{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--tint);padding:5px 0;font-size:14px}
-.ans .q{color:var(--ink);overflow:hidden;text-overflow:ellipsis}
-.ans b.ok{color:var(--green)}.ans b.bad{color:var(--red)}
+.dstrip{display:flex;gap:4px}.dstrip .c{width:100%;min-width:0}
+.ans{border-bottom:1px solid var(--tint);font-size:14px}
+.ans summary{display:flex;justify-content:space-between;gap:10px;padding:7px 0;cursor:pointer;list-style:none}.ans summary::-webkit-details-marker{display:none}
+.ans .q{color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;display:flex;gap:6px;align-items:center}
+.ans .a{flex:none;white-space:nowrap}
+.ans .tn{flex:none;font-size:11px;font-weight:700;background:var(--tint);color:var(--muted);border-radius:5px;padding:1px 6px}
+.ans[open] summary{color:var(--muted)}
+.ans-more{background:var(--tint);border-radius:9px;padding:8px 10px;margin:0 0 8px}.ans-more p{margin:4px 0}
+.ans b.ok,.ans-more .ok{color:var(--green)}.ans b.bad,.ans-more .bad{color:var(--red)}
+.dc{flex:1;min-width:0;display:flex;flex-direction:column;align-items:stretch;gap:2px;text-align:center}.dc small{font-size:11px;color:var(--muted)}
+.dlegend{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;margin:8px 0 0}.dlegend .c{min-width:22px;height:18px;font-size:11px}
+.h4-note{text-transform:none;letter-spacing:0;font-weight:400;margin-left:6px}
 .flagbox{background:var(--amber-soft);color:var(--amber-ink);border-radius:8px;padding:6px 10px;margin:4px 0;font-size:14px}
 .labrow{display:flex;gap:8px}.labrow input{flex:1;font:inherit;padding:6px 9px;border:1px solid var(--line);border-radius:8px}
 
@@ -151,6 +162,18 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
   .kpis{gap:6px}.kpi{padding:6px 10px;font-size:13px}.kpi b{font-size:18px}
   .bar input{width:100%}
   .slips{grid-template-columns:1fr 1fr}
+  .top select{flex:1;min-width:0}
+  .brand{font-size:0;gap:0}
+  .live{display:none}
+  .panel{overflow:hidden}
+  .lt thead{display:none}
+  .lt tr{display:grid;grid-template-columns:1fr auto;gap:4px 10px;padding:10px 0;border-bottom:1px solid var(--tint)}
+  .lt td{border:0;padding:0}
+  .lt td.lt-lab{order:3}.lt td.lt-lab input{width:100%}
+  .lt td.lt-seen{order:2;text-align:right}
+  .lt td.lt-act{order:4}
+  .drawer{padding:16px 14px 30px}
+  .labrow{flex-wrap:wrap}.labrow input{flex:1;min-width:0}
 }
 
 /* Пульс */
@@ -182,9 +205,10 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
   <span class="sp"></span>
   <span class="live" id="live" hidden><i></i><span></span></span>
   <span class="who" id="who"></span>
-  <button class="btn btn-sm" id="logout" hidden>Выйти</button>
-  <button class="btn btn-sm" id="logout-all" hidden>Выйти со всех устройств</button>
-  <a class="btn btn-sm" href="report.html" id="pilot-report" hidden>Отчёт пилота</a>
+  <details class="menu" id="menu" hidden><summary class="btn btn-sm" aria-label="Меню">Меню</summary><div class="menu-pop">
+    <a class="btn btn-sm" href="report.html" id="pilot-report" hidden>Отчёт пилота</a>
+    <button class="btn btn-sm" id="logout" hidden>Выйти</button>
+    <button class="btn btn-sm" id="logout-all" hidden>Выйти со всех устройств</button></div></details>
 </header>
 <main id="root"></main>
 <script src="config.js"></script>
@@ -239,7 +263,7 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
   /* ---------- вход (К-12) ---------- */
   function loginView(msg) {
     clearInterval(timer); clearInterval(ticker);
-    ['logout', 'logout-all', 'pilot-report', 'tabs', 'cls', 'live'].forEach(id => $(id).hidden = true); $('who').textContent = '';
+    ['logout', 'logout-all', 'pilot-report', 'tabs', 'cls', 'live', 'menu'].forEach(id => $(id).hidden = true); $('who').textContent = '';
     if (!SB) { root.innerHTML = '<div class="login"><h1>Сервер не подключён</h1><p class="muted">Кабинет работает с сервером Supabase. Заполните config.js.</p></div>'; return; }
     root.innerHTML = `<div class="login"><h1>Вход для учителя</h1><p class="muted" style="margin:0">Логин и пароль выдал администратор пилота.</p>
       <form id="f"><label>Логин<input name="login" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
@@ -287,7 +311,7 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
     let topic = fresh ? c.topic : stuckT ? stuckT.id : null;
     if (fresh && c.mistakes && c.mistakes.length) {
       const m = c.mistakes[0], tt = mistakeTitle(c.topic, m.id);
-      if (tt && (m.n >= 2 || c.wrong5 >= 3)) why.push(`${tt} — ${m.n} ${plural(m.n, 'раз', 'раза', 'раз')}`);
+      if (tt && (m.n >= 2 || c.wrong5 >= 3)) why.push(`${tt} — ${m.n} ${plural(m.n, 'раз', 'раза', 'раз')} за урок`);
     }
     if (stuckT) { const x = s.topics[stuckT.id]; why.push(`${x.f} ${plural(x.f, 'проверка', 'проверки', 'проверок')} темы не ${x.f === 1 ? 'пройдена' : 'пройдены'}`); if (!topic) topic = stuckT.id; }
     if (fresh && c.wrong5 >= 3 && !why.length) why.push(`${c.wrong5} ${plural(c.wrong5, 'ошибка', 'ошибки', 'ошибок')} в 5 последних ответах`);
@@ -507,7 +531,7 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
     const rows = classRows().slice().sort((a, b) => num(a.login) - num(b.login));
     const html = `<div class="panel"><h2>Подписи учеников</h2>
       <p class="small muted" style="margin-top:0">Впишите имя рядом с логином — так в кабинете будет видно, кто есть кто. Подписи хранятся только в этом браузере и на сервер не отправляются.</p>
-      <table><thead><tr><th>Логин</th><th>Подпись</th><th>Был(а)</th><th></th></tr></thead><tbody>${rows.map(s => `<tr><td>${esc(s.login)}</td><td><input class="lab" data-lab="${esc(s.login)}" value="${esc(label(s.login))}" placeholder="например, Маша К." maxlength="40"></td><td>${ago(s.last_seen)}</td><td><button class="btn btn-sm" data-open="${esc(s.login)}">Карточка и пароль</button></td></tr>`).join('')}</tbody></table></div>
+      <table class="lt"><thead><tr><th>Логин</th><th>Подпись</th><th>Был(а)</th><th></th></tr></thead><tbody>${rows.map(s => `<tr><td><b>${esc(s.login)}</b></td><td class="lt-lab"><input class="lab" data-lab="${esc(s.login)}" value="${esc(label(s.login))}" placeholder="например, Маша К." maxlength="40" aria-label="Подпись для ${esc(s.login)}"></td><td class="lt-seen">${ago(s.last_seen)}</td><td class="lt-act"><button class="btn btn-sm" data-open="${esc(s.login)}">Карточка</button></td></tr>`).join('')}</tbody></table></div>
       <div class="panel"><h2>Вставить список</h2><p class="small muted" style="margin-top:0">По строке на ученика: <code>ученик1; Маша К.</code> — или просто имена по порядку логинов класса.</p>
       <textarea id="lab-bulk" placeholder="ученик1; Маша К.&#10;ученик2; Дима Л."></textarea><p><button class="btn" id="lab-apply">Применить</button> <span id="lab-out" class="small muted"></span></p></div>
       ${ui.cls && ui.cls !== '*' ? `<div class="panel"><h2>Бумажки с паролями</h2><p class="small muted" style="margin-top:0">Пароли в базе не хранятся в открытом виде, поэтому напечатать старые нельзя. Можно выдать новый пароль одному ученику (в его карточке) или новые бумажки всему классу.</p>
@@ -548,15 +572,23 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
     const c = d.cur, n = need({ ...s, ...d, flags: d.flags });
     const errs = []; Object.entries(d.topics || {}).forEach(([tid, t]) => Object.entries(t.errors || {}).forEach(([id, k]) => { const tt = mistakeTitle(tid, id); k = Math.max(0, Math.floor(Number(k)) || 0); if (tt && k && TI[tid]) errs.push({ tid, tt, k }); }));
     (d.last || []).forEach(a => { const tt = a.mistake && TI[a.topic] && mistakeTitle(a.topic, a.mistake); if (!tt) return; const e = errs.find(x => x.tid === a.topic && x.tt === tt); if (!e) errs.push({ tid: a.topic, tt, k: 1, recent: 1 }); else if (e.recent) e.k++; });
+    // счётчик «за урок» не может быть больше, чем «за всё время»: берём наибольший
+    (c && c.mistakes || []).forEach(m => { const tt = TI[c.topic] && mistakeTitle(c.topic, m.id); if (!tt) return; const e = errs.find(x => x.tid === c.topic && x.tt === tt); const k = Math.max(0, Math.floor(Number(m.n)) || 0); if (!e) errs.push({ tid: c.topic, tt, k }); else e.k = Math.max(e.k, k); });
     errs.sort((a, b) => b.k - a.k);
     const curT = c && TI[c.topic];
+    // ответ в карточке: задача, ответ ученика, верный ответ и неверное правило — по нажатию
+    const ansRow = a => { const t = TI[a.topic], tt = a.mistake && t && mistakeTitle(a.topic, a.mistake), q = String(a.q || '').trim();
+      return `<details class="ans"><summary><span class="q">${t ? `<span class="tn">${t.n}</span>` : ''}${q ? esc(q.slice(0, 60)) : `<span class="muted">задача из темы «${esc(t ? t.title : '?')}»</span>`}</span><span class="a">${a.a ? `«${esc(a.a)}»` : ''} <b class="${a.ok ? 'ok' : 'bad'}">${a.ok ? '✓' : '✗'}</b></span></summary>
+        <div class="ans-more">${t ? `<div class="muted small">Тема ${t.n}. ${esc(t.title)}${a.at ? ' · ' + new Date(a.at * 1000).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</div>` : ''}${q ? `<p>${esc(q)}</p>` : ''}
+        <p>Ответ ученика: <b class="${a.ok ? 'ok' : 'bad'}">${a.a ? esc(a.a) : '—'}</b>${!a.ok && a.r ? ` · верно: <b>${esc(a.r)}</b>` : ''}</p>${tt ? `<p class="bad">Неверное правило: ${esc(tt)}</p>` : ''}</div></details>`; };
     $('drawer-host').querySelector('.drawer').innerHTML = `<button class="x-close" data-close aria-label="Закрыть">×</button>
       <h3>${esc(label(login) || login)}</h3>
       <p class="sub">${label(login) ? esc(login) + ' · ' : ''}${esc(d.class || '')} · ${ago(d.last_seen)}${curT && now - c.at < 900 ? ` · тема ${curT.n}, ${Math.max(1, Math.round((now - c.since) / 60))} мин` : ''}</p>
       ${n ? `<div class="flagbox" style="background:var(--red-soft);color:var(--red)"><b>Нужна помощь:</b> ${esc(n.why.join(' · '))}</div>` : ''}
-      <div class="dstrip" aria-label="Темы">${TOPICS.map(t => cell((d.topics || {})[t.id], `Тема ${t.n}. ${t.title}`)).join('')}</div>
-      <h4>Частые ошибки</h4>${errs.length ? `<ul>${errs.slice(0, 5).map(e => `<li>${esc(e.tt)} <span class="muted">(тема ${esc(TI[e.tid] ? TI[e.tid].n : '?')})</span> — ${Number(e.k) || 0} ${plural(e.k, 'раз', 'раза', 'раз')}</li>`).join('')}</ul>` : '<p class="muted small">Типичных ошибок не замечено.</p>'}
-      <h4>Последние ответы</h4>${(d.last || []).length ? d.last.map(a => `<div class="ans"><span class="q" title="${esc(a.q)}">${TI[a.topic] ? TI[a.topic].n + '. ' : ''}${esc(String(a.q || '').slice(0, 70))}</span><span>«${esc(a.a)}» <b class="${a.ok ? 'ok' : 'bad'}">${a.ok ? '✓' : '✗'}</b></span></div>`).join('') : '<p class="muted small">Ответов пока нет.</p>'}
+      <h4>Темы</h4><div class="dstrip" aria-label="Темы">${TOPICS.map(t => `<span class="dc">${cell((d.topics || {})[t.id], `Тема ${t.n}. ${t.title}`)}<small>${t.n}</small></span>`).join('')}</div>
+      <p class="small muted dlegend"><i class="c c3">✓</i> освоена <i class="c c1">●</i> в работе <i class="c c2">×2</i> застрял <i class="c c0"></i> не начинал</p>
+      <h4>Частые ошибки за всё время</h4>${errs.length ? `<ul>${errs.slice(0, 5).map(e => `<li>${esc(e.tt)} <span class="muted">(тема ${esc(TI[e.tid] ? TI[e.tid].n : '?')})</span> — ${Number(e.k) || 0} ${plural(e.k, 'раз', 'раза', 'раз')}</li>`).join('')}</ul>` : '<p class="muted small">Типичных ошибок не замечено.</p>'}
+      <h4>Последние ответы <span class="h4-note">нажмите, чтобы увидеть задачу</span></h4>${(d.last || []).length ? d.last.map(ansRow).join('') : '<p class="muted small">Ответов пока нет.</p>'}
       <h4>Сегодня</h4><p style="margin:0">Решено верно: ${d.today || 0} · подсказок: ${d.hints_today || 0} · вопросов наставнику: ${d.ai_today || 0}</p>
       <h4>Сигналы ИИ</h4>${(d.flags || []).length ? d.flags.map(f => `<div class="flagbox">«${esc(f.t)}» <span class="small">${new Date(f.at * 1000).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span></div>`).join('') : '<p class="muted small">Нет.</p>'}
       <h4>Тесты</h4><p style="margin:0">До: ${esc((d.tests || {}).pre || '—')} · После: ${esc((d.tests || {}).post || '—')}</p>
@@ -636,7 +668,7 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
   }
   function start() {
     labels = ls.get(LKEY()) || {};
-    $('who').textContent = sess.name || ''; $('logout').hidden = false; $('tabs').hidden = false;
+    $('who').textContent = sess.name || ''; $('logout').hidden = false; $('tabs').hidden = false; $('menu').hidden = false;
     $('logout').onclick = async () => { try { await rpc('vektor_logout', { p_token: sess.token }); } catch {} sessionStorage.removeItem(KEY); sess = null; loginView(); };
     $('logout-all').hidden=false;
     $('pilot-report').hidden=false;

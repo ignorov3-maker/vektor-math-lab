@@ -65,6 +65,13 @@
   function systemPrompt({ topic, mode, task, attempts = [], mistake, pace = 'normal', style = 'steps', name }) {
     const common = `Ты — добрый и терпеливый наставник по математике в учебном приложении «Вектор». Твой ученик — школьник 5–6 класса (10–12 лет).
 
+Как ты учишь (это главное):
+- Один маленький шаг за сообщение: покажи первый шаг и попроси ученика сделать следующий самому.
+- Начинай с маленьких чисел: сокращай по шагам — на 2, потом на 3, на 5, а не сразу на большое число. Общий знаменатель ищи перебором, без формул.
+- Опирайся на то, что ученик написал: сначала скажи, что верно, потом покажи одну ошибку.
+- «Не понял» — объясни по-другому и проще, не повторяй те же слова.
+- Заканчивай коротким вопросом, на который можно ответить одним числом или словом.
+
 Как ты пишешь:
 - По-русски, просто и дружелюбно, на «ты». 2–4 коротких предложения в одном сообщении (не больше 70 слов), одна мысль за раз. Всегда заканчивай мысль — не обрывай слова и фразы.
 - Опирайся только на методичку ниже. Не придумывай других правил и обозначений.
@@ -82,7 +89,8 @@
   [[прямая a/b]] — точка на числовой прямой;
   [[сравнить a/b c/d]] — ДВЕ полоски одна под другой (для сравнения и равных дробей);
   [[прямоугольник a/b c/d]] — для умножения a/b · c/d;
-  [[смешанное n a/b]] — n целых кругов и ещё a/b.
+  [[смешанное n a/b]] — n целых кругов и ещё a/b;
+  [[шоколадка съел a/b]] — съели a из b, съеденные дольки пустые; [[пицца a/b c/d]] — две пиццы рядом (говоришь про две вещи — рисуй обе).
 - Не больше одной картинки в сообщении, знаменатель не больше 12. Описывай ровно то, что на картинке: если нужны две дроби — бери [[сравнить …]] и пиши «верхняя полоска… нижняя полоска…»; не пиши «слева/справа» и не придумывай фигур, которых нет.
 - Не проси и не запоминай личные данные (адрес, школу, телефон, фото).
 - Если вопрос не про учёбу — коротко и по-доброму верни к теме. Если ученик пишет, что ему плохо, страшно или его обижают, мягко посоветуй рассказать об этом взрослому, которому он доверяет, и не продолжай эту тему сам.
@@ -220,11 +228,15 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
       .replace(/(^|[^\d/])(\d{1,3})\s*\/\s*(\d{1,3})(?![\d/])/g, (m, pre, a, b) => `${pre}${f(a, b)}`);
   }
   // Картинка не должна спорить с текстом: числа в теге сверяем с дробями из сообщения
-  const figFracs = g => ({ pizza: [[g.have, g.parts]], cake: [[g.have, g.parts]], choco: [[g.have, g.parts]], labeled: [[g.n, g.d]], line: [[g.n, g.d]], bar: [[g.shaded, g.parts]], circle: [[g.shaded, g.parts]], pair: [g.a, g.b], grid: [[g.r, g.rows], [g.c, g.cols]], mixed: [[g.n, g.d]] }[g.type] || []);
+  const figFracs = g => ({ pizza: [[g.have, g.parts]], cake: [[g.have, g.parts]], choco: [[g.have, g.parts]], labeled: [[g.n, g.d]], line: [[g.n, g.d]], bar: [[g.shaded, g.parts]], circle: [[g.shaded, g.parts]], pair: [g.a, g.b], grid: [[g.r, g.rows], [g.c, g.cols]], mixed: [[g.n, g.d]], pizzas: (g.items || []).map(x => [x.have, x.parts]), chocopair: [g.a, g.b] }[g.type] || []);
   function reconcile(fig, said) {
     if (!said.length) return fig; // в тексте дробей нет — сверять не с чем
     const has = ([n, d]) => said.some(([a, b]) => a === n && b === d);
     if (figFracs(fig).every(has)) return fig;
+    // «съел 3 из 8»: в тексте съеденная часть, на картинке — оставшаяся
+    if (fig.eaten && has([fig.parts - fig.have, fig.parts])) return fig;
+    // две вещи рядом: хватает, что в тексте есть хотя бы одна из дробей
+    if ((fig.type === 'pizzas' || fig.type === 'chocopair') && figFracs(fig).some(has)) return fig;
     // смешанное число совпадает и с «7/5», и с «1 2/5» в тексте
     if (fig.type === 'mixed' && (has([fig.whole * fig.d + fig.n, fig.d]) || has([fig.n, fig.d]))) return fig;
     const proper = said.filter(([a, b]) => b >= 1 && b <= 12 && a <= b);
@@ -261,7 +273,15 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
       const m = part.match(/^\[\[([^\]]+)\]\]$/);
       if (m) {
         if (/^\s*готово\s*$/i.test(m[1])) { done = true; continue; }
-        const fig = figs < 1 && figureFromTag(m[1]), fixed = fig && reconcile(fig, said);
+        const fig = figs < 1 && figureFromTag(m[1]);
+        let fixed = fig && reconcile(fig, said);
+        // в тексте две вещи («вторую пиццу разрезали на 8»), а тег один — рисуем обе рядом, чтобы картинка не спорила с текстом
+        if (fixed && ['pizza', 'cake', 'choco'].includes(fixed.type) && !fixed.eaten && /втор|две |два |обе |оба /i.test(t)) {
+          const two = said.filter(([a, b]) => b >= 2 && b <= 12 && a <= b).slice(0, 2);
+          if (two.length === 2) fixed = fixed.type === 'choco'
+            ? { type: 'chocopair', a: two[0], b: two[1], la: `${two[0][0]} из ${two[0][1]}`, lb: `${two[1][0]} из ${two[1][1]}` }
+            : { type: 'pizzas', food: fixed.type, items: two.map(([a, b]) => ({ parts: b, have: a, label: `${a}/${b}` })) };
+        }
         if (fixed) { html += figure(fixed); figs++; lastFig = fixed; }
         continue;
       }

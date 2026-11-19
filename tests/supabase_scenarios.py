@@ -82,7 +82,7 @@ async def main():
         psql("do $$ begin create role anon nologin; exception when duplicate_object then null; end $$;"
              "do $$ begin create role authenticated nologin; exception when duplicate_object then null; end $$;")
         subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase/schema.sql')], check=True, capture_output=True)
-        for f in ('test.sql', 'admin.sql', 'teacher.sql', 'pulse.sql', 'ai.sql', 'guard.sql', 'accounts.sql', 'plans.sql', 'parent.sql', 'tutor_cabinet.sql', 'audit.sql', 'pilot_report.sql', 'security_fix.sql', 'pilot_adults.sql', 'login_keys.sql', 'sandbox.sql'):
+        for f in ('test.sql', 'admin.sql', 'teacher.sql', 'pulse.sql', 'ai.sql', 'guard.sql', 'accounts.sql', 'plans.sql', 'parent.sql', 'tutor_cabinet.sql', 'audit.sql', 'pilot_report.sql', 'security_fix.sql', 'pilot_adults.sql', 'login_keys.sql', 'sandbox.sql', 'teacher_card.sql'):
             subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase' / f)], check=True, capture_output=True)
         rep('схема накатывается повторно', True)
         rep('vk_seed: 80 профилей с паролями', psql("select count(*) from vk_seed(80, '5А:1-28,5Б:29-56,5В:57-80') where password ~ '^[а-я]+[0-9]{4}$'") == '80')
@@ -342,7 +342,7 @@ async def main():
             rep('кабинет на телефоне: карточки, без прокрутки вбок (К-10)', await pg.is_visible('#mlist') and not await pg.is_visible('#wrap') and await pg.evaluate('document.documentElement.scrollWidth') <= 390)
             await pg.set_viewport_size({'width': 1280, 'height': 720})
             rep('кабинет: нет ошибок на странице', not errs, errs)
-            await pg.click('#logout'); await pg.wait_for_selector('#f')
+            await pg.click('#menu summary'); await pg.click('#logout'); await pg.wait_for_selector('#f')
             rep('кабинет: выход', True)
             await b.close()
         # Тест до/после: учитель открывает, ученик решает, сервер проверяет (Ф-27–Ф-29)

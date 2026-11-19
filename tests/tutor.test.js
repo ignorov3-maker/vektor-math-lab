@@ -37,6 +37,12 @@ r = T.render('Посмотри на картинку.\n[[полоска 2/7]]');
 ok(r.html.includes('Полоска из 7'), 'no fractions in text → keep tag');
 r = T.render('Это 2/3.\n[[полоска 2/3]]\n[[круг 2/3]]');
 ok((r.html.match(/<svg/g) || []).length === 1, 'only one picture per message');
+r = T.render('Вот две одинаковые пиццы. Первую разрезали на 4 куска, ты взял 2. Вторую — на 8, ты взял 4.\n[[пицца 2/4]]\nДроби 2/4 и 4/8 равны.');
+ok((r.html.match(/<svg/g) || []).length === 1 && r.html.includes('4 кусков, есть 2') && r.html.includes('8 кусков, есть 4'), 'две пиццы в тексте → две пиццы на картинке');
+r = T.render('Ты съел 3/8 шоколадки.\n[[шоколадка съел 3/8]]');
+ok(r.html.includes('5 на месте'), 'съел 3/8 → 5 долек на месте, 3 зачёркнуты');
+r = T.render('Сравни 2/3 и 4/6.\n[[шоколадка 2/3 4/6]]');
+ok(r.html.includes('Две одинаковые шоколадки'), 'две шоколадки тегом');
 ok(!T.systemPrompt({ topic: window.VEKTOR_FRACTIONS.topics[0], mode: 'lesson' }).includes('[[круг 3/8]]'), 'prompt has no copyable concrete tag');
 
 // промпт

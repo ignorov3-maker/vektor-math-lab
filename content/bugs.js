@@ -406,7 +406,10 @@
     b.lesson = [
       { kind: 'wrong', html: bipychSolved(b), question: 'Согласны с Бипычем?' },
       { kind: 'conflict', html: `<p>${forClass(ex(b.conflicts[0].text))}</p>${b.conflicts[0].figure}`, question: forClass(b.conflicts[0].ask) },
-      { kind: 'fix', html: `<p><b>${b.fixIdea}</b></p>`, question: 'Решим вместе: ' + (() => { const p = trapOf(b, 2); return p ? p.text : ''; })(), answerHtml: (() => { const p = b._lastTrap; return p ? p.answer : ''; })() },
+      // задача, на которой этот жучок ошибается; в ответе — верный результат рядом с тем, что дало бы неверное правило
+      (() => { const p = trapOf(b, 2), w = p && b.wrong(p);
+        return { kind: 'fix', html: `<p><b>${b.fixIdea}</b></p>`, question: p ? 'Решим вместе: ' + p.text : '',
+          answerHtml: p ? `<p>Верно: <b>${p.answer}</b></p>${w != null ? `<p class="board-wrong">По неверному правилу вышло бы ${w} — это ошибка «${b.kidName}».</p>` : ''}` : '' }; })(),
     ];
   }
 

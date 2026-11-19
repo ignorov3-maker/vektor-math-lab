@@ -233,8 +233,8 @@ const SERVER = !!window.VEKTOR_SYNC;
 let aiPaused = false; // П-03: ИИ на сервере выключен — до конца занятия идём по конспекту молча
 const isOnline = () => !aiPaused && T.ready(ai);
 
-function msgHtml(m, k, old) {
-  return `<div class="msg ${m.role}${m.error ? ' error' : ''}${old === true ? ' is-old' : ''}">${m.role === 'assistant' ? '<span class="msg-who"><i class="bip-dot" aria-hidden="true"></i>Бипыч</span>' : ''}<div class="msg-body">${m.html}${m.lab ? V.labHtml(`lab-msg-${k}`) : ''}</div></div>`;
+function msgHtml(m, k, old, last, first) {
+  return `<div class="msg ${m.role}${m.error ? ' error' : ''}${old === true ? ' is-old' : ''}${last ? ' is-last' : ''}${first ? ' is-first' : ''}">${m.role === 'assistant' ? '<span class="msg-who"><i class="bip-dot" aria-hidden="true"></i>Бипыч</span>' : ''}<div class="msg-body">${m.html}${m.lab ? V.labHtml(`lab-msg-${k}`) : ''}</div></div>`;
 }
 
 function quickReplies(i, kind) {
@@ -264,7 +264,7 @@ function playFrac(c) {
   const src = String(last.html || last.text || '').replace(/<span class="frac"><span>(\d+)<\/span><span>(\d+)<\/span><\/span>/g, ' $1/$2 ').replace(/<[^>]+>/g, ' ');
   for (const m of src.matchAll(/(?<![\d/])(\d{1,2})\s*\/\s*(\d{1,2})(?![\d/])/g)) {
     const n = +m[1], d = +m[2];
-    if (d >= 2 && d <= 12 && n >= 1 && n <= d) return { n, d };
+    if (d >= 2 && d <= 24 && n >= 1 && n <= d) return { n, d };
   }
   return null;
 }
@@ -273,18 +273,23 @@ function playHtml(i, c) {
   const f = playFrac(c); if (!f) return '';
   const key = f.n + '/' + f.d;
   if (!c.play || c.play.key !== key) c.play = { key, n: f.n, d: f.d, sel: [] };
-  const { n, d, sel } = c.play, k = sel.length, R = 64, C = 72;
+  const { n, d, sel } = c.play, k = sel.length, R = 64, C = 72, d0 = +key.split('/')[1];
+  // та же часть пиццы, даже если куски нарезаны иначе: 2/3 = 4/6 = 8/12 — так видно, что такое сокращение
+  const same = k > 0 && k * d0 === n * d;
   const pt = a => [C + R * Math.sin(a), C - R * Math.cos(a)].map(v => v.toFixed(1)).join(' ');
   const slices = Array.from({ length: d }, (_, j) => {
     const a0 = j / d * 2 * Math.PI, a1 = (j + 1) / d * 2 * Math.PI, on = sel.includes(j), mid = (a0 + a1) / 2;
     const dot = on ? `<circle cx="${(C + R * .58 * Math.sin(mid)).toFixed(1)}" cy="${(C - R * .58 * Math.cos(mid)).toFixed(1)}" r="${Math.max(3.5, 9 - d / 2)}" class="pz-dot"/>` : '';
     return `<g class="pz-slice${on ? ' on' : ''}" data-play-slice="${j}" role="button" tabindex="0" aria-pressed="${on}" aria-label="Кусок ${j + 1}"><path d="M${C} ${C} L${pt(a0)} A${R} ${R} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${pt(a1)} Z"/>${dot}</g>`;
   }).join('');
-  const say = k === 0 ? `Тыкай в куски — собери ${n}/${d}` : k === n ? `Да! ${k} из ${d} — это и есть ${n}/${d}` : `Взял ${k} из ${d}${k < n ? ' — ещё ' + (n - k) : ' — это уже больше'}`;
-  return `<div class="play${k === n ? ' is-done' : ''}" data-play="${i}">
+  const goal = d === d0 ? n : n * d / d0; // сколько кусков нужно при этой нарезке (может быть не целым)
+  const say = k === 0 ? (d === d0 ? `Тыкай в куски — собери ${n}/${d0}` : Number.isInteger(goal) ? `Собери столько же пиццы, сколько ${n}/${d0}` : `На ${d} кусков ${n}/${d0} ровно не собрать — попробуй другую нарезку`)
+    : same ? (d === d0 ? `Да! ${k} из ${d} — это и есть ${n}/${d0}` : `Да! ${k}/${d} = ${n}/${d0} — та же часть пиццы, куски просто ${d > d0 ? 'мельче' : 'крупнее'}`)
+    : `Взял ${k} из ${d}${k < goal ? (Number.isInteger(goal) ? ' — ещё ' + (goal - k) : '') : ' — это уже больше'}`;
+  return `<div class="play${same ? ' is-done' : ''}" data-play="${i}">
     <svg viewBox="0 0 144 144" class="pz" aria-label="Пицца из ${d} кусков"><circle cx="${C}" cy="${C}" r="${R + 5}" class="pz-crust"/>${slices}</svg>
     <div class="play-side"><div class="play-frac" aria-live="polite"><span class="pf-n">${k}</span><span class="pf-d">${d}</span></div>
-      <div class="play-cut"><button type="button" data-play-d="-1" aria-label="Меньше кусков"${d <= 2 ? ' disabled' : ''}>−</button><span>кусков</span><button type="button" data-play-d="1" aria-label="Больше кусков"${d >= 12 ? ' disabled' : ''}>+</button></div></div>
+      <div class="play-cut"><button type="button" data-play-d="-1" aria-label="Меньше кусков"${d <= 2 ? ' disabled' : ''}>−</button><span>кусков</span><button type="button" data-play-d="1" aria-label="Больше кусков"${d >= 24 ? ' disabled' : ''}>+</button></div></div>
     <p class="play-say">${say}</p></div>`;
 }
 document.addEventListener('click', e => {
@@ -292,8 +297,8 @@ document.addEventListener('click', e => {
   const box = el.closest('[data-play]'); if (!box) return;
   const i = +box.dataset.play, c = getChat(i, 'lesson'); if (!c.play) return;
   if (el.dataset.playSlice != null) { const j = +el.dataset.playSlice; c.play.sel = c.play.sel.includes(j) ? c.play.sel.filter(x => x !== j) : [...c.play.sel, j]; }
-  else { c.play.d = Math.min(12, Math.max(2, c.play.d + +el.dataset.playD)); c.play.sel = c.play.sel.filter(x => x < c.play.d); }
-  const was = c.play.sel.length === c.play.n;
+  else { c.play.d = Math.min(24, Math.max(2, c.play.d + +el.dataset.playD)); c.play.sel = c.play.sel.filter(x => x < c.play.d); }
+  const was = c.play.sel.length * +c.play.key.split('/')[1] === c.play.n * c.play.d;
   const tmp = document.createElement('div'); tmp.innerHTML = playHtml(i, c); const nb = tmp.firstElementChild;
   if (nb) box.replaceWith(nb);
   if (!was && c.play.sel.length === c.play.n && c.play.d === +c.play.key.split('/')[1]) logEvent('play', { topic: topics[i] && topics[i].id, frac: c.play.key });
@@ -304,14 +309,16 @@ function chatBox(i, kind) {
   const c = getChat(i, kind), online = isOnline();
   const ph = kind === 'lesson' ? (c.pending ? 'Твой ответ, например 3/4' : 'Ответь или спроси Бипыча…') : 'Спроси, что непонятно…';
   const steps = kind === 'lesson' && c.beats && !online ? `<div class="lesson-progress"><span>Шаг ${Math.max(1, c.beat + 1)} из ${c.beats.length}</span>${bar(Math.round(Math.max(1, c.beat + 1) / c.beats.length * 100))}</div>` : '';
-  // урок: Бипыч сам говорит — на виду его последняя реплика и ответ ученика, раньше сказанное спрятано в «Что было раньше»
+  // урок идёт этапами: на виду весь текущий этап (шаг или вопрос, ответы ученика, реакция Бипыча),
+  // прошлые этапы свёрнуты в «Весь разговор»
   const vis = c.msgs.filter(m => !m.hidden), lastA = kind === 'lesson' ? vis.map(m => m.role).lastIndexOf('assistant') : -1;
-  const older = lastA > 0 ? `<button type="button" class="bip-history" data-bip-history aria-label="Показать или свернуть весь разговор"><span class="bh-open">${CHEV_UP} Весь разговор</span><span class="bh-close">${CHEV_DOWN} Свернуть</span></button>` : '';
+  const stageAt = kind === 'lesson' ? vis.map(m => !!m.stage).lastIndexOf(true) : -1, from = stageAt >= 0 ? stageAt : lastA;
+  const older = from > 0 ? `<button type="button" class="bip-history" data-bip-history aria-label="Показать или свернуть весь разговор"><span class="bh-open">${CHEV_UP} Весь разговор</span><span class="bh-close">${CHEV_DOWN} Свернуть</span></button>` : '';
   // главная кнопка — крупно; остальные подсказки — маленькие «чипсы», появляются после реплики Бипыча
   const qr = quickReplies(i, kind), main = qr.filter(x => x[2]), rest = qr.filter(x => !x[2]).slice(0, 3);
   return `<div class="chat chat-${kind}" data-chat="${kind}">${steps}
     ${kind === 'lesson' ? '<div class="bip-stage" aria-hidden="true"><span class="bip-stage-pet"></span></div>' : ''}
-    <div class="chat-log" aria-live="polite">${older}${vis.map((m, k) => msgHtml(m, k, k < lastA && !m.error)).join('') || (kind === 'task' ? '<p class="muted small chat-empty">Застрял? Спроси Бипыча — он не скажет ответ, но поможет дойти до него самому.</p>' : '')}</div>
+    <div class="chat-log" aria-live="polite">${older}${vis.map((m, k) => msgHtml(m, k, k < from && !m.error, k === lastA, k === Math.max(0, from))).join('') || (kind === 'task' ? '<p class="muted small chat-empty">Застрял? Спроси Бипыча — он не скажет ответ, но поможет дойти до него самому.</p>' : '')}</div>
     ${kind === 'lesson' ? playHtml(i, c) : ''}
     <div class="chat-quick">${kind === 'lesson' && c.ask ? `<div class="ask-choices" role="group" aria-label="Выбери ответ">${c.ask.order.map(j => `<button type="button" class="ask-tile${c.ask.off.includes(j) ? ' is-off' : ''}" data-ask="${j}"${c.ask.off.includes(j) ? ' disabled' : ''}>${c.ask.choices[j]}</button>`).join('')}</div>` : ''}${rest.length ? `<div class="chat-chips">${rest.map(([v, l], n) => `<button type="button" class="chip" style="--n:${n}" data-quick="${esc(v)}">${l}</button>`).join('')}</div>` : ''}${main.map(([v, l]) => `<button type="button" class="btn btn-primary chat-next" data-quick="${esc(v)}">${l}</button>`).join('')}</div>
     ${kind === 'lesson' && c.pending ? `<form class="chat-form chat-answer" autocomplete="off">${answerInput(c.pending.task, 'Проверить')}</form>` : `<form class="chat-form" autocomplete="off"><label class="visually-hidden" for="chat-in-${kind}">Сообщение наставнику</label>
@@ -338,7 +345,14 @@ function refreshChat(i, kind) {
   bindChat(i, kind);
   V.labBind(box);
   log.scrollTop = log.scrollHeight;
-  if (kind === 'lesson') { bipReact(i); learnFill(i); }
+  if (kind === 'lesson') {
+    bipReact(i); learnFill(i);
+    // этап длинный — на телефоне подкручиваем страницу к новой реплике Бипыча
+    // если весь этап помещается — показываем его с начала (вопрос, ответ, реакция), иначе — новую реплику
+    const lastEl = log.querySelector('.msg.is-last'), firstEl = log.querySelector('.msg:not(.is-old)');
+    if (lastEl) { const r = lastEl.getBoundingClientRect(), f = firstEl ? firstEl.getBoundingClientRect() : r;
+      if (r.bottom > innerHeight - 160) (r.bottom - f.top < innerHeight * .7 ? firstEl : lastEl).scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }
+  }
 }
 // полоска «Узнать» вверху заполняется по ходу объяснения
 function learnFill(i) {
@@ -536,9 +550,9 @@ function nextBeat(i) {
   const b = c.beats[++c.beat];
   if (b.task) {
     c.pending = { task: b.task, tries: 0 };
-    c.msgs.push({ role: 'assistant', html: `<p><b>Проверь себя.</b> ${b.task.story}</p>${figure(b.task.figure)}<p class="chat-q">${b.task.question}</p>${b.task.choices ? `<p class="small muted">Напиши знак: &lt;, &gt; или =</p>` : ''}` });
+    c.msgs.push({ role: 'assistant', stage: true, html: `<p><b>Проверь себя.</b> ${b.task.story}</p>${figure(b.task.figure)}<p class="chat-q">${b.task.question}</p>${b.task.choices ? `<p class="small muted">Напиши знак: &lt;, &gt; или =</p>` : ''}` });
   } else {
-    c.msgs.push({ role: 'assistant', html: b.html, lab: b.lab, raw: T.plain(b.html) });
+    c.msgs.push({ role: 'assistant', stage: true, html: b.html, lab: b.lab, raw: T.plain(b.html) });
     if (b.ask) c.ask = { ...b.ask, order: shuffleIdx(b.ask.choices.length), off: [], tries: 0 };
     if (b.done) c.done = true;
   }
@@ -720,7 +734,7 @@ function startTour(k = 0) {
     const r = el.getBoundingClientRect();
     // подсветка — только видимая часть элемента
     const hr = { l: Math.max(m / 2, r.left - pad), t: Math.max(m / 2, r.top - pad), r: Math.min(W - m / 2, r.right + pad), b: Math.min(H - m / 2, r.bottom + pad) };
-    Object.assign(hole.style, { left: hr.l + 'px', top: hr.t + 'px', width: Math.max(0, hr.r - hr.l) + 'px', height: Math.max(0, hr.b - hr.t) + 'px' });
+    Object.assign(hole.style, { transform: `translate3d(${hr.l}px,${hr.t}px,0)`, width: Math.max(0, hr.r - hr.l) + 'px', height: Math.max(0, hr.b - hr.t) + 'px' });
     const tw = Math.min(360, W - 2 * m); tip.style.width = tw + 'px'; tip.classList.remove('sheet-top', 'sheet-bottom');
     const th = tip.offsetHeight;
     const clampX = x => Math.max(m, Math.min(W - tw - m, x));
@@ -778,15 +792,20 @@ function toast(html, kind = '') {
 function confetti() {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const c = document.createElement('canvas'); c.className = 'confetti'; c.setAttribute('aria-hidden', 'true');
-  const W = c.width = innerWidth, H = c.height = innerHeight, ctx = c.getContext('2d');
+  // чёткий холст на экранах с высокой плотностью; движение считаем по времени, а не по кадрам —
+  // на 120 Гц конфетти летит с той же скоростью, только плавнее
+  const W = innerWidth, H = innerHeight, dpr = Math.min(devicePixelRatio || 1, 2);
+  c.width = W * dpr; c.height = H * dpr; c.style.width = W + 'px'; c.style.height = H + 'px';
+  const ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
   document.body.appendChild(c);
   const css = getComputedStyle(document.documentElement);
   const colors = ['--green', '--marker', '--pie', '--margin', '--green-soft'].map(v => css.getPropertyValue(v).trim() || '#1E7358');
   const parts = Array.from({ length: 140 }, () => ({ x: W / 2 + (Math.random() - .5) * W * .3, y: H * .35, vx: (Math.random() - .5) * 14, vy: -Math.random() * 13 - 4, r: Math.random() * 6 + 4, a: Math.random() * 6, va: (Math.random() - .5) * .3, c: colors[Math.floor(Math.random() * colors.length)] }));
-  const t0 = performance.now();
+  const t0 = performance.now(); let last = t0;
   (function frame(t) {
+    const k = Math.min((t - last) / (1000 / 60), 3); last = t; // 1 = кадр при 60 Гц
     ctx.clearRect(0, 0, W, H);
-    for (const p of parts) { p.vy += .42; p.x += p.vx; p.y += p.vy; p.a += p.va; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.fillStyle = p.c; ctx.fillRect(-p.r / 2, -p.r / 4, p.r, p.r / 2); ctx.restore(); }
+    for (const p of parts) { p.vy += .42 * k; p.x += p.vx * k; p.y += p.vy * k; p.a += p.va * k; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.fillStyle = p.c; ctx.fillRect(-p.r / 2, -p.r / 4, p.r, p.r / 2); ctx.restore(); }
     if (t - t0 < 1800) requestAnimationFrame(frame); else c.remove();
   })(t0);
 }
@@ -1005,19 +1024,20 @@ function runQuick() {
     // перетаскивание пальцем или мышью: плитка едет за указателем, отпустили над клеткой — ответ
     tile.onpointerdown = e => {
       if (r.lock) return;
-      const start = { x: e.clientX, y: e.clientY }; let ghost = null;
+      const start = { x: e.clientX, y: e.clientY }; let ghost = null, sr = null, over = false;
+      // плитку двигаем через transform (видеокарта, без пересчёта страницы) — плавно и на 120 Гц
       const move = ev => {
         const dx = ev.clientX - start.x, dy = ev.clientY - start.y;
         if (!ghost && Math.hypot(dx, dy) < 8) return;
-        if (!ghost) { ghost = tile.cloneNode(true); ghost.classList.add('qz-ghost'); document.body.append(ghost); tile.classList.add('lifted'); }
-        ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px';
-        const sr = slot.getBoundingClientRect(); slot.classList.toggle('hover', ev.clientX > sr.left - 20 && ev.clientX < sr.right + 20 && ev.clientY > sr.top - 20 && ev.clientY < sr.bottom + 20);
+        if (!ghost) { ghost = tile.cloneNode(true); ghost.classList.add('qz-ghost'); document.body.append(ghost); tile.classList.add('lifted'); sr = slot.getBoundingClientRect(); }
+        ghost.style.transform = `translate3d(${ev.clientX}px,${ev.clientY}px,0) translate(-50%,-50%) scale(1.08)`;
+        const now = ev.clientX > sr.left - 20 && ev.clientX < sr.right + 20 && ev.clientY > sr.top - 20 && ev.clientY < sr.bottom + 20;
+        if (now !== over) { over = now; slot.classList.toggle('hover', over); }
       };
       const up = ev => {
         removeEventListener('pointermove', move); removeEventListener('pointerup', up);
         if (!ghost) return;
-        tile.dataset.dragged = '1'; ghost.remove(); tile.classList.remove('lifted');
-        const over = slot.classList.contains('hover'); slot.classList.remove('hover');
+        tile.dataset.dragged = '1'; ghost.remove(); tile.classList.remove('lifted'); slot.classList.remove('hover');
         if (over) answer(tile.dataset.v, tile);
       };
       addEventListener('pointermove', move); addEventListener('pointerup', up);
@@ -1511,7 +1531,7 @@ function bind(page, i, stage) {
       const value = got.value;
       const r = check(value, s.task);
       logEvent('attempt', { topic: topics[i].id, mode: s.mode, level: s.mode === 'practice' ? meta(i).level : null, question: String(s.task.question || '').replace(/<[^>]+>/g, '').slice(0, 200),
-        answer: String(value).slice(0, 40), ok: !!(r.ok && !r.almost), try: (s.tries ? s.tries.length : 0) + 1, hints: s.hints || 0, mistake: r.mistake || null, sec: Math.round((Date.now() - (s.started || Date.now())) / 1000) });
+        answer: String(value).slice(0, 40), right: String(s.task.answer == null ? '' : s.task.answer).slice(0, 40), ok: !!(r.ok && !r.almost), try: (s.tries ? s.tries.length : 0) + 1, hints: s.hints || 0, mistake: r.mistake || null, sec: Math.round((Date.now() - (s.started || Date.now())) / 1000) });
       if (r.empty || r.unreadable) { fb.className = 'feedback bad'; fb.innerHTML = r.empty ? 'Сначала впиши ответ в клеточки.' : r.msg; return; }
       markActivity();
       const m = meta(i), t = topics[i];
