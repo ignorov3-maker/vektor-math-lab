@@ -323,6 +323,8 @@ function chatBox(i, kind) {
 function refreshChat(i, kind) {
   const box = app.querySelector(`.chat[data-chat="${kind}"]`);
   if (!box || route().page !== 'lesson' || route().i !== i) return;
+  // урок пошёл дальше — раскрытая история сама сворачивается, на виду только новая реплика
+  if (kind === 'lesson') box.classList.remove('show-old');
   const tmp = document.createElement('div'); tmp.innerHTML = chatBox(i, kind);
   const nb = tmp.firstElementChild, log = nb.querySelector('.chat-log');
   box.querySelector('.chat-log').replaceWith(log);
@@ -564,7 +566,7 @@ function syncHints() {
   const box = app.querySelector('#hints'), hb = app.querySelector('#hint-btn'); if (!box || !session?.task) return;
   const all = session.task.hints || [];
   box.innerHTML = all.slice(0, session.hints).map((h, k) => `<p class="bubble"><b>Подсказка ${k + 1}.</b> ${h}</p>`).join('');
-  if (hb) { const left = all.length - session.hints; hb.disabled = left <= 0; hb.textContent = left <= 0 ? 'Подсказок больше нет' : `Подсказка (${left})`; }
+  if (hb) { const left = all.length - session.hints; hb.disabled = left <= 0; hb.hidden = left <= 0; hb.textContent = `Подсказка (${left})`; }
 }
 
 function lessonTaskHelp(i, what) {
@@ -630,7 +632,7 @@ async function aiReply(i, kind, hiddenUser) {
     try { text = await call(); }
     catch (e) { if (!/Нет связи|не отвечает/.test(e.message || '')) throw e; await new Promise(r => setTimeout(r, 1500)); text = await call(); } // один повтор при сбое сети
     const r = T.render(text);
-    msg.raw = text; msg.html = r.html || '<p>…</p>';
+    msg.raw = text; msg.html = r.html || '<p>Картинка не получилась. Нажми «Не понял» — объясню словами.</p>';
     if (r.done && kind === 'lesson') c.done = true;
     if (kind === 'task' && session?.mode === 'practice') session.askedAi = true;
     c.forceOffline = false;
@@ -1124,7 +1126,7 @@ function lessonPage(i, stage) {
       <i class="step-bar" aria-hidden="true"${id === 'practice' && id === stage ? ` style="--fill:${Math.max(6, Math.round(Math.min(m.practice, need) / need * 100))}%"` : ''}></i><span class="step-t"><b>${name}</b></span>
     </button></li>`).join('')}</ol>`;
   const req = (t.requires || []).map(id => byId[id]).filter(x => x != null && pct(x) < DONE);
-  const reqHtml = req.length && stage === 'learn' ? `<p class="requires small">Пригодится тема ${req.map(r => `<button class="link" data-lesson="${r}">«${topics[r].title}»</button>`).join(' и ')} — её можно повторить в любой момент.</p>` : '';
+  const reqHtml = req.length && stage === 'learn' ? `<p class="requires small">Опирается на ${req.map(r => `<button class="link" data-lesson="${r}">«${topics[r].title}»</button>`).join(' и ')}</p>` : '';
   const body = stage === 'learn' ? learnStage(i) : stage === 'check' ? checkStage(i, 'check') : stage === 'review' ? checkStage(i, 'review') : practiceStage(i);
   const learnTabs = stage === 'learn' && !t.legacy ? `<div class="lb-tabs" role="group" aria-label="Как изучать">
       <button data-learn-tab="tutor" aria-pressed="${learnTab === 'tutor'}" aria-label="Урок с Бипычем" title="Урок с Бипычем">${G.icon('chat', 20)}</button>
@@ -1528,16 +1530,16 @@ function bind(page, i, stage) {
           // Черновик «как считал» остаётся ссылкой — и главным путём для незнакомых ошибок.
           const rk = !t.legacy && r.mistake && window.VEKTOR_BUGS && window.VEKTOR_BUGS.byKey[`${t.id}:${r.mistake}`];
           const senior = window.VEKTOR_TONE.senior();
-          const fbTitle = rk ? (senior ? 'Здесь сработало неверное правило' : 'Похоже, тут жучок') : 'Пока не так — попробуй ещё раз';
+          const fbTitle = rk ? (senior ? 'Здесь сработало неверное правило' : 'Похоже, тут жучок') : 'Пока не так';
           const primary = rk ? `<button class="btn btn-primary btn-big" id="catch-open">${window.VEKTOR_TONE.t('catchBtn')}</button>`
-            : xrayExpr ? `<button class="btn btn-primary btn-big" id="xray-open">${window.VEKTOR_TONE.t('catchBtn')}</button>`
+            : xrayExpr ? '<button class="btn btn-primary btn-big" id="xray-open">Разобрать, где ошибка</button>'
             : '<button class="btn btn-primary" id="try-again">Исправить ответ</button>';
           const links = [rk || xrayExpr ? '<button class="link" id="try-again">Исправить ответ</button>' : '',
             rk && xrayExpr ? '<button class="link" id="xray-open">Записать, как считал</button>' : '',
             s.hints < s.task.hints.length ? '<button class="link" id="fb-hint">Подсказка</button>' : '',
             t.legacy ? '' : '<button class="link" id="ask-tutor">Спросить наставника</button>'].filter(Boolean).join('');
           fb.className = 'feedback bad big' + (rk ? ' fb-bug' : '');
-          fb.innerHTML = `<p class="fb-title">${rk ? window.VEKTOR_TONE.art(rk, { size: 30 }) : G.icon('repeat', 22)} ${fbTitle}</p><p>${rk && mistakeOf(i, r.mistake) ? `<b>${mistakeOf(i, r.mistake).title}.</b> ${mistakeOf(i, r.mistake).say}` : feedbackFor(r, s.task, i)}</p>` + eventsHtml(ev, i) +
+          fb.innerHTML = `<p class="fb-title">${rk ? window.VEKTOR_TONE.art(rk, { size: 30 }) : G.icon('repeat', 22)} ${fbTitle}</p><p>${rk && mistakeOf(i, r.mistake) ? `<b>${mistakeOf(i, r.mistake).title}.</b> ${mistakeOf(i, r.mistake).say}` : (r.mistake || r.almost ? feedbackFor(r, s.task, i) : (xrayExpr ? 'Исправь сам — или нажми «Разобрать», и Бипыч найдёт, где сбилось.' : 'Исправь ответ или открой подсказку.'))}</p>` + eventsHtml(ev.filter(e => e.type !== 'struggle'), i) +
             `<div class="fb-actions">${primary}</div><div class="fb-links">${links}</div>`;
           fb.querySelector('#try-again').onclick = () => { const inp = app.querySelector('#ans-num'); if (inp) { inp.focus(); inp.select(); } };
           const fh = fb.querySelector('#fb-hint'); if (fh) fh.onclick = () => app.querySelector('#hint-btn')?.click();

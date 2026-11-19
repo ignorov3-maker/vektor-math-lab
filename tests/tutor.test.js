@@ -12,7 +12,9 @@ ok(V.figureFromTag('сравнить 1/3 1/5')?.type === 'pair', 'pair tag');
 ok(V.figureFromTag('прямоугольник 2/3 3/4')?.rows === 3, 'grid tag');
 ok(V.figureFromTag('смешанное 2 1/3')?.whole === 2, 'mixed tag');
 ok(V.figureFromTag('прямая 7/4')?.type === 'line', 'line >1');
-ok(V.figureFromTag('полоска 9/5') === null, 'reject numerator > denominator on bar');
+{ const g = V.figureFromTag('полоска 9/5'); ok(g && g.type === 'mixed' && g.whole === 1 && g.n === 4 && g.d === 5, 'дробь больше единицы на полоске → смешанное число'); }
+{ const g = V.figureFromTag('пицца 7/5'); ok(g && g.type === 'mixed' && g.whole === 1 && g.n === 2, 'пицца 7/5 → 1 целая и 2/5 (раньше пропадала)'); }
+ok(V.figureFromTag('пицца 300/2') === null, 'слишком много целых — не рисуем');
 ok(V.figureFromTag('круг 1/500') === null, 'reject huge denominator');
 ok(V.figureFromTag('<script>') === null, 'reject junk');
 

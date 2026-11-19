@@ -1402,3 +1402,10 @@ body.is-focus #app{max-width:820px;padding:10px 20px calc(28px + env(safe-area-i
   .lesson-learn .chat-lesson>.chat-mode{font-size:12px;text-align:center;margin:2px 0 0}
   .play .pz{width:min(46vw,170px);height:min(46vw,170px)}
 }
+/* Телефон: Бипыч слева, «Весь разговор» справа — в одну строку над репликой */
+@media (max-width:760px){
+  .lesson-learn .chat-lesson>.bip-stage{align-self:flex-start}
+}
+@media (max-width:760px){.lesson-practice .feedback .fb-links{padding-right:64px}}
+@media (max-width:760px){.lesson-learn .chat-lesson>.chat-form{width:100%}.lesson-learn .chat-lesson>.chat-form .composer{width:100%}}
+.lesson-title+.requires .link{font-size:inherit;font-weight:600;text-decoration-thickness:1px}

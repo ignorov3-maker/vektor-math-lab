@@ -9,7 +9,7 @@
 (function () {
   'use strict';
 
-  const { f, figure, figureFromTag } = window.VEKTOR_VISUALS;
+  const { f, figure, figureFromTag, describe } = window.VEKTOR_VISUALS;
   const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
   const MODELS = [
@@ -225,6 +225,8 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
     if (!said.length) return fig; // в тексте дробей нет — сверять не с чем
     const has = ([n, d]) => said.some(([a, b]) => a === n && b === d);
     if (figFracs(fig).every(has)) return fig;
+    // смешанное число совпадает и с «7/5», и с «1 2/5» в тексте
+    if (fig.type === 'mixed' && (has([fig.whole * fig.d + fig.n, fig.d]) || has([fig.n, fig.d]))) return fig;
     const proper = said.filter(([a, b]) => b >= 1 && b <= 12 && a <= b);
     if (proper.length >= 2) return { type: 'pair', a: proper[0], b: proper[1] };
     if (proper.length === 1) {
@@ -234,6 +236,8 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
       if (fig.type === 'line') return { type: 'line', n, d };
       return { type: 'labeled', n, d };
     }
+    const improper = said.filter(([a, b]) => b > 1 && b <= 12 && a > b && a / b < 10);
+    if (improper.length) { const [n, d] = improper[0]; return { type: 'mixed', whole: Math.floor(n / d), n: n % d, d }; }
     return null; // непонятно, что рисовать, — лучше без картинки, чем с неверной
   }
   function fracsIn(t) {
@@ -252,17 +256,23 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
     if (streaming) t = t.replace(/\[\[[^\]]*$/, '');
     let done = false;
     const parts = t.split(/(\[\[[^\]]{1,40}\]\])/g), said = fracsIn(t);
-    let html = '', figs = 0;
+    let html = '', figs = 0, words = 0, lastFig = null;
     for (const part of parts) {
       const m = part.match(/^\[\[([^\]]+)\]\]$/);
       if (m) {
         if (/^\s*готово\s*$/i.test(m[1])) { done = true; continue; }
         const fig = figs < 1 && figureFromTag(m[1]), fixed = fig && reconcile(fig, said);
-        if (fixed) { html += figure(fixed); figs++; }
+        if (fixed) { html += figure(fixed); figs++; lastFig = fixed; }
         continue;
       }
       const paras = part.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+      words += paras.length;
       html += paras.map(p => `<p>${p.split('\n').map(l => inline(l.replace(/^\s*[-•*]\s+/, '• '))).join('<br>')}</p>`).join('');
+    }
+    // Ответ пришёл одной картинкой без слов — подписываем её сами, чтобы ребёнок понял, что видит
+    if (!streaming && lastFig && !words && typeof describe === 'function') {
+      const d = describe(lastFig);
+      if (d) html += `<p class="figure-caption">На картинке ${d}.</p>`;
     }
     return { html, done };
   }

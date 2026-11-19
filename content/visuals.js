@@ -280,6 +280,9 @@
     if(['graph','график'].includes(kind)&&['linear','quadratic'].includes(tokens[0]))geo={type:'graph',kind:tokens[0],a:Number(tokens[1]),b:Number(tokens[2]),c:tokens[3]==null?0:Number(tokens[3])};
     if(geo)return geometry(geo)?geo:null;
     if ((m = t.match(new RegExp(`^(подпиши|подписи|подписанная|части)\\s+${FR}$`))) && ok(+m[2], +m[3]) && +m[3] > 0) return { type: 'labeled', n: +m[2], d: +m[3] };
+    // дробь больше единицы на «вещи» или полоске (7/5) — рисуем смешанным числом: целые и остаток
+    if ((m = t.match(new RegExp(`^(пицца|торт|шоколадка|шоколад|полоска|bar|круг|circle)\\s+${FR}$`))) && +m[3] > 1 && +m[3] <= 12 && +m[2] > +m[3] && +m[2] / +m[3] < 10)
+      return { type: 'mixed', whole: Math.floor(+m[2] / +m[3]), n: +m[2] % +m[3], d: +m[3] };
     if ((m = t.match(new RegExp(`^(пицца|торт|шоколадка|шоколад)\\s+${FR}$`))) && ok(+m[2], +m[3], 12) && +m[2] <= +m[3] && +m[3] > 0) return { type: m[1] === 'пицца' ? 'pizza' : m[1] === 'торт' ? 'cake' : 'choco', parts: +m[3], have: +m[2] };
     if ((m = t.match(new RegExp(`^(полоска|bar)\\s+${FR}$`))) && ok(+m[2], +m[3]) && +m[2] <= +m[3]) return { type: 'bar', parts: +m[3], shaded: +m[2] };
     if ((m = t.match(new RegExp(`^(круг|circle)\\s+${FR}$`))) && ok(+m[2], +m[3], 16) && +m[2] <= +m[3]) return { type: 'circle', parts: +m[3], shaded: +m[2] };
