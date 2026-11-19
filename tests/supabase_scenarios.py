@@ -141,6 +141,7 @@ async def main():
             user_txt = ' '.join(m['content'] for m in last['body']['messages'] if m['role'] == 'user')
             sys_txt = ' '.join(m['content'] for m in last['body']['messages'] if m['role'] == 'system')
             rep('ключ модели — только на сервере', last['auth'] == 'Bearer sk-test' and 'token' not in last['body'])
+            rep('модель и лимит выбирает сервер, промпт — его', last['body']['model'] == 'deepseek/deepseek-v4-flash' and last['body']['max_tokens'] == 500 and 'Методичка темы' in sys_txt)
             rep('телефон вырезан из текста ребёнка', '916' not in user_txt and '[скрыто]' in user_txt, user_txt[:80])
             rep('имя ученика не уходит в модель', 'Ученик 1' not in sys_txt and 'зовут' not in sys_txt)
             await pg.fill('#chat-in-task', 'ты сука тупая'); await pg.click('.chat-task .chat-form button[type=submit]'); await pg.wait_for_timeout(1500)
@@ -161,7 +162,7 @@ async def main():
             rep('имя из состояния на сервер не пишется', psql("select coalesce(state->'settings'->>'name', 'нет') from vk_students where login='ученик1'") == 'нет')
             psql("update vk_settings set value = '{\"enabled\": true, \"per_student_day\": 30, \"total_day\": 100}' where key = 'ai'")
             st, j = rpc(base, 'vektor_login', p_login='ученик2', p_password='компас1234')
-            r = urllib.request.Request(base + '/functions/v1/tutor', data=json.dumps({'token': 'x' * 64, 'messages': [{'role': 'user', 'content': 'hi'}]}).encode(), headers={'Content-Type': 'application/json', 'Origin': base})
+            r = urllib.request.Request(base + '/functions/v1/tutor', data=json.dumps({'token': 'x' * 64, 'mode': 'lesson', 'topic': 'concept', 'history': [{'role': 'user', 'content': 'hi'}]}).encode(), headers={'Content-Type': 'application/json', 'Origin': base})
             try: urllib.request.urlopen(r); code = 200
             except urllib.error.HTTPError as e: code = e.code
             rep('без входа наставник не отвечает (401)', code == 401, code)
@@ -195,7 +196,7 @@ async def main():
             await_spend = float(psql("select coalesce(sum(usd),0) from vk_ai_usage"))
             rep('поток: расход из usage записан', await_spend >= 0.00014 * 3 - 1e-9, str(await_spend))
             psql("update vk_settings set value = value || '{\"usd_day\": 0}' where key = 'ai'")
-            code, out = fn_call({'token': tok2, 'messages': [{'role': 'user', 'content': 'помоги'}]})
+            code, out = fn_call({'token': tok2, 'mode': 'lesson', 'topic': 'concept', 'history': [{'role': 'user', 'content': 'помоги'}]})
             rep('дневной бюджет исчерпан → спокойное сообщение (429)', code == 429 and 'budget' in out, out[:100])
             psql("update vk_settings set value = value || '{\"usd_day\": 3}' where key = 'ai'")
             try: psql("set role anon; select vk_ai_cache_put('k', '{}')"); rep('служебные ИИ-функции закрыты', False)

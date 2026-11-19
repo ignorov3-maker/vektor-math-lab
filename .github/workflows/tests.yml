@@ -31,6 +31,7 @@ jobs:
           node tests/secrets.test.js
           node tests/generators.test.js
           node tests/tutor.test.js
+          node tools/tutor-method.mjs --check
           node tests/game.test.js
           node tests/worker.test.mjs
           node tests/rational.test.js

@@ -571,9 +571,13 @@ async function aiReply(i, kind, hiddenUser) {
   const history = c.msgs.filter(m => m.raw).slice(-14).map(m => ({ role: m.role, content: m.raw }));
   const msg = { role: 'assistant', html: '<p class="typing">Бипыч думает…</p>', raw: null };
   c.msgs.push(msg); c.busy = true; refreshChat(i, kind);
+  // сервер «Вектора» получает только тему, данные задачи и реплики; промпт и модель — на сервере
+  const payload = ai.mode === 'vektor' ? T.serverPayload({ topic: t, mode: kind === 'lesson' ? 'lesson' : 'task', task,
+    attempts: kind === 'task' ? (session?.tries || []) : [], mistake: kind === 'task' ? session?.lastMistake : null,
+    pace: pace(), style: state.settings.style, history }) : null;
   const call = () => T.stream(ai, [{ role: 'system', content: sys }, ...history], txt => {
     msg.html = T.render(txt, { streaming: true }).html || '<p class="typing">…</p>'; updateLastMsg(i, kind, msg);
-  }, { maxTokens: kind === 'lesson' ? 700 : 550, topic: topics[i].id, onFinish: r => { c.truncated = r === 'length'; } });
+  }, { maxTokens: kind === 'lesson' ? 700 : 550, payload, onFinish: r => { c.truncated = r === 'length'; } });
   try {
     let text;
     try { text = await call(); }
