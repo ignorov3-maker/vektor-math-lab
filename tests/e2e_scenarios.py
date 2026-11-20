@@ -168,10 +168,11 @@ async def main():
         await pg.goto(B); await pg.evaluate("localStorage.removeItem('vektor-progress-v3')"); await pg.reload(); await pg.wait_for_timeout(300)
         rep('карта новичка: лёгкий старт, дальше облака', await pg.locator('#path .node-quick.is-current').count()==1 and await pg.locator('#path .is-fog').count()==2 and await pg.locator('#path .fog-bank').count()==1)
         await pg.evaluate("() => { state.quick = Object.fromEntries(VEKTOR_QUICK.LEVELS.map(l => [l.id, {done:true, at:today(), best:5}])); state.settings.interests = []; save(); render(); }"); await pg.wait_for_timeout(200)
-        rep('после старта текущий уровень — первая тема дробей', await pg.locator('#path .is-current [data-lesson="0"]').count()==1)
+        r0 = await pg.evaluate("ROUTE[0]"); rep('после старта текущий уровень — первая тема программы класса', await pg.locator(f'#path .is-current [data-lesson="{r0}"]').count()==1)
         await pg.click('#path .is-current [data-continue]', force=True); await pg.wait_for_timeout(200)
-        rep('«Продолжить» ведёт в урок первой темы', (await pg.evaluate("location.hash")).startswith('#lesson/0/learn'))
+        rep('«Продолжить» ведёт в урок первой темы', (await pg.evaluate("location.hash")).startswith(f'#lesson/{r0}/learn'))
         rep('шаги урока — полоска из трёх частей вверху', await pg.locator('.lesson-bar .stepper .step').count()==3 and await pg.locator('.do-now').count()==0)
+        await pg.goto(B+'#lesson/0/learn'); await pg.wait_for_timeout(200)  # ввод дробью проверяем на первой теме дробей
         await pg.click('.stepper [data-stage=practice]'); await pg.wait_for_timeout(150)
         await pg.fill('#ans-num','3'); await pg.press('#ans-num','/'); await pg.keyboard.type('5')
         rep('«/» переносит курсор в знаменатель', await pg.input_value('#ans-den')=='5')
