@@ -41,7 +41,7 @@
   const C = () => root.VEKTOR_CHECK;
   const plain = s => String(s == null ? '' : s)
     .replace(/<span class="frac"><span>([^<]*)<\/span><span>([^<]*)<\/span><\/span>/g, '$1/$2')
-    .replace(/<sup>([^<]*)<\/sup>/g, (m, x) => (/^[-−]?\d+$/.test(x) ? x.replace(/[-−]/, '⁻').replace(/\d/g, d => '⁰¹²³⁴⁵⁶⁷⁸⁹'[d]) : '^' + x)).replace(/<[^>]+>/g, '').replace(/&nbsp;| /g, ' ').replace(/\s+/g, ' ').trim();
+    .replace(/<sup>([^<]*)<\/sup>/g, (m, x) => (/^[-−]?\d+$/.test(x) ? x.replace(/[-−]/, '⁻').replace(/\d/g, d => '⁰¹²³⁴⁵⁶⁷⁸⁹'[d]) : '^' + x)).replace(/<\/?[a-z][^>]*>/gi, '').replace(/&nbsp;| /g, ' ').replace(/\s+/g, ' ').trim();
   // значение строки-ответа; для выбора — сама строка
   function valueOf(raw, task) {
     if (task.accept === 'choice') { const v = C().choiceNorm(raw), hit = (task.choices || []).find(c => C().choiceNorm(c) === v); return hit != null ? hit : String(raw).trim(); }
