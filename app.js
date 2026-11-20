@@ -27,10 +27,14 @@ const legacy = [
 
 // Ф-10: в пилотной версии видны только 9 тем дробей; заглушки других разделов скрыты (?demo=all вернёт их)
 const SHOW_LEGACY = /[?&]demo=all\b/.test(location.search);
-const topics = [...window.VEKTOR_FRACTIONS.topics, ...(SHOW_LEGACY ? legacy : [])];
+const GEO_TOPICS = (window.VEKTOR_GEOMETRY && window.VEKTOR_GEOMETRY.topics) || [];
+const topics = [...window.VEKTOR_FRACTIONS.topics, ...GEO_TOPICS, ...(SHOW_LEGACY ? legacy : [])];
 const byId = Object.fromEntries(topics.map((t, i) => [t.id, i]));
 const SECTIONS = SHOW_LEGACY ? ['Дроби', 'Отношения', 'Геометрия'] : ['Дроби'];
-const ROUTE = window.VEKTOR_FRACTIONS.topics.map((t, i) => i); // раздел «Дроби» — настоящая последовательность тем
+// маршрут: сначала дроби, потом наглядная геометрия 5–6 (сама геометрия открывается и из «Все темы»)
+const ROUTE = [...window.VEKTOR_FRACTIONS.topics, ...GEO_TOPICS].map((t, i) => i);
+const GEO_FROM = window.VEKTOR_FRACTIONS.topics.length; // индекс первой темы геометрии
+const isGeo = i => i >= GEO_FROM && i < GEO_FROM + GEO_TOPICS.length;
 const DIAG = ['concept', 'reduce', 'compare', 'add-same', 'mult', 'part-of'].map(id => byId[id]);
 const DONE = 80;
 
@@ -904,8 +908,8 @@ function home() {
   const items = [
     startOpen ? chapter('Старт', 'разминка для ума') : '',
     ...(startOpen ? seq.slice(0, qn).map((n, idx) => nodeHtml(n, idx)) : []),
-    chapter('Обыкновенные дроби', `${ROUTE.filter(i => pct(i) >= DONE).length} из ${ROUTE.length} освоено`),
-    ...seq.slice(qn).map((n, idx) => nodeHtml(n, idx + qn)),
+    chapter('Обыкновенные дроби', `${ROUTE.filter(i => !isGeo(i) && pct(i) >= DONE).length} из ${GEO_FROM} освоено`),
+    ...seq.slice(qn).map((n, idx) => (n.kind === 'topic' && n.i === GEO_FROM && idx + qn < FOG_FROM ? chapter('Наглядная геометрия', `${ROUTE.filter(i => isGeo(i) && pct(i) >= DONE).length} из ${GEO_TOPICS.length} освоено`) : '') + nodeHtml(n, idx + qn)),
   ].join('');
   const hidden = Math.max(0, seq.length - FOG_FROM - 2);
   return `${state.warmupDay !== today() && warmupPlan().length ? `<a class="strip strip-warmup" href="#warmup" data-warmup>${G.icon('repeat', 18)}<span><b>${window.VEKTOR_TONE.senior() ? 'Проверим разобранные ошибки' : 'Не вернулись ли жучки?'}</b> 2 минуты</span><span class="strip-go">Начать</span></a>` : ''}
@@ -915,7 +919,7 @@ function home() {
   <div class="layout home-layout">
     <section class="path-wrap" aria-label="Мой путь">
       <ol class="path" id="path"><svg class="path-line" aria-hidden="true"></svg>${items}
-        ${hidden > 0 ? `<li class="fog-bank" aria-label="Ещё ${hidden} уровней скрыты"><span class="cloud cloud-a"></span><span class="cloud cloud-b"></span><span class="cloud cloud-c"></span><b>Ещё ${hidden} ${plural(hidden, 'уровень', 'уровня', 'уровней')} под облаками</b><span>Откроются, когда дойдёшь</span></li>` : `<li class="node node-finish" style="--x:0"><span class="finish-flag">${G.icon('flag', 30)}</span><div class="node-label"><b>Финиш</b><span>Покоритель дробей</span></div></li>`}
+        ${hidden > 0 ? `<li class="fog-bank" aria-label="Ещё ${hidden} уровней скрыты"><span class="cloud cloud-a"></span><span class="cloud cloud-b"></span><span class="cloud cloud-c"></span><b>Ещё ${hidden} ${plural(hidden, 'уровень', 'уровня', 'уровней')} под облаками</b><span>Откроются, когда дойдёшь</span></li>` : `<li class="node node-finish" style="--x:0"><span class="finish-flag">${G.icon('flag', 30)}</span><div class="node-label"><b>Финиш</b><span>${GEO_TOPICS.length ? 'Дроби и геометрия пройдены' : 'Покоритель дробей'}</span></div></li>`}
       </ol>
     </section>
     <div class="stack side">
@@ -1157,7 +1161,7 @@ function learnStage(i) {
   const tabBtns = '';
   const side = `<aside class="stack side">
       <div class="sheet"><h3>Готов потренироваться?</h3><p class="muted small">Задачи каждый раз новые и подстраиваются под твой темп.</p><button class="btn btn-primary btn-big" data-stage="practice">Начать тренировку →</button></div>
-      <details class="sheet lab-box" ${matchMedia('(min-width: 761px)').matches ? 'open' : ''}><summary><h3>Лаборатория дробей</h3><span class="muted small">Нажимай + и −, чтобы увидеть дробь</span></summary>${V.labHtml('lab-side', { n: 3, d: 5, k: 1 })}</details>
+      ${isGeo(i) ? '' : `<details class="sheet lab-box" ${matchMedia('(min-width: 761px)').matches ? 'open' : ''}><summary><h3>Лаборатория дробей</h3><span class="muted small">Нажимай + и −, чтобы увидеть дробь</span></summary>${V.labHtml('lab-side', { n: 3, d: 5, k: 1 })}</details>`}
     </aside>`;
   if (learnTab === 'tutor') {
     return tabBtns + `<div class="layout"><section class="sheet tutor-lesson" aria-label="Урок с Бипычем">${chatBox(i, 'lesson')}</section>${side}</div>`;
@@ -1173,7 +1177,7 @@ function learnStage(i) {
         ${e.examples.map(x => `<div class="worked"><p class="worked-q">${x.q}</p><ol>${x.steps.map(s => `<li>${s}</li>`).join('')}</ol></div>`).join('')}</details>
       <details class="notes-more"${open}><summary>Где чаще ошибаются</summary>
       <ul class="mistakes">${t.mistakes.map(m => `<li><b>${m.title}.</b> ${m.say}</li>`).join('')}</ul></details>`; })()}
-      <p class="muted small notes-src">${window.VEKTOR_FRACTIONS.sources}</p>
+      <p class="muted small notes-src">${isGeo(i) ? window.VEKTOR_GEOMETRY.sources : window.VEKTOR_FRACTIONS.sources}</p>
       <div class="notes-go"><button class="btn btn-ghost btn-big" data-learn-tab="tutor">${G.icon('chat', 18)} Объясни, Бипыч</button><button class="btn btn-primary btn-big" data-stage="practice">Тренироваться</button></div>
     </article>${side}</div>`;
 }
