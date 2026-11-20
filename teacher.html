@@ -210,7 +210,7 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
     <button class="btn btn-sm" id="logout" hidden>Выйти</button>
     <button class="btn btn-sm" id="logout-all" hidden>Выйти со всех устройств</button></div></details>
 </header>
-<main id="root"></main>
+<main id="root" data-ym-private></main><!-- имена детей в Вебвизор не попадают -->
 <script src="config.js"></script>
 <script src="content/metrika.js"></script>
 <script src="content/check.js"></script>
@@ -251,14 +251,35 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
     return j;
   }
 
-  /* ---------- подписи учеников: только в этом браузере, на сервер не уходят (К-02) ---------- */
+  /* ---------- подписи учеников («Маша К.»): хранятся на сервере, видны учителю на любом устройстве ----------
+     Если на сервере ещё нет teacher_labels.sql — подписи живут в этом браузере, как раньше. */
   const LKEY = () => 'vektor-labels:' + ((sess && sess.login) || 'teacher');
-  let labels = {};
-  // своя подпись учителя (в этом браузере) → подпись с сервера → логин
+  let labels = {}, labelsServer = null; // null — ещё не проверяли, true — сервер принимает подписи, false — только этот браузер
+  // подпись из этого браузера (ещё не на сервере) → подпись с сервера → пусто
   const label = l => labels[l] || ((data.find(st => st.login === l) || {}).label) || '';
   const nameHtml = s => label(s.login) ? `<b>${esc(label(s.login))}</b><small>${esc(s.login)}</small>` : `<b>${esc(s.login)}</b>`;
   const nameText = s => label(s.login) ? `${label(s.login)} · ${s.login}` : s.login;
-  function setLabel(login, v) { v = String(v || '').trim().slice(0, 40); if (v) labels[login] = v; else delete labels[login]; ls.set(LKEY(), labels); }
+  const cleanLabel = v => String(v || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  function keepLocal(map) { for (const [l, v] of Object.entries(map)) { if (v) labels[l] = v; else delete labels[l]; } ls.set(LKEY(), labels); }
+  // Сохраняет пачку подписей {логин: подпись}. Сначала сразу показываем, потом отправляем на сервер.
+  async function saveLabels(map) {
+    for (const [l, v] of Object.entries(map)) { map[l] = cleanLabel(v); const st = data.find(s => s.login === l); if (st) st.label = map[l]; }
+    if (labelsServer === false) { keepLocal(map); return false; }
+    try {
+      await rpc('vektor_teacher_labels', { p_token: sess.token, p_labels: map });
+      labelsServer = true; for (const l of Object.keys(map)) delete labels[l]; ls.set(LKEY(), labels); return true;
+    } catch (e) { if (e.auth) throw e; labelsServer = false; keepLocal(map); return false; }
+  }
+  const setLabel = (login, v) => saveLabels({ [login]: v }).catch(() => {});
+  // Подписи, которые раньше хранились только в этом браузере, один раз переносим на сервер
+  async function migrateLabels() {
+    const old = Object.fromEntries(Object.entries(labels).filter(([l, v]) => { const st = data.find(s => s.login === l); return st && st.label !== v; }));
+    if (Object.keys(old).length) { await saveLabels(old).catch(() => {}); paint(); }
+    else if (labelsServer === null) await saveLabels({}).catch(() => {});
+  }
+  const labelsNote = () => labelsServer === false
+    ? 'Сейчас подписи сохраняются только в этом браузере: на сервере ещё не включена эта функция.'
+    : 'Подписи сохраняются на сервере: вы увидите их и на телефоне, и на компьютере. Ученик видит свою подпись в профиле. Пишите только имя и первую букву фамилии.';
 
   /* ---------- вход (К-12) ---------- */
   function loginView(msg) {
@@ -530,7 +551,7 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
   function paintLogins() {
     const rows = classRows().slice().sort((a, b) => num(a.login) - num(b.login));
     const html = `<div class="panel"><h2>Подписи учеников</h2>
-      <p class="small muted" style="margin-top:0">Впишите имя рядом с логином — так в кабинете будет видно, кто есть кто. Подписи хранятся только в этом браузере и на сервер не отправляются.</p>
+      <p class="small muted" style="margin-top:0">Впишите имя рядом с логином — так в кабинете будет видно, кто есть кто. ${labelsNote()}</p>
       <table class="lt"><thead><tr><th>Логин</th><th>Подпись</th><th>Был(а)</th><th></th></tr></thead><tbody>${rows.map(s => `<tr><td><b>${esc(s.login)}</b></td><td class="lt-lab"><input class="lab" data-lab="${esc(s.login)}" value="${esc(label(s.login))}" placeholder="например, Маша К." maxlength="40" aria-label="Подпись для ${esc(s.login)}"></td><td class="lt-seen">${ago(s.last_seen)}</td><td class="lt-act"><button class="btn btn-sm" data-open="${esc(s.login)}">Карточка</button></td></tr>`).join('')}</tbody></table></div>
       <div class="panel"><h2>Вставить список</h2><p class="small muted" style="margin-top:0">По строке на ученика: <code>ученик1; Маша К.</code> — или просто имена по порядку логинов класса.</p>
       <textarea id="lab-bulk" placeholder="ученик1; Маша К.&#10;ученик2; Дима Л."></textarea><p><button class="btn" id="lab-apply">Применить</button> <span id="lab-out" class="small muted"></span></p></div>
@@ -541,11 +562,13 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
     put(host, html);
     host.querySelectorAll('[data-lab]').forEach(inp => inp.onchange = () => { setLabel(inp.dataset.lab, inp.value); paint(); });
     const ap = $('lab-apply'); if (ap) ap.onclick = () => {
-      const lines = $('lab-bulk').value.split(/\r?\n/).map(x => x.trim()).filter(Boolean); let n = 0;
+      const lines = $('lab-bulk').value.split(/\r?\n/).map(x => x.trim()).filter(Boolean), map = {};
       lines.forEach((ln, i) => { const m = /^(ученик\s*\d+)\s*[;,\t—–-]\s*(.+)$/i.exec(ln);
-        if (m) { const lg = m[1].replace(/\s+/g, '').toLowerCase(); if (data.find(s => s.login === lg)) { setLabel(lg, m[2]); n++; } }
-        else if (rows[i]) { setLabel(rows[i].login, ln); n++; } });
-      $('lab-out').textContent = `Подписано: ${n}`; $('lab-bulk').value = ''; host._h = null; paint();
+        if (m) { const lg = m[1].replace(/\s+/g, '').toLowerCase(); if (data.find(s => s.login === lg)) map[lg] = m[2]; }
+        else if (rows[i]) map[rows[i].login] = ln; });
+      const n = Object.keys(map).length; ap.disabled = true;
+      saveLabels(map).catch(() => false).then(ok => { $('lab-bulk').value = ''; host._h = null; paint();
+        const out = $('lab-out'); if (out) out.textContent = `Подписано: ${n}` + (ok ? '' : ' (только в этом браузере)'); });
     };
     const sg = $('slips-go'); if (sg) sg.onclick = async () => {
       sg.disabled = true;
@@ -592,9 +615,9 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
       <h4>Сегодня</h4><p style="margin:0">Решено верно: ${d.today || 0} · подсказок: ${d.hints_today || 0} · вопросов наставнику: ${d.ai_today || 0}</p>
       <h4>Сигналы ИИ</h4>${(d.flags || []).length ? d.flags.map(f => `<div class="flagbox">«${esc(f.t)}» <span class="small">${new Date(f.at * 1000).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span></div>`).join('') : '<p class="muted small">Нет.</p>'}
       <h4>Тесты</h4><p style="margin:0">До: ${esc((d.tests || {}).pre || '—')} · После: ${esc((d.tests || {}).post || '—')}</p>
-      <h4>Подпись (видна только вам)</h4><div class="labrow"><input id="d-lab" value="${esc(label(login))}" maxlength="40" placeholder="например, Маша К."><button class="btn" id="d-lab-save">Сохранить</button></div>
+      <h4>Подпись (видна вам и ученику)</h4><div class="labrow"><input id="d-lab" value="${esc(label(login))}" maxlength="40" placeholder="например, Маша К."><button class="btn" id="d-lab-save">Сохранить</button></div>
       <h4>Пароль</h4><div id="d-pass"><button class="btn" id="d-reset">Выдать новый пароль</button> <span class="small muted">если ученик потерял бумажку</span></div>`;
-    $('d-lab-save').onclick = () => { setLabel(login, $('d-lab').value); paint(); openDrawer(login); };
+    $('d-lab-save').onclick = async () => { $('d-lab-save').disabled = true; await setLabel(login, $('d-lab').value); paint(); openDrawer(login); };
     $('d-reset').onclick = () => {
       $('d-pass').innerHTML = `<div class="confirm">Старая бумажка перестанет работать, прогресс сохранится. <button class="btn btn-sm btn-danger armed" id="d-reset-go">Выдать новый</button><button class="btn btn-sm" id="d-reset-no">Отмена</button></div>`;
       $('d-reset-no').onclick = () => openDrawer(login);
@@ -660,6 +683,7 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
       try { pulse = await rpc('vektor_teacher_pulse', { p_token: sess.token, p_class: ui.cls || null, p_minutes: 45 }); } catch (e) { if (e.auth) throw e; }
       data = a.students || []; tests = b || tests; if (a.server_time) skew = a.server_time - Date.now() / 1000;
       lastOk = Date.now(); failed = false; paint();
+      if (labelsServer === null) migrateLabels();
     } catch (err) {
       if (err.auth) { sessionStorage.removeItem(KEY); sess = null; loginView(err.message); return; }
       failed = true;
@@ -667,7 +691,7 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
     liveTick();
   }
   function start() {
-    labels = ls.get(LKEY()) || {};
+    labels = ls.get(LKEY()) || {}; labelsServer = null;
     $('who').textContent = sess.name || ''; $('logout').hidden = false; $('tabs').hidden = false; $('menu').hidden = false;
     $('logout').onclick = async () => { try { await rpc('vektor_logout', { p_token: sess.token }); } catch {} sessionStorage.removeItem(KEY); sess = null; loginView(); };
     $('logout-all').hidden=false;

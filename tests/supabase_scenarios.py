@@ -82,7 +82,7 @@ async def main():
         psql("do $$ begin create role anon nologin; exception when duplicate_object then null; end $$;"
              "do $$ begin create role authenticated nologin; exception when duplicate_object then null; end $$;")
         subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase/schema.sql')], check=True, capture_output=True)
-        for f in ('test.sql', 'admin.sql', 'teacher.sql', 'pulse.sql', 'ai.sql', 'guard.sql', 'accounts.sql', 'plans.sql', 'parent.sql', 'tutor_cabinet.sql', 'audit.sql', 'pilot_report.sql', 'security_fix.sql', 'pilot_adults.sql', 'login_keys.sql', 'sandbox.sql', 'teacher_card.sql'):
+        for f in ('test.sql', 'admin.sql', 'teacher.sql', 'pulse.sql', 'ai.sql', 'guard.sql', 'accounts.sql', 'plans.sql', 'parent.sql', 'tutor_cabinet.sql', 'audit.sql', 'pilot_report.sql', 'security_fix.sql', 'pilot_adults.sql', 'login_keys.sql', 'sandbox.sql', 'teacher_card.sql', 'teacher_labels.sql'):
             subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase' / f)], check=True, capture_output=True)
         rep('схема накатывается повторно', True)
         rep('vk_seed: 80 профилей с паролями', psql("select count(*) from vk_seed(80, '5А:1-28,5Б:29-56,5В:57-80') where password ~ '^[а-я]+[0-9]{4}$'") == '80')
@@ -91,6 +91,17 @@ async def main():
              "update vk_students set pass_hash = extensions.crypt('компас1234', extensions.gen_salt('bf', 8)) where login = 'ученик2';"
              "update vk_students set pass_hash = extensions.crypt('компас1111', extensions.gen_salt('bf', 8)) where login = 'ученик40';"
              "select vk_teacher('uchitel', 'учитель-1', 'Учитель', '5А')")
+        # Подписи учеников от учителя (teacher_labels.sql)
+        tt = json.loads(psql(f"set role anon; select vektor_teacher_login('uchitel', {lit('учитель-1')}, null)::text")).get('token', '')
+        r = json.loads(psql(f"set role anon; select vektor_teacher_labels({lit(tt)}, {lit({'ученик1': '  Маша   К. ', 'ученик40': 'Чужой', 'ученик2': 7})})::text"))
+        rep('подписи: учитель подписывает своих, чужих и мусор пропускает', r == {'saved': 1, 'skipped': 2}
+            and psql("select label from vk_students where login = 'ученик1'") == 'Маша К.' and psql("select label is null from vk_students where login = 'ученик40'") == 't', str(r))
+        rep('подписи: видны в классе учителя', any(s.get('label') == 'Маша К.' for s in json.loads(psql(f"set role anon; select vektor_teacher_class({lit(tt)})::text"))['students']))
+        psql(f"set role anon; select vektor_teacher_labels({lit(tt)}, {lit({'ученик1': ''})})")
+        rep('подписи: пустая строка стирает', psql("select label is null from vk_students where login = 'ученик1'") == 't')
+        try: psql(f"set role anon; select vektor_teacher_labels('чужой-токен', {lit({'ученик1': 'x'})})"); rep('подписи: без входа нельзя', False)
+        except RuntimeError: rep('подписи: без входа нельзя', True)
+        psql(f"delete from vk_sessions where role = 'teacher'")
         # anon не читает таблицы и не вызывает служебные функции
         from pilot_scenarios import run as pilot_scenarios
         pilot_scenarios(psql, rep)
@@ -331,11 +342,13 @@ async def main():
             st_, j_ = rpc(base, 'vektor_login', p_login='ученик5', p_password=newp)
             rep('карточка: новый пароль работает (К-12)', bool(j_.get('token')), newp)
             await pg.keyboard.press('Escape')
-            # подписи только в браузере (К-02)
+            # подписи учителя сохраняются на сервере (teacher_labels.sql)
             await pg.click('#tabs [data-tab=logins]'); await pg.fill('[data-lab="ученик5"]', 'Аня С.'); await pg.press('[data-lab="ученик5"]', 'Tab')
             await pg.click('#tabs [data-tab=class]'); await pg.wait_for_timeout(100)
             rep('подпись видна в кабинете', 'Аня С.' in await pg.inner_text('#tbody') and 'Аня С.' in await pg.inner_text('#help'))
-            rep('подпись не уходит на сервер', psql("select count(*) from vk_students where label is not null or state::text like '%Аня%'") == '0')
+            await pg.wait_for_timeout(500)
+            rep('подпись сохранена на сервере, в прогресс не попала', psql("select label from vk_students where login = 'ученик5'") == 'Аня С.' and psql("select count(*) from vk_students where state::text like '%Аня%'") == '0')
+            rep('подпись не осталась только в браузере', await pg.evaluate("Object.keys(JSON.parse(localStorage.getItem('vektor-labels:uchitel') || '{}')).length") == 0)
             st_, j_ = rpc(base, 'vektor_teacher_student', p_token=await pg.evaluate("JSON.parse(sessionStorage.getItem('vektor-teacher')).token"), p_login='ученик40')
             rep('учитель не открывает карточку чужого класса', j_.get('error') == 'forbidden' or st_ != 200)
             await pg.set_viewport_size({'width': 390, 'height': 844}); await pg.wait_for_timeout(200)
