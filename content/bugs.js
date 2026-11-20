@@ -328,7 +328,15 @@
     const r = R.evalLine(String(raw)); return r.ok ? r.value : null;
   }
   const sameValue = (raw, p) => { if (p.sign) return raw === p.sign; const v = rawValue(raw); return v && p.value && eq(v, p.value); };
+  // темы 5–9 из content/kit.js: значения сравниваем через общую проверку (целые, десятичные, отрицательные, выбор)
+  function detectGeneric(b, p, raw) {
+    const K = root.VEKTOR_KIT, w = b.wrong(p); if (!K || w == null || raw == null) return false;
+    const v = K.valueOf(raw, p), wv = K.valueOf(w, p), rv = K.valueOf(p.answer, p);
+    const eqv = (x, y) => (typeof x === 'number' && typeof y === 'number' ? Math.abs(x - y) < 1e-9 : x === y);
+    return v != null && !eqv(v, rv) && eqv(v, wv);
+  }
   function detectOne(b, p, raw) {
+    if (b.generic || (p && p.generic)) return detectGeneric(b, p, raw);
     const w = b.wrong(p); if (w == null || raw == null) return false;
     if (b.notation || p.sign) return norm(raw) === norm(w);
     if (sameValue(raw, p)) return false; // верное значение — это не жучок
@@ -337,6 +345,7 @@
   }
   // → bug | null. Приоритет: точное совпадение записи, затем значение.
   function detectAnswer(p, raw) {
+    if (p && p.generic) return raw == null ? null : B.filter(b => b.topic === p.topic && b.wrong(p) != null).find(b => detectGeneric(b, p, raw)) || null;
     if (raw == null || norm(raw) === norm(p.answer)) return null;
     const cand = B.filter(b => b.topic === p.topic && b.wrong(p) != null);
     return cand.find(b => norm(b.wrong(p)) === norm(raw) && (b.notation || !sameValue(raw, p)))
@@ -376,6 +385,7 @@
 
   /* ---------- Совместимость с тренировкой ---------- */
   function toTask(p) {
+    if (p && p.generic && root.VEKTOR_KIT) return root.VEKTOR_KIT.fromData(p);
     return {
       story: '', question: p.text, answer: p.answer, accept: p.sign ? 'exact' : 'equivalent',
       choices: p.sign ? ['<', '=', '>'] : undefined, hints: [], solution: `Ответ: ${p.answer}.`, xray: p,
@@ -414,6 +424,9 @@
   }
 
   const byKey = Object.fromEntries(B.map(b => [b.key, b]));
+  // жучки тем 5–9: kit.js регистрирует их сам (b уже со всеми полями: trap, lesson, conflicts…)
+  function register(b) { if (byKey[b.key]) return byKey[b.key]; B.push(b); byKey[b.key] = b; return b; }
   // caught(bug, p, raw) — попался ли ребёнок именно на этого жучка (для ловушек разминки)
-  root.VEKTOR_BUGS = { caught: detectOne, list: B, byKey, ofTopic: t => B.filter(b => b.topic === t), problem, gen: P, solve, detectAnswer, detectStep, fromLine, toTask, norm };
+  root.VEKTOR_BUGS = { register, caught: detectOne, list: B, byKey, ofTopic: t => B.filter(b => b.topic === t), problem, gen: P, solve, detectAnswer, detectStep, fromLine, toTask, norm };
+  if (root.VEKTOR_KIT) root.VEKTOR_KIT.flush();
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -13,8 +13,14 @@
   const positive=n=>Number.isFinite(n)&&n>0&&n<=1000000;
   const num=n=>Number.isFinite(n)?String(Math.round(n*1000)/1000):'?';
 
+  // Рисунки тем 5–9 подключаются из файлов курсов: VEKTOR_VISUALS.register('bars', { describe(fig), render(fig) → '<svg…>' | '' })
+  const PLUGINS = {};
+  function register(type, def) { if (PLUGINS[type] || ['bar','circle','pair','line','mixed','grid','labeled','pizza','cake','choco','pizzas','chocopair','people','icons','groups','triangle','right_triangle','circle_geo','angle','coord','graph','rect','box','angle_split','clock'].includes(type)) throw new Error('visuals: тип уже есть ' + type); PLUGINS[type] = def; }
+  // обёртка для render(): svgWrap(300, 200, 'подпись для экранного чтеца', '<line …/>')
+  const svgWrap = (vw, vh, label, inner) => `<svg viewBox="0 0 ${vw} ${vh}" width="${vw}" height="${vh}" role="img" aria-label="${esc(label)}" style="width:${vw}px;max-width:100%;height:auto"><title>${esc(label)}</title>${inner}</svg>`;
   function describe(fig) {
     if(!fig)return '';
+    if(PLUGINS[fig.type]){try{return String(PLUGINS[fig.type].describe(fig)||'');}catch(e){return '';}}
     switch(fig.type){
       case 'triangle': return `треугольник, стороны ${fig.a}, ${fig.b}, ${fig.c}`;
       case 'right_triangle': return `прямоугольный треугольник, катеты ${fig.a} и ${fig.b}, гипотенуза ${fig.c==null?'неизвестна':fig.c}`;
@@ -245,6 +251,7 @@
   // Рисунок по описанию { type, ... } → HTML
   function figure(fig) {
     if (!fig) return '';
+    if (PLUGINS[fig.type]) { let svg = ''; try { svg = PLUGINS[fig.type].render(fig) || ''; } catch (e) { svg = ''; } return svg ? `<div class="figure">${svg}</div>` : ''; }
     if(['triangle','right_triangle','circle_geo','angle','coord','graph','rect','box','angle_split','clock'].includes(fig.type))return geometry(fig);
     if (SCENES.includes(fig.type)) return scene(fig);
     // значки интереса ребёнка (мячи, ракеты…): total штук, первые mark выделены. Значок — готовая картинка из VEKTOR_ART
@@ -374,5 +381,5 @@
     });
   }
 
-  window.VEKTOR_VISUALS = { f, figure, figureFromTag, describe, labHtml, labBind, labeled };
+  window.VEKTOR_VISUALS = { f, figure, figureFromTag, describe, labHtml, labBind, labeled, register, svgWrap, esc };
 })();
