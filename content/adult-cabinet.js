@@ -6,7 +6,7 @@
  let current = null, children = [];
  const tutor = api.role === 'tutor';
  const who = tutor ? 'ученика' : 'ребёнка';
- const topic = id => [...(window.VEKTOR_FRACTIONS?.topics || []), ...(window.VEKTOR_GEOMETRY?.topics || [])].find(t => t.id === id)?.title || id;
+ const topic = id => [...(window.VEKTOR_FRACTIONS?.topics || []), ...(window.VEKTOR_KIT?.topics || [])].find(t => t.id === id)?.title || id;
  const date = s => s ? new Date(s).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) : '—';
  const plural = (n, one, few, many) => { const a = Math.abs(n) % 100, b = a % 10; return a > 10 && a < 20 ? many : b > 1 && b < 5 ? few : b === 1 ? one : many; };
  const ruleTitle = key => window.VEKTOR_BUGS?.byKey[key]?.title || 'Правило пока не описано в каталоге';

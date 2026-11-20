@@ -41,18 +41,19 @@
   const C = () => root.VEKTOR_CHECK;
   const plain = s => String(s == null ? '' : s)
     .replace(/<span class="frac"><span>([^<]*)<\/span><span>([^<]*)<\/span><\/span>/g, '$1/$2')
-    .replace(/<sup>([^<]*)<\/sup>/g, '^$1').replace(/<[^>]+>/g, '').replace(/&nbsp;| /g, ' ').replace(/\s+/g, ' ').trim();
+    .replace(/<sup>([^<]*)<\/sup>/g, (m, x) => (/^[-−]?\d+$/.test(x) ? x.replace(/[-−]/, '⁻').replace(/\d/g, d => '⁰¹²³⁴⁵⁶⁷⁸⁹'[d]) : '^' + x)).replace(/<[^>]+>/g, '').replace(/&nbsp;| /g, ' ').replace(/\s+/g, ' ').trim();
   // значение строки-ответа; для выбора — сама строка
   function valueOf(raw, task) {
-    if (task.accept === 'choice') return String(raw).trim();
+    if (task.accept === 'choice') { const v = C().choiceNorm(raw), hit = (task.choices || []).find(c => C().choiceNorm(c) === v); return hit != null ? hit : String(raw).trim(); }
     const p = C().parse(String(raw)); return p && p.kind !== 'sign' ? p.v : p ? p.v : null;
   }
   const same = (a, b) => (typeof a === 'number' && typeof b === 'number' ? Math.abs(a - b) < 1e-9 : a === b);
   // misc по wrongs: какой ошибке соответствует ответ ребёнка
   function miscOf(task) {
-    const right = valueOf(task.answer, task);
-    const ws = Object.entries(task.wrongs || {}).map(([id, w]) => [id, valueOf(w, task)]).filter(([, v]) => v != null && !same(v, right));
+    let right, ws; // считаем при первой проверке: страницы без check.js (кабинеты взрослых) задачу только показывают
+    const prep = () => { if (ws) return; right = valueOf(task.answer, task); ws = Object.entries(task.wrongs || {}).map(([id, w]) => [id, valueOf(w, task)]).filter(([, v]) => v != null && !same(v, right)); };
     return got => {
+      prep();
       if (!got) return null;
       const v = task.accept === 'choice' ? String(got.v) : got.kind === 'sign' ? got.v : got.v;
       if (v == null || same(v, right)) return null;
@@ -110,7 +111,8 @@
     };
     const V = root.VEKTOR_VISUALS, fig = p => (p && p.figure && V ? V.figure(p.figure) : '');
     const shown = (p, w) => (p.accept === 'choice' ? w : num(+valueOf(w, p)));
-    b.lesson = [
+    // мини-урок на доску собираем, только когда учитель его открывает
+    const makeLesson = () => [
       (() => { const p = trapOf(1, 200) || trapOf(2, 200); const w = p && b.wrong(p);
         return { kind: 'wrong', html: p ? `<p>${p.story || ''} ${p.question}</p>${fig(p)}<p>Бипыч ответил: <b>${shown(p, w)}</b></p>` : `<p>Бипыч думает так: ${b.title.toLowerCase()}.</p>`, question: 'Согласны с Бипычем?' }; })(),
       (() => { const c = b.conflicts[0] || { text: b.title, ask: '' }; return { kind: 'conflict', html: `<p>${c.text.replace(/По твоему( правилу)?/g, 'По этому правилу').replace(/У тебя /g, 'Получилось ')}</p>${c.figure || ''}`, question: c.ask }; })(),
@@ -118,6 +120,8 @@
         return { kind: 'fix', html: `<p><b>${b.fixIdea}</b></p>`, question: p ? 'Решим вместе: ' + p.text : '',
           answerHtml: p ? `<p>Верно: <b>${shown(p, p.answer)}</b></p>${w != null ? `<p class="board-wrong">По неверному правилу вышло бы ${shown(p, w)} — это ошибка «${b.kidName}».</p>` : ''}` : '' }; })(),
     ];
+    let lesson = null;
+    Object.defineProperty(b, 'lesson', { get: () => lesson || (lesson = makeLesson()), enumerable: true, configurable: true });
     return b;
   }
   function registerBugs(topic) {

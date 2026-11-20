@@ -27,14 +27,26 @@ const legacy = [
 
 // Ф-10: в пилотной версии видны только 9 тем дробей; заглушки других разделов скрыты (?demo=all вернёт их)
 const SHOW_LEGACY = /[?&]demo=all\b/.test(location.search);
-const GEO_TOPICS = (window.VEKTOR_GEOMETRY && window.VEKTOR_GEOMETRY.topics) || [];
-const topics = [...window.VEKTOR_FRACTIONS.topics, ...GEO_TOPICS, ...(SHOW_LEGACY ? legacy : [])];
+// Темы 5–9 по федеральной рабочей программе: курсы из content/courses/*.js (через content/kit.js).
+// Дроби 5 класса — свой давний файл, в реестр их «усыновляем», чтобы на них ссылались корни ошибок.
+const KIT = window.VEKTOR_KIT;
+if (KIT) KIT.adopt('fractions', 'Обыкновенные дроби', 5, window.VEKTOR_FRACTIONS.topics, 'Дроби');
+const KIT_TOPICS = KIT ? KIT.topics.filter(t => t.course) : ((window.VEKTOR_GEOMETRY && window.VEKTOR_GEOMETRY.topics) || []);
+const topics = [...window.VEKTOR_FRACTIONS.topics, ...KIT_TOPICS, ...(SHOW_LEGACY ? legacy : [])];
+for (const t of window.VEKTOR_FRACTIONS.topics) { t.grade = t.grade || 5; t.strand = t.strand || 'Дроби'; }
 const byId = Object.fromEntries(topics.map((t, i) => [t.id, i]));
 const SECTIONS = SHOW_LEGACY ? ['Дроби', 'Отношения', 'Геометрия'] : ['Дроби'];
-// маршрут: сначала дроби, потом наглядная геометрия 5–6 (сама геометрия открывается и из «Все темы»)
-const ROUTE = [...window.VEKTOR_FRACTIONS.topics, ...GEO_TOPICS].map((t, i) => i);
-const GEO_FROM = window.VEKTOR_FRACTIONS.topics.length; // индекс первой темы геометрии
-const isGeo = i => i >= GEO_FROM && i < GEO_FROM + GEO_TOPICS.length;
+const isFractions = i => i < window.VEKTOR_FRACTIONS.topics.length;
+// Разделы ФРП по классам — в этом порядке идёт путь ученика и «Все темы»
+const STRANDS = {
+  5: ['Натуральные числа', 'Дроби', 'Текстовые задачи', 'Наглядная геометрия'],
+  6: ['Натуральные числа', 'Дроби', 'Положительные и отрицательные числа', 'Буквенные выражения', 'Текстовые задачи', 'Наглядная геометрия'],
+  7: ['Алгебра', 'Геометрия', 'Вероятность и статистика'], 8: ['Алгебра', 'Геометрия', 'Вероятность и статистика'], 9: ['Алгебра', 'Геометрия', 'Вероятность и статистика'],
+};
+const gradeTopics = g => (STRANDS[g] || []).flatMap(st => topics.map((t, i) => i).filter(i => !topics[i].legacy && topics[i].grade === g && topics[i].strand === st));
+// маршрут ученика — темы его класса по разделам программы; пересобирается при смене класса
+let ROUTE = gradeTopics(5);
+const buildRoute = () => { const r = gradeTopics(state.settings.grade || 5); ROUTE = r.length ? r : gradeTopics(5); };
 const DIAG = ['concept', 'reduce', 'compare', 'add-same', 'mult', 'part-of'].map(id => byId[id]);
 const DONE = 80;
 
@@ -62,6 +74,7 @@ try { state = Object.assign(fresh(), JSON.parse(localStorage.getItem(KEY))); } c
   if (typeof state.settings.sound !== 'boolean') state.settings.sound = true;
   if (state.settings.interests !== undefined && !Array.isArray(state.settings.interests)) delete state.settings.interests;
   if (![5, 6, 7, 8, 9].includes(state.settings.grade)) state.settings.grade = 5;
+  buildRoute();
   if (!Array.isArray(state.diag.results) || !Number.isInteger(state.diag.step)) state.diag = d.diag;
   state.attempts = state.attempts.filter(a => a && typeof a === 'object');
   // Раньше у четырёх тем стоял демонстрационный прогресс: новый ученик видел «Начато», хотя ничего не решал.
@@ -145,8 +158,22 @@ const levelOf = i => meta(i).level ?? A.startLevel(pace());
 const dots = lv => `<span class="level" title="Уровень задач ${lv} из 3">${[1, 2, 3].map(k => `<i class="${k <= lv ? 'on' : ''}"></i>`).join('')}</span>`;
 const modelName = () => (T.MODELS.find(m => m.id === ai.model)?.name.split(' — ')[0]) || ai.model;
 
+// «Дыра из младшего класса»: у ошибки есть корень — тема, где это правило родилось
+const rootOf = (i, mistakeId) => { const m = mistakeOf(i, mistakeId), r = m && m.root != null ? byId[m.root] : null; return r != null && r !== i ? r : null; };
+function rootHole(i, mistakeId) {
+  const r = rootOf(i, mistakeId); if (r == null || pct(r) >= DONE) return '';
+  const g = topics[r].grade || 5, from = g < 5 ? 'из начальной школы' : g < (topics[i].grade || 5) ? `из ${g} класса` : 'из этой же программы';
+  return `<span class="root-hole" style="display:block">Корень этой ошибки — ${from}: <button class="link" data-lesson="${r}">«${esc(topics[r].title)}»</button>. Повтори — дальше пойдёт легче.</span>`;
+}
 // Что делать дальше: повторение, база для трудной темы или следующая тема маршрута
 function nextStep() {
+  // одна и та же ошибка повторилась 3+ раз, а её корень в младшем классе не освоен — сначала корень
+  for (const i of ROUTE) {
+    if (pct(i) >= DONE) continue;
+    const top = Object.entries(meta(i).errors || {}).sort((a, b) => b[1] - a[1])[0];
+    const r = top && top[1] >= 3 ? rootOf(i, top[0]) : null;
+    if (r != null && pct(r) < DONE) return { i: r, reason: `Ошибка в «${topics[i].short || topics[i].title}» растёт из темы «${topics[r].title}» (${topics[r].grade < 5 ? 'начальная школа' : topics[r].grade + ' класс'}). Закроем дыру — и дальше пойдёт легче.` };
+  }
   // если какая-то тема дважды не сдана, а её база не освоена — сначала база
   for (const i of ROUTE) {
     if (pct(i) >= DONE || meta(i).failedChecks < 2) continue;
@@ -169,11 +196,14 @@ const bar = v => `<div class="bar" role="progressbar" aria-valuenow="${v}" aria-
 
 // Поле ответа: дробь клеточками (числитель сверху, знаменатель снизу), при желании — целая часть
 function answerInput(task, button) {
-  if (task.choices) return `<div class="choices" role="group" aria-label="Выбери знак">${task.choices.map(c => `<button type="submit" class="btn btn-ghost choice" name="choice" value="${esc(c)}" aria-label="${{ '<': 'меньше', '>': 'больше', '=': 'равно' }[c] || c}">${esc(c)}</button>`).join('')}</div>`;
+  if (task.choices) { const signs = task.choices.every(c => ['<', '=', '>'].includes(c));
+    return `<div class="choices${signs ? '' : ' choices-text'}" role="group" aria-label="${signs ? 'Выбери знак' : 'Выбери ответ'}">${task.choices.map(c => `<button type="submit" class="btn btn-ghost choice" name="choice" value="${esc(c)}" aria-label="${{ '<': 'меньше', '>': 'больше', '=': 'равно' }[c] || esc(c)}">${esc(c)}</button>`).join('')}</div>`; }
+  // темы 5–9: на цифровой клавиатуре телефона нет минуса — кнопка ±; для десятичных — клавиатура с запятой
+  const signKey = task.signed ? '<button type="button" class="btn btn-ghost sign-key" data-sign aria-label="Поменять знак: плюс или минус">±</button>' : '';
   const numberOnly = !String(task.answer).includes('/') && task.accept === 'exact';
-  if (numberOnly) return `<div class="answer-row"><label class="num-input"><span class="visually-hidden">Твой ответ</span><input id="ans-num" inputmode="numeric" autocomplete="off" placeholder="?" aria-label="Твой ответ — число"></label><button class="btn btn-primary btn-big" type="submit">${button}</button></div>`;
+  if (numberOnly) return `<div class="answer-row">${signKey}<label class="num-input"><span class="visually-hidden">Твой ответ</span><input id="ans-num" inputmode="${task.decimal ? 'decimal' : 'numeric'}" autocomplete="off" placeholder="?" aria-label="Твой ответ — число"></label><button class="btn btn-primary btn-big" type="submit">${button}</button></div>${task.decimal ? '<p class="fi-help small muted">Дробную часть — через запятую: 2,5</p>' : ''}`;
   const mixed = task.accept === 'mixed';
-  return `<div class="answer-row">
+  return `<div class="answer-row">${signKey}
     <div class="frac-input${mixed ? ' with-whole' : ''}" role="group" aria-label="Твой ответ — ${mixed ? 'смешанное число' : 'дробь'}">
       ${mixed ? '<label class="fi-whole"><input id="ans-whole" inputmode="numeric" autocomplete="off" aria-label="Целая часть"><span>целые</span></label>' : ''}
       <div class="fi-frac">
@@ -187,6 +217,12 @@ function answerInput(task, button) {
   ${mixed ? '<p class="fi-help small muted">Слева — целые, справа — дробная часть.</p>' : ''}`;
 }
 
+// ± меняет знак числа в поле ответа (числитель — для дроби)
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-sign]'); if (!b) return;
+  const inp = b.closest('form') && b.closest('form').querySelector('#ans-num'); if (!inp) return;
+  inp.value = /^[-−]/.test(inp.value) ? inp.value.replace(/^[-−]\s*/, '') : '−' + inp.value; inp.focus();
+});
 function taskCard(task, { formId = 'answer-form', button = 'Проверить', exam = false, hints = false } = {}) {
   return `<p class="story">${task.interest && window.VEKTOR_ART ? `<span class="story-ic" aria-hidden="true">${window.VEKTOR_ART.interest(task.interest, { size: 28 })}</span>` : ''}${task.story}</p>${exam && task.figureIsHint ? '' : figure(task.figure)}<p class="question" id="q">${task.question}</p>
     <form class="answer" id="${formId}" autocomplete="off">${answerInput(task, button)}</form>
@@ -489,7 +525,14 @@ function withInterests(task) {
   if (t && t.interest && A && p && (p.kind === 'left' || p.kind === 'shaded') && p.n <= 12) return { ...t, figure: { type: 'icons', total: p.n, mark: p.kind === 'left' ? p.n - p.k : p.k, icon: A.interest(t.interest, { size: 30 }) } };
   return t;
 }
+// Класс спрашиваем один раз: от него зависит путь (темы своего класса по программе)
+const askGrade = () => !state.settings.gradeChosen && !navigator.webdriver && !askInterests();
+const gradeSheet = () => `<div class="int-sheet-wrap"><section class="int-sheet grade-ask" role="dialog" aria-modal="true" aria-labelledby="grade-h"><span class="int-grip" aria-hidden="true"></span><h2 id="grade-h">В каком ты классе?</h2><p class="muted small">Бипыч соберёт путь по программе твоего класса. Поменять можно в профиле.</p><div class="grade-pick">${[5, 6, 7, 8, 9].map(n => `<button class="btn btn-ghost btn-big" data-grade-pick="${n}">${n}</button>`).join('')}</div></section></div>`;
+function bindGrade(root) {
+  root.querySelectorAll('[data-grade-pick]').forEach(b => b.onclick = () => { state.settings.grade = +b.dataset.gradePick; state.settings.gradeChosen = true; buildRoute(); save(); ymGoal('grade', { k: state.settings.grade }); render(); });
+}
 function bindInterests(root) {
+  bindGrade(root);
   root.querySelectorAll('.interests').forEach(g => g.addEventListener('change', e => {
     const on = g.querySelectorAll('input:checked'); if (on.length > 3) e.target.checked = false;
   }));
@@ -548,7 +591,7 @@ function nextBeat(i) {
   const b = c.beats[++c.beat];
   if (b.task) {
     c.pending = { task: b.task, tries: 0 };
-    c.msgs.push({ role: 'assistant', stage: true, html: `<p><b>Проверь себя.</b> ${b.task.story}</p>${figure(b.task.figure)}<p class="chat-q">${b.task.question}</p>${b.task.choices ? `<p class="small muted">Напиши знак: &lt;, &gt; или =</p>` : ''}` });
+    c.msgs.push({ role: 'assistant', stage: true, html: `<p><b>Проверь себя.</b> ${b.task.story}</p>${figure(b.task.figure)}<p class="chat-q">${b.task.question}</p>${b.task.choices ? `<p class="small muted">${b.task.choices.every(c => ['<', '=', '>'].includes(c)) ? 'Напиши знак: &lt;, &gt; или =' : 'Варианты: ' + b.task.choices.map(esc).join(' · ')}</p>` : ''}` });
   } else {
     c.msgs.push({ role: 'assistant', stage: true, html: b.html, lab: b.lab, play: b.play, raw: T.plain(b.html) });
     if (b.ask) c.ask = { ...b.ask, order: shuffleIdx(b.ask.choices.length), off: [], tries: 0 };
@@ -908,18 +951,23 @@ function home() {
   const items = [
     startOpen ? chapter('Старт', 'разминка для ума') : '',
     ...(startOpen ? seq.slice(0, qn).map((n, idx) => nodeHtml(n, idx)) : []),
-    chapter('Обыкновенные дроби', `${ROUTE.filter(i => !isGeo(i) && pct(i) >= DONE).length} из ${GEO_FROM} освоено`),
-    ...seq.slice(qn).map((n, idx) => (n.kind === 'topic' && n.i === GEO_FROM && idx + qn < FOG_FROM ? chapter('Наглядная геометрия', `${ROUTE.filter(i => isGeo(i) && pct(i) >= DONE).length} из ${GEO_TOPICS.length} освоено`) : '') + nodeHtml(n, idx + qn)),
+    // глава — раздел программы: «Натуральные числа», «Дроби», «Алгебра»…
+    ...seq.slice(qn).map((n, idx) => {
+      const st = n.kind === 'topic' && topics[n.i].strand, prev = idx > 0 && seq[qn + idx - 1].kind === 'topic' ? topics[seq[qn + idx - 1].i].strand : null;
+      const inStrand = ROUTE.filter(r => topics[r].strand === st);
+      return (st && st !== prev && idx + qn < FOG_FROM ? chapter(st, `${inStrand.filter(r => pct(r) >= DONE).length} из ${inStrand.length} освоено`) : '') + nodeHtml(n, idx + qn);
+    }),
   ].join('');
   const hidden = Math.max(0, seq.length - FOG_FROM - 2);
   return `${state.warmupDay !== today() && warmupPlan().length ? `<a class="strip strip-warmup" href="#warmup" data-warmup>${G.icon('repeat', 18)}<span><b>${window.VEKTOR_TONE.senior() ? 'Проверим разобранные ошибки' : 'Не вернулись ли жучки?'}</b> 2 минуты</span><span class="strip-go">Начать</span></a>` : ''}
-  ${(state.settings.grade || 5) >= 7 ? `<a class="strip grade-note" href="#map"><span><b>Программа ${state.settings.grade} класса скоро появится.</b> Пока закрываем дыры в дробях.</span></a>` : ''}
+  ${!gradeTopics(state.settings.grade || 5).length ? `<a class="strip grade-note" href="#map"><span><b>Программа ${state.settings.grade} класса скоро появится.</b> Пока закрываем дыры из младших классов.</span></a>` : ''}
+  ${askGrade() ? gradeSheet() : ''}
   ${askInterests() ? `<div class="int-sheet-wrap"><section class="int-sheet interests-ask" role="dialog" aria-modal="true" aria-labelledby="int-h"><span class="int-grip" aria-hidden="true"></span><h2 id="int-h">Ты прошёл уже ${finishedLevels()} ${finishedLevels() < 5 ? 'уровня' : 'уровней'}! Что тебе интересно?</h2><p class="muted small">Выбери до трёх — Бипыч будет придумывать задачи про это.</p>${interestPicker([])}<div class="row-actions"><button class="btn btn-primary btn-big" data-interests-save>Готово</button><button class="btn btn-ghost" data-interests-skip>Не сейчас</button></div></section></div>` : ''}
   <h1 class="visually-hidden">Мой путь</h1>
   <div class="layout home-layout">
     <section class="path-wrap" aria-label="Мой путь">
       <ol class="path" id="path"><svg class="path-line" aria-hidden="true"></svg>${items}
-        ${hidden > 0 ? `<li class="fog-bank" aria-label="Ещё ${hidden} уровней скрыты"><span class="cloud cloud-a"></span><span class="cloud cloud-b"></span><span class="cloud cloud-c"></span><b>Ещё ${hidden} ${plural(hidden, 'уровень', 'уровня', 'уровней')} под облаками</b><span>Откроются, когда дойдёшь</span></li>` : `<li class="node node-finish" style="--x:0"><span class="finish-flag">${G.icon('flag', 30)}</span><div class="node-label"><b>Финиш</b><span>${GEO_TOPICS.length ? 'Дроби и геометрия пройдены' : 'Покоритель дробей'}</span></div></li>`}
+        ${hidden > 0 ? `<li class="fog-bank" aria-label="Ещё ${hidden} уровней скрыты"><span class="cloud cloud-a"></span><span class="cloud cloud-b"></span><span class="cloud cloud-c"></span><b>Ещё ${hidden} ${plural(hidden, 'уровень', 'уровня', 'уровней')} под облаками</b><span>Откроются, когда дойдёшь</span></li>` : `<li class="node node-finish" style="--x:0"><span class="finish-flag">${G.icon('flag', 30)}</span><div class="node-label"><b>Финиш</b><span>Программа ${state.settings.grade || 5} класса пройдена</span></div></li>`}
       </ol>
     </section>
     <div class="stack side">
@@ -1102,21 +1150,23 @@ function topicCards(ids) {
     </article>`; }).join('')}</div>`;
 }
 function mapPage() {
+  // «Все темы» — вся программа 5–9 по классам и разделам ФРП; что ещё не наполнено — честно «скоро»
   const P = window.VEKTOR_PROGRAM;
-  if (!P) return head('Все темы', '') + topicCards(topics.map(t => t.id));
-  const gn = mapGrade || state.settings.grade || 5, g = P.grade(gn);
-  const tabs = `<div class="segmented grade-tabs" role="tablist" aria-label="Класс">${P.GRADES.map(x => `<button role="tab" data-map-grade="${x.n}" aria-selected="${x.n === gn}" aria-pressed="${x.n === gn}" aria-label="${x.n} класс">${x.n}<span class="gt-s"> класс</span></button>`).join('')}</div>`;
-  const body = g.strands.map(st => {
-    const ready = st.topics.filter(t => t.ready), soon = st.topics.filter(t => !t.ready);
-    const waves = [...new Set(soon.map(t => t.wave))], when = waves.length === 1 && P.WAVES[waves[0]] ? `появится ${P.WAVES[waves[0]]}` : '';
-    return `<section class="section strand"><h2>${esc(st.name)}${!ready.length && when ? ` <small>${when}</small>` : ''}</h2>
-      ${ready.map(t => `<h3 class="strand-sub">${esc(t.title)}</h3>${topicCards(t.ready)}`).join('')}
-      ${soon.length ? `<ul class="soon-list">${soon.map(t => `<li><span>${esc(t.title)}</span>${ready.length || !when ? `<small>скоро${P.WAVES[t.wave] ? ', ' + P.WAVES[t.wave] : ''}</small>` : ''}</li>`).join('')}</ul>` : ''}
-      ${st.bug ? `<div class="bug-sample"><p class="bs-label">Как Вектор поймает ошибку здесь</p><p class="bs-rule"><s>${esc(st.bug.rule)}</s></p><p class="bs-counter">${esc(st.bug.counter)}</p></div>` : ''}
+  const gn = mapGrade || state.settings.grade || 5;
+  const tabs = `<div class="segmented grade-tabs" role="tablist" aria-label="Класс">${[5, 6, 7, 8, 9].map(n => `<button role="tab" data-map-grade="${n}" aria-selected="${n === gn}" aria-pressed="${n === gn}" aria-label="${n} класс">${n}<span class="gt-s"> класс</span></button>`).join('')}</div>`;
+  const byStrand = st => topics.filter(t => !t.legacy && t.grade === gn && t.strand === st).map(t => t.id);
+  const body = (STRANDS[gn] || []).map(st => {
+    const ids = byStrand(st);
+    const plan = P && P.grade(gn) ? (P.grade(gn).strands.find(x => x.name === st) || {}).bug : null;
+    return `<section class="section strand"><h2>${esc(st)}${ids.length ? ` <small>${ids.length} ${plural(ids.length, 'тема', 'темы', 'тем')}</small>` : ' <small>скоро</small>'}</h2>
+      ${ids.length ? topicCards(ids) : ''}
+      ${plan && !ids.length ? `<div class="bug-sample"><p class="bs-label">Как Вектор поймает ошибку здесь</p><p class="bs-rule"><s>${esc(plan.rule)}</s></p><p class="bs-counter">${esc(plan.counter)}</p></div>` : ''}
     </section>`;
   }).join('');
-  const lead = gn <= 6 ? '' : `Программа ${gn} класса в работе. Пока закрываем дыры из 5–6 класса.`;
-  return head('Все темы', lead) + tabs + body;
+  // фундамент начальной школы — сюда ведут «дыры» из любых классов
+  const base = topics.filter(t => !t.legacy && t.grade < 5).map(t => t.id);
+  const found = base.length ? `<section class="section strand"><h2>Фундамент начальной школы <small>повторить</small></h2>${topicCards(base)}</section>` : '';
+  return head('Все темы', 'По федеральной рабочей программе «Математика. 5–9 классы».') + tabs + body + found;
 }
 const library = filter => mapPage(filter);
 
@@ -1161,7 +1211,7 @@ function learnStage(i) {
   const tabBtns = '';
   const side = `<aside class="stack side">
       <div class="sheet"><h3>Готов потренироваться?</h3><p class="muted small">Задачи каждый раз новые и подстраиваются под твой темп.</p><button class="btn btn-primary btn-big" data-stage="practice">Начать тренировку →</button></div>
-      ${isGeo(i) ? '' : `<details class="sheet lab-box" ${matchMedia('(min-width: 761px)').matches ? 'open' : ''}><summary><h3>Лаборатория дробей</h3><span class="muted small">Нажимай + и −, чтобы увидеть дробь</span></summary>${V.labHtml('lab-side', { n: 3, d: 5, k: 1 })}</details>`}
+      ${!isFractions(i) ? '' : `<details class="sheet lab-box" ${matchMedia('(min-width: 761px)').matches ? 'open' : ''}><summary><h3>Лаборатория дробей</h3><span class="muted small">Нажимай + и −, чтобы увидеть дробь</span></summary>${V.labHtml('lab-side', { n: 3, d: 5, k: 1 })}</details>`}
     </aside>`;
   if (learnTab === 'tutor') {
     return tabBtns + `<div class="layout"><section class="sheet tutor-lesson" aria-label="Урок с Бипычем">${chatBox(i, 'lesson')}</section>${side}</div>`;
@@ -1177,7 +1227,7 @@ function learnStage(i) {
         ${e.examples.map(x => `<div class="worked"><p class="worked-q">${x.q}</p><ol>${x.steps.map(s => `<li>${s}</li>`).join('')}</ol></div>`).join('')}</details>
       <details class="notes-more"${open}><summary>Где чаще ошибаются</summary>
       <ul class="mistakes">${t.mistakes.map(m => `<li><b>${m.title}.</b> ${m.say}</li>`).join('')}</ul></details>`; })()}
-      <p class="muted small notes-src">${isGeo(i) ? window.VEKTOR_GEOMETRY.sources : window.VEKTOR_FRACTIONS.sources}</p>
+      <p class="muted small notes-src">${isFractions(i) ? window.VEKTOR_FRACTIONS.sources : `${t.grade < 5 ? 'Повторение начальной школы. ' : ''}По федеральной рабочей программе «Математика. 5–9 классы (базовый уровень)»${t.frp ? ': ' + esc(t.frp.join('; ')) : ''}. Черновик «Вектора» — вычитывается методистом.`}</p>
       <div class="notes-go"><button class="btn btn-ghost btn-big" data-learn-tab="tutor">${G.icon('chat', 18)} Объясни, Бипыч</button><button class="btn btn-primary btn-big" data-stage="practice">Тренироваться</button></div>
     </article>${side}</div>`;
 }
@@ -1557,9 +1607,10 @@ function bind(page, i, stage) {
             s.hints < s.task.hints.length ? '<button class="link" id="fb-hint">Подсказка</button>' : '',
             t.legacy ? '' : '<button class="link" id="ask-tutor">Спросить наставника</button>'].filter(Boolean).join('');
           fb.className = 'feedback bad big' + (rk ? ' fb-bug' : '');
-          fb.innerHTML = `<p class="fb-title">${rk ? window.VEKTOR_TONE.art(rk, { size: 30 }) : G.icon('repeat', 22)} ${fbTitle}</p><p>${rk && mistakeOf(i, r.mistake) ? `<b>${mistakeOf(i, r.mistake).title}.</b> ${mistakeOf(i, r.mistake).say}` : (r.mistake || r.almost ? feedbackFor(r, s.task, i) : (xrayExpr ? 'Исправь сам — или нажми «Разобрать», и Бипыч найдёт, где сбилось.' : 'Исправь ответ или открой подсказку.'))}</p>` + eventsHtml(ev.filter(e => e.type !== 'struggle'), i) +
+          fb.innerHTML = `<p class="fb-title">${rk ? window.VEKTOR_TONE.art(rk, { size: 30 }) : G.icon('repeat', 22)} ${fbTitle}</p><p>${rk && mistakeOf(i, r.mistake) ? `<b>${mistakeOf(i, r.mistake).title}.</b> ${mistakeOf(i, r.mistake).say}${rootHole(i, r.mistake)}` : (r.mistake || r.almost ? feedbackFor(r, s.task, i) : (xrayExpr ? 'Исправь сам — или нажми «Разобрать», и Бипыч найдёт, где сбилось.' : 'Исправь ответ или открой подсказку.'))}</p>` + eventsHtml(ev.filter(e => e.type !== 'struggle'), i) +
             `<div class="fb-actions">${primary}</div><div class="fb-links">${links}</div>`;
           fb.querySelector('#try-again').onclick = () => { const inp = app.querySelector('#ans-num'); if (inp) { inp.focus(); inp.select(); } };
+          fb.querySelectorAll('[data-lesson]').forEach(b => b.onclick = () => { session = null; location.hash = 'lesson/' + b.dataset.lesson + '/learn'; });
           const fh = fb.querySelector('#fb-hint'); if (fh) fh.onclick = () => app.querySelector('#hint-btn')?.click();
           sfx('wrong');
           const ask = fb.querySelector('#ask-tutor');
@@ -1679,7 +1730,7 @@ function bind(page, i, stage) {
     e.preventDefault();
     const nm = sform.querySelector('#set-name');
     const hasInt = !!sform.querySelector('input[name=interest]');
-    state.settings = { ...state.settings, name: nm ? nm.value.trim() || 'Ученик' : state.settings.name, sound: sform.sound.checked, grade: +sform.grade.value || 5, ...(hasInt ? { interests: pickedInterests(sform) } : {}) }; game().goal = +sform.goal.value || 5; save();
+    state.settings = { ...state.settings, name: nm ? nm.value.trim() || 'Ученик' : state.settings.name, sound: sform.sound.checked, grade: +sform.grade.value || 5, gradeChosen: true, ...(hasInt ? { interests: pickedInterests(sform) } : {}) }; buildRoute(); game().goal = +sform.goal.value || 5; save();
     document.querySelector('#student-name').textContent = state.settings.name;
     document.querySelector('#avatar').textContent = state.settings.name[0].toUpperCase();
     app.querySelector('#feedback').textContent = 'Сохранено ✓';

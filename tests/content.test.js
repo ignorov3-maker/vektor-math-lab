@@ -11,7 +11,8 @@ const ROOT = path.join(__dirname, '..');
 for (const f of ['check', 'rational', 'tone', 'visuals', 'bugs', 'kit', 'fractions', 'geometry']) require(path.join(ROOT, 'content', f + '.js'));
 const K = window.VEKTOR_KIT, C = window.VEKTOR_CHECK, V = window.VEKTOR_VISUALS, B = window.VEKTOR_BUGS;
 K.adopt('fractions', 'Обыкновенные дроби', 5, window.VEKTOR_FRACTIONS.topics, 'Дроби');
-if (window.VEKTOR_GEOMETRY) K.adopt('geometry56', 'Наглядная геометрия', 5, window.VEKTOR_GEOMETRY.topics, 'Наглядная геометрия');
+// старая геометрия 5–6 — пока её не заменил курс content/courses/g56.js с теми же id
+if (window.VEKTOR_GEOMETRY && !fs.existsSync(path.join(ROOT, 'content', 'courses', 'g56.js'))) K.adopt('geometry56', 'Наглядная геометрия', 5, window.VEKTOR_GEOMETRY.topics, 'Наглядная геометрия');
 
 const dir = path.join(ROOT, 'content', 'courses');
 const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.endsWith('.js')).sort().map(f => path.join(dir, f)) : [];
