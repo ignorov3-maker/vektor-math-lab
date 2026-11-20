@@ -43,7 +43,7 @@ jobs:
           node tests/stories.test.js
           node tests/program.test.js
           node tests/geometry.test.js
-          node tests/geometry56.test.js
+          STRICT=1 N=600 node tests/content.test.js
           node tests/report-export.test.js
           node tests/quick.test.js
 
