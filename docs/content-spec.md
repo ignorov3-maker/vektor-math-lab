@@ -132,3 +132,6 @@ node -e "globalThis.window=globalThis;['check','rational','tone','visuals','bugs
 ```
 
 Читай как учитель: условие однозначно? ответ верен? подсказки ведут к ответу? неверные ответы действительно такие, какие даёт это неверное правило?
+
+
+ВАЖНО про поля ошибок: kidRule, say, fixIdea, conflicts[].text/ask/choices, explainOptions — ПРОСТОЙ ТЕКСТ (экран разбора их экранирует). Дроби пиши как «3/4» (они сами станут дробью), степени — символами ² ³, без fr() и HTML-тегов. fr() и <sup> — только в story/question/hints/solution/explain.
