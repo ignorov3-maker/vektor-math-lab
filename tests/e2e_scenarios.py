@@ -118,11 +118,11 @@ async def main():
         rep('Д-01: повторение неосвоенной темы закрыто', await pg.evaluate("session ? session.mode : 'none'")!='review' and await pg.evaluate("pct(5)")<100)
         # Ф-10: заглушки других разделов скрыты
         await pg.goto(B+'#map'); await pg.wait_for_timeout(150)
-        rep('Ф-10: на карте только 9 тем дробей', await pg.evaluate("topics.length")==9 and 'Проценты' not in await pg.inner_text('#app'))
+        rep('Ф-10: на карте 9 тем дробей и 5 геометрии, заглушек нет', await pg.evaluate("topics.length")==14 and await pg.evaluate("topics.filter(t=>t.legacy).length")==0 and 'Проценты' not in await pg.inner_text('#app'))
         # 9. Краткие темы (без методички) — только в демо-режиме ?demo=all
         D=B+'?demo=all'
-        await pg.goto(D+'#lesson/9'); await pg.wait_for_timeout(150); await answer(pg,'3'); rep('краткая тема решается', 'Верно' in await pg.inner_text('#feedback'))
-        await pg.goto(D+'#lesson/9/check'); rep('краткая тема не ломается на /check', await pg.locator('#answer-form').count()==1)
+        await pg.goto(D+'#lesson/14'); await pg.wait_for_timeout(150); await answer(pg,'3'); rep('краткая тема решается', 'Верно' in await pg.inner_text('#feedback'))
+        await pg.goto(D+'#lesson/14/check'); rep('краткая тема не ломается на /check', await pg.locator('#answer-form').count()==1)
         # 10. Материалы → конспект открывает урок, а не тренировку
         await pg.goto(B+'#library'); await pg.click('.topic-row[data-lesson="2"]'); await pg.wait_for_timeout(200); await pg.goto(B+'#lesson/2/learn'); await pg.wait_for_timeout(200); await pg.click('.lb-tabs [data-learn-tab="notes"]'); await pg.wait_for_timeout(200)
         rep('конспект открывается из урока кнопкой в верхней строке', await pg.locator('.method').count()==1, await pg.evaluate("location.hash"))
