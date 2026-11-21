@@ -318,6 +318,9 @@ print('''{
 	handle @hidden {
 		respond 404
 	}
+	handle /ops* {
+		reverse_proxy 127.0.0.1:8099
+	}
 	@api path /rest/v1/* /functions/v1/*
 	handle @api {
 		reverse_proxy 127.0.0.1:8000
@@ -398,6 +401,36 @@ proxy_setup() {
   ok 'ключ сохранён в /opt/vektor/functions.env (виден только root)'
   (cd "$SB" && docker compose up -d --force-recreate --no-deps functions >/dev/null 2>&1) || true
   sleep 5; ok 'функция Бипыча перезапущена'
+}
+
+# ---------- админка сервера: https://<домен>/ops/ ----------
+ops_code() {  # одноразовый код первого входа, 2 часа
+  local c; c=$(tr -dc 'ABCDEFGHJKMNPQRSTUVWXYZ23456789' </dev/urandom | head -c 8 || true)
+  printf '{"code":"%s","until":%s}\n' "$c" "$(( $(date +%s) + 7200 ))" > "$ROOT/ops-setup"; chmod 600 "$ROOT/ops-setup"
+  OPS_CODE=$c
+}
+ops_setup() {
+  say 'Админка сервера'
+  local self ref; self=$(readlink -f "$0"); ref=$(cat "$ROOT/ops-ref" 2>/dev/null || echo claude/beget)
+  [[ $self == "$ROOT/install.sh" ]] || cp "$self" "$ROOT/install.sh"; chmod 700 "$ROOT/install.sh"
+  if curl -fsSL --max-time 60 "https://raw.githubusercontent.com/ignorov3-maker/vektor-math-lab/$ref/tools/beget/ops.py" -o "$ROOT/ops.py.new" && python3 -m py_compile "$ROOT/ops.py.new"; then
+    mv "$ROOT/ops.py.new" "$ROOT/ops.py"; chmod 700 "$ROOT/ops.py"
+  else rm -f "$ROOT/ops.py.new"; [[ -f $ROOT/ops.py ]] || { warn 'админка не скачалась с GitHub'; return 0; }; fi
+  cat > /etc/systemd/system/vektor-ops.service <<UNIT
+[Unit]
+Description=Vektor server admin (/ops)
+After=network-online.target docker.service
+[Service]
+ExecStart=/usr/bin/python3 $ROOT/ops.py
+Restart=always
+RestartSec=3
+[Install]
+WantedBy=multi-user.target
+UNIT
+  systemctl daemon-reload; systemctl enable -q vektor-ops; systemctl restart vektor-ops
+  OPS_CODE=""
+  if [[ ! -f $ROOT/ops-pass ]]; then ops_code; fi
+  ok "админка: https://$(cat "$ROOT/domain")/ops/"
 }
 
 # ---------- автообновление: сервер сам берёт исправления с GitHub ----------
@@ -601,6 +634,8 @@ summary() {
   echo "   Postgres: $(cat "$ROOT/pg-image")   Supabase commit: $(cut -c1-10 "$ROOT/supabase-commit" 2>/dev/null)"
   echo "   данные: $([[ -f $ROOT/.data-copied ]] && echo скопированы || echo 'не копировались')"
   if ((${#WARNS[@]})); then echo '   замечания:'; printf '     - %s\n' "${WARNS[@]}"; else echo '   замечаний нет'; fi
+  echo "   админка: https://$(cat "$ROOT/domain")/ops/"
+  if [[ -n ${OPS_CODE:-} ]]; then echo "   ПЕРВЫЙ ВХОД В АДМИНКУ: https://$(cat "$ROOT/domain")/ops/#code=$OPS_CODE   (код $OPS_CODE, действует 2 часа)"; fi
   echo '   Пароли лежат на сервере: /opt/vektor/supabase/.env и /opt/vektor/functions.env. В чат их не присылай.'
   echo '   Не забудь сменить пароль root командой: passwd'
 }
@@ -634,7 +669,7 @@ diag() {
 case $CMD in
   install)
     ask; exec > >(tee -a "$LOG") 2>&1
-    base; firewall; supabase_prepare; site_prepare; up; exposure; data; backup; status; summary ;;
+    base; firewall; supabase_prepare; site_prepare; up; exposure; ops_setup; autoupdate; data; backup; status; summary ;;
   data)
     DOMAIN=$(cat "$ROOT/domain"); ask; exec > >(tee -a "$LOG") 2>&1
     data; backup; status; summary ;;
@@ -656,6 +691,23 @@ case $CMD in
     if [[ ${2:-} == proxyapi ]]; then proxy_setup; else ai_setup; fi
     autoupdate; status; summary ;;
   autoupdate) exec > >(tee -a "$LOG") 2>&1; autoupdate ;;
+  admin)  # bash install.sh admin — поставить админку и автообновление (без ключей и вопросов)
+    exec > >(tee -a "$LOG") 2>&1; DOMAIN=$(cat "$ROOT/domain"); OR_KEY=""
+    site_prepare; (docker rm -f vektor-caddy >/dev/null 2>&1; docker run -d --name vektor-caddy --restart unless-stopped --network host \
+      -v "$ROOT/Caddyfile:/etc/caddy/Caddyfile:ro" -v "$APP:/srv/site:ro" -v "$ROOT/public:/srv/conf:ro" \
+      -v vektor_caddy_data:/data -v vektor_caddy_config:/config caddy:2 >/dev/null) && ok 'веб-сервер перезапущен'
+    ops_setup; autoupdate; summary ;;
+  ops-code) ops_code; echo "Код первого входа: $OPS_CODE (2 часа). Ссылка: https://$(cat "$ROOT/domain")/ops/#code=$OPS_CODE" ;;
+  # вызываются из админки: секрет приходит на stdin и нигде не печатается
+  ai-set)
+    AI_KEY=$(head -c 4096 | tr -d '\r\n '); exec > >(tee -a "$LOG") 2>&1
+    case ${2:-} in proxyapi) proxy_setup ;; beget) ai_setup ;; *) die 'неизвестный провайдер' ;; esac
+    status; summary ;;
+  data-set)
+    SOURCE_DB=$(head -c 4096 | tr -d '\r\n'); DOMAIN=$(cat "$ROOT/domain"); exec > >(tee -a "$LOG") 2>&1
+    [[ $SOURCE_DB =~ ^postgres(ql)?:// ]] || die 'строка должна начинаться с postgresql://'
+    data; unset SOURCE_DB; backup; status; summary ;;
+  backup-now) exec > >(tee -a "$LOG") 2>&1; say 'Бэкап'; "$ROOT/backup.sh" && ok 'бэкап сделан' ;;
   diag) diag ;;
   status) exec > >(tee -a "$LOG") 2>&1; status; summary ;;
   *) die "неизвестная команда $CMD (install | ai | data | domain | reset | status | diag)" ;;
