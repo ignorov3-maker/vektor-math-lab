@@ -429,7 +429,11 @@ WantedBy=multi-user.target
 UNIT
   systemctl daemon-reload; systemctl enable -q vektor-ops; systemctl restart vektor-ops
   OPS_CODE=""
-  if [[ ! -f $ROOT/ops-pass ]]; then ops_code; fi
+  if [[ ! -f $ROOT/ops-pass ]]; then
+    # действующий код не меняем (автообновление не должно сбивать первый вход)
+    OPS_CODE=$(python3 -c 'import json,time,sys; d=json.load(open(sys.argv[1])); print(d["code"] if d.get("until",0)>time.time() else "")' "$ROOT/ops-setup" 2>/dev/null || true)
+    [[ -n $OPS_CODE ]] || ops_code
+  fi
   ok "админка: https://$(cat "$ROOT/domain")/ops/"
 }
 
