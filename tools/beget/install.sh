@@ -201,7 +201,10 @@ for line in open(p).read().split('\n'):
         m2 = re.match(r'^(\s*)-\s*(["\']?)([^"\']*)\2\s*$', line)
         if m2 and len(m2.group(1)) > ind:
             v = m2.group(3)
-            if not v.startswith('127.0.0.1:') and v.count(':') == 1:
+            bare = v  # двоеточия внутри ${A:-${B:-8000}} не считаются
+            while re.search(r'\$\{[^{}]*\}', bare):
+                bare = re.sub(r'\$\{[^{}]*\}', 'X', bare)
+            if bare.count(':') == 1 and not re.match(r'^(\d+\.\d+\.\d+\.\d+|\[)', v):
                 v = '127.0.0.1:' + v
             out.append('%s- "%s"' % (m2.group(1), v)); continue
         if line.strip() == '' or line.strip().startswith('#'):
