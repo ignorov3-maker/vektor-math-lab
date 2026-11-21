@@ -43,6 +43,9 @@ const STRANDS = {
   6: ['Натуральные числа', 'Дроби', 'Положительные и отрицательные числа', 'Буквенные выражения', 'Текстовые задачи', 'Наглядная геометрия'],
   7: ['Алгебра', 'Геометрия', 'Вероятность и статистика'], 8: ['Алгебра', 'Геометрия', 'Вероятность и статистика'], 9: ['Алгебра', 'Геометрия', 'Вероятность и статистика'],
 };
+// Название главы на пути: в 6 классе раздел ФРП «Дроби» — это отношения, пропорции и проценты, а не дроби 5 класса
+const STRAND_TITLE = { 6: { 'Дроби': 'Отношения, пропорции, проценты', 'Натуральные числа': 'Делимость: НОД и НОК', 'Наглядная геометрия': 'Геометрия' } };
+const strandTitle = (st, g = state.settings.grade || 5) => (STRAND_TITLE[g] && STRAND_TITLE[g][st]) || st;
 const gradeTopics = g => (STRANDS[g] || []).flatMap(st => topics.map((t, i) => i).filter(i => !topics[i].legacy && topics[i].grade === g && topics[i].strand === st));
 // маршрут ученика — темы его класса по разделам программы; пересобирается при смене класса
 let ROUTE = gradeTopics(5);
@@ -527,8 +530,14 @@ function withInterests(task) {
 }
 // Класс спрашиваем один раз: от него зависит путь (темы своего класса по программе)
 const askGrade = () => !state.settings.gradeChosen && !navigator.webdriver && !askInterests();
-const gradeSheet = () => `<div class="int-sheet-wrap"><section class="int-sheet grade-ask" role="dialog" aria-modal="true" aria-labelledby="grade-h"><span class="int-grip" aria-hidden="true"></span><h2 id="grade-h">В каком ты классе?</h2><p class="muted small">Бипыч соберёт путь по программе твоего класса. Поменять можно в профиле.</p><div class="grade-pick">${[5, 6, 7, 8, 9].map(n => `<button class="btn btn-ghost btn-big" data-grade-pick="${n}">${n}</button>`).join('')}</div></section></div>`;
+const gradeSheet = () => `<div class="int-sheet-wrap"><section class="int-sheet grade-ask" role="dialog" aria-modal="true" aria-labelledby="grade-h"><span class="int-grip" aria-hidden="true"></span><h2 id="grade-h">В каком ты классе?</h2><p class="muted small">Бипыч соберёт путь по программе твоего класса. Поменять можно в профиле.</p><div class="grade-pick">${[5, 6, 7, 8, 9].map(n => `<button class="btn ${state.settings.gradeChosen && n === state.settings.grade ? 'btn-primary' : 'btn-ghost'} btn-big" data-grade-pick="${n}" aria-pressed="${n === state.settings.grade}">${n}</button>`).join('')}</div></section></div>`;
 function bindGrade(root) {
+  root.querySelectorAll('[data-grade-open]').forEach(b => b.onclick = () => {
+    if (document.querySelector('.grade-ask')) return;
+    const box = document.createElement('div'); box.innerHTML = gradeSheet(); const w = box.firstElementChild;
+    w.addEventListener('click', e => { if (e.target === w) w.remove(); });
+    app.appendChild(w); bindGrade(w);
+  });
   root.querySelectorAll('[data-grade-pick]').forEach(b => b.onclick = () => { state.settings.grade = +b.dataset.gradePick; state.settings.gradeChosen = true; buildRoute(); save(); ymGoal('grade', { k: state.settings.grade }); render(); });
 }
 function bindInterests(root) {
@@ -955,7 +964,7 @@ function home() {
     ...seq.slice(qn).map((n, idx) => {
       const st = n.kind === 'topic' && topics[n.i].strand, prev = idx > 0 && seq[qn + idx - 1].kind === 'topic' ? topics[seq[qn + idx - 1].i].strand : null;
       const inStrand = ROUTE.filter(r => topics[r].strand === st);
-      return (st && st !== prev && idx + qn < FOG_FROM ? chapter(st, `${inStrand.filter(r => pct(r) >= DONE).length} из ${inStrand.length} освоено`) : '') + nodeHtml(n, idx + qn);
+      return (st && st !== prev && idx + qn < FOG_FROM ? chapter(strandTitle(st), `${inStrand.filter(r => pct(r) >= DONE).length} из ${inStrand.length} освоено`) : '') + nodeHtml(n, idx + qn);
     }),
   ].join('');
   const hidden = Math.max(0, seq.length - FOG_FROM - 2);
@@ -964,6 +973,7 @@ function home() {
   ${askGrade() ? gradeSheet() : ''}
   ${askInterests() ? `<div class="int-sheet-wrap"><section class="int-sheet interests-ask" role="dialog" aria-modal="true" aria-labelledby="int-h"><span class="int-grip" aria-hidden="true"></span><h2 id="int-h">Ты прошёл уже ${finishedLevels()} ${finishedLevels() < 5 ? 'уровня' : 'уровней'}! Что тебе интересно?</h2><p class="muted small">Выбери до трёх — Бипыч будет придумывать задачи про это.</p>${interestPicker([])}<div class="row-actions"><button class="btn btn-primary btn-big" data-interests-save>Готово</button><button class="btn btn-ghost" data-interests-skip>Не сейчас</button></div></section></div>` : ''}
   <h1 class="visually-hidden">Мой путь</h1>
+  <div class="grade-bar"><button class="grade-chip" data-grade-open aria-label="Сменить класс">${state.settings.grade || 5} класс <span aria-hidden="true">▾</span></button></div>
   <div class="layout home-layout">
     <section class="path-wrap" aria-label="Мой путь">
       <ol class="path" id="path"><svg class="path-line" aria-hidden="true"></svg>${items}
@@ -1158,7 +1168,7 @@ function mapPage() {
   const body = (STRANDS[gn] || []).map(st => {
     const ids = byStrand(st);
     const plan = P && P.grade(gn) ? (P.grade(gn).strands.find(x => x.name === st) || {}).bug : null;
-    return `<section class="section strand"><h2>${esc(st)}${ids.length ? ` <small>${ids.length} ${plural(ids.length, 'тема', 'темы', 'тем')}</small>` : ' <small>скоро</small>'}</h2>
+    return `<section class="section strand"><h2>${esc(strandTitle(st, gn))}${ids.length ? ` <small>${ids.length} ${plural(ids.length, 'тема', 'темы', 'тем')}</small>` : ' <small>скоро</small>'}</h2>
       ${ids.length ? topicCards(ids) : ''}
       ${plan && !ids.length ? `<div class="bug-sample"><p class="bs-label">Как Вектор поймает ошибку здесь</p><p class="bs-rule"><s>${esc(plan.rule)}</s></p><p class="bs-counter">${esc(plan.counter)}</p></div>` : ''}
     </section>`;
