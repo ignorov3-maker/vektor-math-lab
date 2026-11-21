@@ -632,7 +632,12 @@ status() {
   [[ $c == 200 ]] && ok 'база отвечает сайту (vektor_public_config)' || warn "база отвечает сайту кодом $c (если данные не копировали — это ожидаемо)"
   # тот же запрос, что шлёт сайт (сайт и API на одном домене — предварительного OPTIONS у браузера нет)
   c=$(code -X POST "https://$DOMAIN/functions/v1/tutor" -H "Origin: https://$DOMAIN" -H "apikey: $anon" -H "Authorization: Bearer $anon" -H 'Content-Type: application/json' -d '{"mode":"lesson","topic":"concept","token":"x","history":[{"role":"user","content":"привет"}]}')
-  [[ $c == 401 || $c == 400 || $c == 200 ]] && ok "функция Бипыча на месте (без входа ученика отвечает $c — так и должно быть)" || warn "функция Бипыча отвечает кодом $c"
+  if [[ $c == 401 || $c == 400 || $c == 200 ]]; then ok "функция Бипыча на месте (без входа ученика отвечает $c — так и должно быть)"
+  else
+    local b; b=$(curl -s --max-time 20 -X POST "https://$DOMAIN/functions/v1/tutor" -H "Origin: https://$DOMAIN" -H "apikey: $anon" -H "Authorization: Bearer $anon" -H 'Content-Type: application/json' -d '{"mode":"lesson","topic":"concept","token":"x","history":[{"role":"user","content":"привет"}]}' | head -c 200 | tr -d '\n')
+    warn "функция Бипыча отвечает кодом $c: $b"
+    echo "     напрямую в функцию: $(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -X POST http://127.0.0.1:8000/functions/v1/tutor -H "Origin: https://$DOMAIN" -H "apikey: $anon" -H "Authorization: Bearer $anon" -H 'Content-Type: application/json' -d '{}')"
+  fi
   if grep -q '^AI_VIA=ProxyAPI' "$ROOT/functions.env" 2>/dev/null; then ok 'Бипыч работает через ProxyAPI'
   elif grep -q '^AI_URL=' "$ROOT/functions.env" 2>/dev/null; then ok 'Бипыч работает через ИИ-шлюз Beget'
   elif grep -q '^OPENROUTER_URL=https://api.proxyapi' "$ROOT/functions.env" 2>/dev/null; then ok 'Бипыч работает через ProxyAPI'
