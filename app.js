@@ -119,7 +119,7 @@ function runWarmup() {
   const items = warmupPlan();
   if (!items.length) { location.hash = 'home'; return; }
   window.VEKTOR_WARMUP.run(el, { items, bugs: window.VEKTOR_REVIEW.ensure(state), today: today(), lv: 2,
-    reviewTask: k => topics[k].generate(2), check,
+    reviewTask: k => newTask(topics[k], 2), check,
     onEvent: (type, data) => { logEvent(type, data); save(); },
     onStars: n => { game().stars += n; save(); hud(); },
     onReview: (key, p, back) => openReview(el, key, null, null, { own: p, onClose: back }),
@@ -161,6 +161,18 @@ const levelOf = i => meta(i).level ?? A.startLevel(pace());
 const dots = lv => `<span class="level" title="Уровень задач ${lv} из 3">${[1, 2, 3].map(k => `<i class="${k <= lv ? 'on' : ''}"></i>`).join('')}</span>`;
 const modelName = () => (T.MODELS.find(m => m.id === ai.model)?.name.split(' — ')[0]) || ai.model;
 
+// Без повторов: задача темы не выпадет снова, пока не пройдёт 40 других её задач (помним и после перезагрузки)
+const RECENT_KEY = 'vektor-recent-tasks';
+let recentTasks = {}; try { recentTasks = JSON.parse(localStorage.getItem(RECENT_KEY)) || {}; } catch (e) { recentTasks = {}; }
+const taskSig = x => [x.story || '', x.question || '', x.answer].join('|').replace(/\s+/g, ' ');
+function newTask(t, lv) {
+  const seen = recentTasks[t.id] || (recentTasks[t.id] = []);
+  let task, sig;
+  for (let k = 0; k < 40; k++) { task = t.generate(lv); sig = taskSig(task); if (!seen.includes(sig)) break; }
+  seen.push(sig); if (seen.length > 40) seen.splice(0, seen.length - 40);
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(recentTasks)); } catch (e) { /* хранилище недоступно — помним до перезагрузки */ }
+  return task;
+}
 // «Дыра из младшего класса»: у ошибки есть корень — тема, где это правило родилось
 const rootOf = (i, mistakeId) => { const m = mistakeOf(i, mistakeId), r = m && m.root != null ? byId[m.root] : null; return r != null && r !== i ? r : null; };
 function rootHole(i, mistakeId) {
@@ -589,13 +601,13 @@ function startLesson(i) {
   if (c.started) return;
   c.started = true;
   // урок всегда идёт по сценарию: живые картинки и вопросы одинаковые у всех; ИИ отвечает, когда ребёнок спрашивает сам
-  c.beats = T.lessonBeats(topics[i], () => topics[i].generate(1));
+  c.beats = T.lessonBeats(topics[i], () => newTask(topics[i], 1));
   nextBeat(i);
 }
 
 function nextBeat(i) {
   const c = getChat(i, 'lesson');
-  if (!c.beats) c.beats = T.lessonBeats(topics[i], () => topics[i].generate(1));
+  if (!c.beats) c.beats = T.lessonBeats(topics[i], () => newTask(topics[i], 1));
   if (c.beat >= c.beats.length - 1) { c.done = true; return; }
   const b = c.beats[++c.beat];
   if (b.task) {
@@ -1245,7 +1257,7 @@ function learnStage(i) {
 function newPracticeTask(i) {
   const m = meta(i), t = topics[i], p = pace();
   if (m.level == null && !t.legacy) m.level = A.startLevel(p);
-  session = { i, mode: 'practice', task: withInterests(t.generate(t.legacy ? undefined : m.level)), hints: 0, answered: false, tries: [], started: Date.now(), lastMistake: null, autoHint: false };
+  session = { i, mode: 'practice', task: withInterests(newTask(t, t.legacy ? undefined : m.level)), hints: 0, answered: false, tries: [], started: Date.now(), lastMistake: null, autoHint: false };
   if (!t.legacy && A.autoHint(m, p)) { session.hints = 1; session.autoHint = true; }
   const tc = chats[`${t.id}:task`]; if (tc && !tc.busy) Object.assign(tc, { msgs: [], hint: 0 });
 }
@@ -1271,7 +1283,7 @@ function practiceStage(i) {
 
 function checkStage(i, mode) {
   const t = topics[i], total = mode === 'check' ? t.check.count : 2;
-  if (!session || session.i !== i || session.mode !== mode) session = { i, mode, k: 0, right: 0, total, task: t.generate(2), answered: false, found: [] };
+  if (!session || session.i !== i || session.mode !== mode) session = { i, mode, k: 0, right: 0, total, task: newTask(t, 2), answered: false, found: [] };
   const s = session;
   if (s.k >= s.total) return resultView(i);
   const title = mode === 'check' ? `Проверка: задача ${s.k + 1} из ${s.total}` : `Повторение: задача ${s.k + 1} из ${s.total}`;
@@ -1329,7 +1341,7 @@ function diagnostic() {
       <div class="row-actions"><button class="btn btn-primary" data-go="home">К моему пути</button><button class="btn btn-ghost" id="diag-restart">Пройти ещё раз</button></div></div>`;
   }
   const i = DIAG[d.step];
-  if (!diagTask || diagTask.i !== i) diagTask = { i, task: topics[i].generate(2), started: Date.now() };
+  if (!diagTask || diagTask.i !== i) diagTask = { i, task: newTask(topics[i], 2), started: Date.now() };
   return head(window.VEKTOR_TONE.senior() ? 'Проверка' : 'Ищем твоих жучков', `${DIAG.length} коротких задач по разным темам, без подсказок. Ошибаться можно — так мы найдём, где правило сбивает, и подберём путь.`) + `
   <section class="sheet task" style="max-width:760px">
     <div class="steps" aria-hidden="true">${DIAG.map((_, k) => `<i class="${k < d.step ? 'on' : ''}"></i>`).join('')}</div>
@@ -1700,7 +1712,7 @@ function bind(page, i, stage) {
       sfx(ok ? 'ok' : 'wrong');
       form.querySelectorAll('input,button').forEach(el => el.disabled = true);
       fb.querySelector('#next-task').onclick = () => {
-        s.k++; s.answered = false; s.task = topics[i].generate(2);
+        s.k++; s.answered = false; s.task = newTask(topics[i], 2);
         if (s.k >= s.total) finishSession(i);
         render(); app.querySelector('#ans-num')?.focus();
         if (gameEvents) { if (gameEvents.some(e => e.type === 'mastered')) sfx('win'); celebrate(gameEvents); gameEvents = null; }
