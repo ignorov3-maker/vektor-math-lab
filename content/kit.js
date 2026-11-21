@@ -137,7 +137,9 @@
     for (const t of def.topics) {
       if (BYID[t.id]) throw new Error(`kit: тема ${t.id} уже есть`);
       const gen = t.generate;
-      const topic = Object.assign({ start: 0, section: t.strand || def.title, course: def.id }, t, { grade: t.grade || def.grade });
+      // check / review / idea — как у дробей: без них шаг «Проверь себя» и повторение не открываются
+      const topic = Object.assign({ start: 0, section: t.strand || def.title, course: def.id, check: { count: 4, passScore: 3 }, review: { afterDays: [1, 3, 7] } }, t, { grade: t.grade || def.grade });
+      if (!topic.idea && topic.explain) topic.idea = topic.explain.model;
       topic.generate = lv => task(gen.call(topic, lv), topic);
       c.topics.push(topic); TOPICS.push(topic); BYID[topic.id] = topic;
       registerBugs(topic);

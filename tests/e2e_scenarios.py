@@ -118,6 +118,12 @@ async def main():
         rep('Д-01: повторение неосвоенной темы закрыто', await pg.evaluate("session ? session.mode : 'none'")!='review' and await pg.evaluate("pct(5)")<100)
         # Ф-10: заглушки других разделов скрыты
         await pg.goto(B+'#map'); await pg.wait_for_timeout(150)
+        # шаг «Проверь себя» открывается на каждой теме 5–9 (был белый экран: у новых тем не было check)
+        bad=[]
+        for i in await pg.evaluate("topics.map((t,i)=>t.course?i:-1).filter(i=>i>=0)"):
+            await pg.goto(B+f'#lesson/{i}/check'); await pg.wait_for_timeout(60)
+            if await pg.locator('#answer-form').count()!=1: bad.append(i)
+        rep('«Проверь себя» открывается на всех темах 5–9', not bad, str(bad[:5]))
         rep('Ф-10: темы — дроби и курсы 5–9 по программе, заглушек нет', await pg.evaluate("topics.length===9+VEKTOR_KIT.topics.filter(t=>t.course).length && topics.filter(t=>t.legacy).length===0"))
         # 9. Краткие темы (без методички) — только в демо-режиме ?demo=all
         D=B+'?demo=all'

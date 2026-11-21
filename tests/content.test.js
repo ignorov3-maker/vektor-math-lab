@@ -62,6 +62,7 @@ for (const [f, list] of Object.entries(loaded)) {
       if (m.root) { const r = K.byId[m.root]; if (!r) missingRef(t, `ошибка ${m.id}: root`, m.root); else if ((r.grade || 5) > t.grade) bad(t, `ошибка ${m.id}: root из старшего класса`); }
     }
     if (typeof t.verify !== 'function') bad(t, 'нет verify(task) — независимый пересчёт ответа');
+    if (!t.check || !(t.check.count > 0) || !(t.check.passScore > 0) || !t.review || !Array.isArray(t.review.afterDays)) bad(t, 'нет check/review — шаг «Проверь себя» не откроется');
     // --- генератор
     const seen = new Set(), wrongSeen = new Set(), lvSeen = { 1: new Set(), 3: new Set() };
     let ok = 0;
