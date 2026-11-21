@@ -516,7 +516,11 @@ diag() {
   for r in supabase_admin postgres authenticator supabase_auth_admin supabase_storage_admin; do
     if docker exec -e PGPASSWORD="$pw" supabase-db psql -h 127.0.0.1 -U "$r" -d postgres -Atc 'select 1' >/dev/null 2>&1; then echo "вход $r по паролю из .env: да"; else echo "вход $r по паролю из .env: НЕТ"; fi
   done
-  echo "--- журнал базы:"; docker logs --tail 25 supabase-db 2>&1 | cut -c1-160
+  echo "базы: $(docker exec -e PGPASSWORD="$pw" supabase-db psql -h 127.0.0.1 -U supabase_admin -d postgres -Atc 'select string_agg(datname, $$ $$) from pg_database' 2>&1)"
+  echo "init-файлы: $(ls volumes/db 2>&1 | tr '\n' ' ')"
+  echo "--- первичная настройка базы (ошибки и миграции):"
+  docker logs supabase-db 2>&1 | grep -vE '_supabase" does not exist|connection authorized|connection received' \
+    | grep -iE 'error|fatal|warn|migrat|init|running|_supabase|skipp' | head -30 | cut -c1-170 || true
 }
 
 case $CMD in
