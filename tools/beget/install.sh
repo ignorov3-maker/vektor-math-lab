@@ -344,34 +344,45 @@ wait_all() {
   BAD=$bad; return 1
 }
 
-up() {
-  say 'Запуск (первый раз скачивание займёт 5–15 минут)'
-  cd "$SB"
-  docker compose pull -q
+auth_broken() { (cd "$SB" && docker compose logs --no-color --since 10m 2>&1) | grep -q 'password authentication failed'; }
+
+# база ещё пустая и не та, что стандартная: пересоздать на стандартном образе Supabase
+fallback_pg() {
+  warn "Postgres $(cat "$ROOT/pg-image"): $1 — пересоздаю пустую базу на стандартном образе Supabase"
+  docker compose down >/dev/null 2>&1 || true
+  rm -rf "$SB/volumes/db/data" "$ROOT/.db-initialized"
+  echo default > "$ROOT/pg-image"; write_override
+}
+can_fallback() { [[ ! -f $ROOT/.data-copied && $(cat "$ROOT/pg-image") != default ]]; }
+
+start_stack() {
   docker compose up -d db >/dev/null 2>&1 || true
   if ! wait_db; then
-    if [[ ! -f $ROOT/.db-initialized && $(cat "$ROOT/pg-image") != default ]]; then
-      warn "Postgres $(cat "$ROOT/pg-image") не запустился, переключаюсь на стандартный образ Supabase"
-      docker logs --tail 20 supabase-db 2>&1 | sed 's/^/     /' || true
-      docker compose down >/dev/null 2>&1 || true
-      rm -rf "$SB/volumes/db/data"
-      echo default > "$ROOT/pg-image"; write_override
-      docker compose up -d db >/dev/null 2>&1 || true
-      wait_db || { docker logs --tail 40 supabase-db 2>&1; die 'база не запускается'; }
-    else
-      docker logs --tail 40 supabase-db 2>&1; die 'база не запускается'
-    fi
+    can_fallback && { fallback_pg 'база не запустилась'; return 2; }
+    docker logs --tail 40 supabase-db 2>&1; die 'база не запускается'
   fi
   touch "$ROOT/.db-initialized"
   ok "база работает: $(docker exec supabase-db postgres --version)"
   docker compose up -d >/dev/null 2>&1 || true
   docker compose up -d --force-recreate --no-deps functions >/dev/null 2>&1 || true
   BAD=""
-  if ! wait_all; then
-    for c in $BAD; do echo "--- ${c#/}"; docker logs --tail 30 "${c#/}" 2>&1 | sed 's/^/     /'; done
-    die "не поднялись контейнеры:$BAD"
+  wait_all && return 0
+  if auth_broken && can_fallback; then fallback_pg 'служебным ролям не выставились пароли'; return 2; fi
+  for c in $BAD; do echo "--- ${c#/}"; docker logs --tail 30 "${c#/}" 2>&1 | sed 's/^/     /'; done
+  die "не поднялись контейнеры:$BAD"
+}
+
+up() {
+  say 'Запуск (первый раз скачивание займёт 5–15 минут)'
+  cd "$SB"
+  if can_fallback && [[ -f $ROOT/.db-initialized ]] && auth_broken; then
+    fallback_pg 'служебным ролям не выставились пароли'
   fi
-  ok "все контейнеры Supabase работают ($(docker compose ps -q | wc -l) шт., analytics включена)"
+  docker compose pull -q
+  local rc=0
+  start_stack || rc=$?
+  if (( rc == 2 )); then docker compose pull -q; start_stack; fi
+  ok "все контейнеры Supabase работают: $(docker compose ps --services --status running | tr '\n' ' ')"
 
   docker rm -f vektor-caddy >/dev/null 2>&1 || true
   local busy
