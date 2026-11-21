@@ -344,7 +344,11 @@ wait_all() {
   BAD=$bad; return 1
 }
 
-auth_broken() { (cd "$SB" && docker compose logs --no-color --since 10m 2>&1) | grep -q 'password authentication failed'; }
+auth_broken() {  # без grep -q: при pipefail ранний выход grep давал ложный ответ
+  local n
+  n=$(cd "$SB" && docker compose logs --no-color --since 30m 2>&1 | grep -c 'password authentication failed' || true)
+  (( ${n:-0} > 0 ))
+}
 
 # база ещё пустая и не та, что стандартная: пересоздать на стандартном образе Supabase
 fallback_pg() {
