@@ -339,6 +339,7 @@ wait_all() {
       case $s in *'|running|'|*'|running|healthy') ;; *) bad+=" ${s%%|*}";; esac
     done
     [[ -z $bad ]] && return 0
+    (( i > 18 )) && auth_broken && { BAD=$bad; return 1; }
     sleep 5
   done
   BAD=$bad; return 1
@@ -353,9 +354,14 @@ auth_broken() {  # без grep -q: при pipefail ранний выход grep 
 # база ещё пустая и не та, что стандартная: пересоздать на стандартном образе Supabase
 fallback_pg() {
   warn "Postgres $(cat "$ROOT/pg-image"): $1 — пересоздаю пустую базу на стандартном образе Supabase"
-  docker compose down >/dev/null 2>&1 || true
-  rm -rf "$SB/volumes/db/data" "$ROOT/.db-initialized"
+  wipe_db
   echo default > "$ROOT/pg-image"; write_override
+}
+# база может лежать и в папке, и в томе Docker: удалить оба (только пока данные не копировались)
+wipe_db() {
+  [[ ! -f $ROOT/.data-copied ]] || die 'данные уже скопированы — удалять базу нельзя'
+  (cd "$SB" && docker compose down -v --remove-orphans >/dev/null 2>&1) || true
+  rm -rf "$SB/volumes/db/data" "$ROOT/.db-initialized"
 }
 can_fallback() { [[ ! -f $ROOT/.data-copied && $(cat "$ROOT/pg-image") != default ]]; }
 
@@ -498,6 +504,10 @@ case $CMD in
   data)
     DOMAIN=$(cat "$ROOT/domain"); ask; exec > >(tee -a "$LOG") 2>&1
     data; backup; status; summary ;;
+  reset)   # пустую базу пересоздать заново и продолжить установку
+    ask; exec > >(tee -a "$LOG") 2>&1
+    say 'Сброс пустой базы'; wipe_db; ok 'база и её тома удалены'
+    base; firewall; supabase_prepare; site_prepare; up; exposure; data; backup; status; summary ;;
   status) exec > >(tee -a "$LOG") 2>&1; status; summary ;;
-  *) die "неизвестная команда $CMD (install | data | status)" ;;
+  *) die "неизвестная команда $CMD (install | reset | data | status)" ;;
 esac
