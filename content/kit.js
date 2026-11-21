@@ -110,7 +110,7 @@
       trap: lv => trapOf(lv),
     };
     const V = root.VEKTOR_VISUALS, fig = p => (p && p.figure && V ? V.figure(p.figure) : '');
-    const shown = (p, w) => (p.accept === 'choice' ? w : num(+valueOf(w, p)));
+    const shown = (p, w) => (p.accept === 'choice' ? w : /\//.test(String(w)) ? String(w).replace(/^-/, '−') : num(+valueOf(w, p))); // дробь показываем дробью, не 0,166667
     // мини-урок на доску собираем, только когда учитель его открывает
     const makeLesson = () => [
       (() => { const p = trapOf(1, 200) || trapOf(2, 200); const w = p && b.wrong(p);
