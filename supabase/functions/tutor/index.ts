@@ -216,7 +216,10 @@ export async function handle(req: Request): Promise<Response> {
   if (req.method !== 'POST') return json(405, 'method', 'Only POST');
 
   const workerUrl = Deno.env.get('OPENROUTER_WORKER_URL');
-  const KEY = workerUrl ? Deno.env.get('OPENROUTER_WORKER_KEY') : Deno.env.get('OPENROUTER_API_KEY');
+  // Свой OpenAI-совместимый шлюз (например, ИИ-шлюз Beget — работает с российского сервера, оплата в рублях):
+  // AI_URL — адрес /chat/completions, AI_API_KEY — ключ, AI_MODEL — модель. Тогда OpenRouter не нужен.
+  const aiUrl = Deno.env.get('AI_URL');
+  const KEY = aiUrl ? Deno.env.get('AI_API_KEY') : workerUrl ? Deno.env.get('OPENROUTER_WORKER_KEY') : Deno.env.get('OPENROUTER_API_KEY');
   const SB = Deno.env.get('SUPABASE_URL'), SR = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   if (!SB || !SR) return json(500, 'config', 'Server is not configured');
 
@@ -291,10 +294,18 @@ export async function handle(req: Request): Promise<Response> {
   const messages = built.messages;
   if (JSON.stringify(messages).length > MAX_CHARS + 12000) return json(413, 'too_long', 'Слишком длинный разговор — начни новый вопрос');
 
-  const model = MODEL, maxTokens = OUT[mode];
+  const model = aiUrl ? (Deno.env.get('AI_MODEL') || 'deepseek-v4-flash') : MODEL, maxTokens = OUT[mode];
   const isJson = built.json;
-  const UP = workerUrl || Deno.env.get('OPENROUTER_URL') || 'https://openrouter.ai/api/v1/chat/completions'; // для тестов
-  const call = (reasoningOff: boolean) => fetch(UP, {
+  const UP = aiUrl || workerUrl || Deno.env.get('OPENROUTER_URL') || 'https://openrouter.ai/api/v1/chat/completions'; // для тестов
+  const call = (reasoningOff: boolean) => fetch(UP, aiUrl ? {
+    // обычный OpenAI-формат: без полей, которые понимает только OpenRouter
+    method: 'POST',
+    headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model, messages, stream: !isJson, temperature: isJson ? 0 : 0.4, max_tokens: maxTokens,
+      ...(isJson ? { response_format: { type: 'json_object' } } : { stream_options: { include_usage: true } }),
+    }),
+  } : {
     method: 'POST',
     headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json', 'X-OpenRouter-Title': 'Vektor' },
     body: JSON.stringify({

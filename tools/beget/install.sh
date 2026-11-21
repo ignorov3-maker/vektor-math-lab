@@ -66,7 +66,7 @@ ask() {
   printf '%s\n' "$DOMAIN" > "$ROOT/domain"
 
   OR_KEY=""
-  if [[ $CMD == install ]] && ! grep -q '^OPENROUTER_API_KEY=.\+' "$ROOT/functions.env" 2>/dev/null; then
+  if [[ $CMD == install ]] && ! grep -qE '^(OPENROUTER_API_KEY|AI_URL)=.+' "$ROOT/functions.env" 2>/dev/null; then
     printf 'Ключ OpenRouter для Бипыча (ввод не виден; Enter — пропустить): '
     read -rs OR_KEY </dev/tty || true; echo
   fi
@@ -262,6 +262,7 @@ site_prepare() {
     rm -rf "$SB/volumes/functions/$f"
     cp -a "$APP/supabase/functions/$f" "$SB/volumes/functions/$f"
   done
+  overlay_tutor
   ok 'функции tutor и mail скопированы'
 
   local tmp; tmp=$(mktemp)
@@ -273,7 +274,9 @@ site_prepare() {
     [[ -n $OR_KEY ]] && printf 'OPENROUTER_API_KEY=%s\n' "$OR_KEY"
   } > "$ROOT/functions.env"
   rm -f "$tmp"; chmod 600 "$ROOT/functions.env"
-  grep -q '^OPENROUTER_API_KEY=.\+' "$ROOT/functions.env" && ok 'ключ OpenRouter сохранён' || warn 'ключ OpenRouter не задан — Бипыч отвечать не будет'
+  if grep -q '^AI_URL=' "$ROOT/functions.env"; then ok 'Бипыч — через ИИ-шлюз Beget'
+  elif grep -q '^OPENROUTER_API_KEY=.\+' "$ROOT/functions.env"; then ok 'ключ OpenRouter сохранён'
+  else warn 'ключ для Бипыча не задан — подключи ИИ-шлюз: bash install.sh ai'; fi
 
   local metrika anon
   metrika=$(grep -oE "metrikaId: *'[0-9]*'" "$APP/config.js" | grep -oE '[0-9]+' || true)
@@ -335,6 +338,43 @@ if not sys.argv[2].endswith('sslip.io'):
 PY
   chmod 644 "$ROOT/Caddyfile"
   ok "HTTPS-настройки для $DOMAIN готовы (заголовки безопасности как на Vercel)"
+}
+
+# Бипыч из другой ветки репозитория (пока поддержка ИИ-шлюза не в main): /opt/vektor/functions-ref
+overlay_tutor() {
+  [[ -s $ROOT/functions-ref ]] || return 0
+  local ref f tmp; ref=$(cat "$ROOT/functions-ref"); tmp=$(mktemp -d)
+  for f in index.ts method.ts; do
+    curl -fsSL --max-time 30 "https://raw.githubusercontent.com/ignorov3-maker/vektor-math-lab/$ref/supabase/functions/tutor/$f" -o "$tmp/$f" || { warn "функция Бипыча из ветки $ref не скачалась — оставляю версию из main"; rm -rf "$tmp"; return 0; }
+  done
+  cp "$tmp"/*.ts "$SB/volumes/functions/tutor/"; chmod -R go+rX "$SB/volumes/functions/tutor"; rm -rf "$tmp"
+  ok "функция Бипыча — из ветки $ref"
+}
+
+# ---------- Бипыч через ИИ-шлюз Beget (рубли, работает с российского сервера) ----------
+AI_GW=https://api-llm.beget.com/v1/chat/completions
+AI_GW_MODEL=deepseek-v4-flash
+ai_setup() {
+  say 'Бипыч через ИИ-шлюз Beget'
+  [[ -n ${AI_KEY:-} ]] || die 'ключ не введён'
+  local code tmp
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 40 -H @<(printf 'Authorization: Bearer %s\n' "$AI_KEY") -H 'Content-Type: application/json' \
+    -d "{\"model\":\"$AI_GW_MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"Ответь одним словом: ок\"}],\"max_tokens\":5}" "$AI_GW" || true)
+  case $code in
+    200) ok 'ключ работает: шлюз ответил' ;;
+    401|403) die "шлюз не принял ключ (код $code) — проверь ключ в панели Beget" ;;
+    402) die 'на балансе Beget нет денег для ИИ-шлюза (код 402) — пополни баланс' ;;
+    *) die "шлюз не ответил как нужно (код $code)" ;;
+  esac
+  tmp=$(mktemp)
+  grep -vE '^(AI_URL|AI_API_KEY|AI_MODEL)=' "$ROOT/functions.env" > "$tmp" || true
+  { cat "$tmp"; echo "AI_URL=$AI_GW"; echo "AI_MODEL=$AI_GW_MODEL"; printf 'AI_API_KEY=%s\n' "$AI_KEY"; } > "$ROOT/functions.env"
+  rm -f "$tmp"; chmod 600 "$ROOT/functions.env"; unset AI_KEY
+  ok 'ключ сохранён в /opt/vektor/functions.env (виден только root)'
+  [[ -s $ROOT/functions-ref ]] || echo claude/beget > "$ROOT/functions-ref"
+  overlay_tutor
+  (cd "$SB" && docker compose up -d --force-recreate --no-deps functions >/dev/null 2>&1) || true
+  sleep 5; ok 'функция Бипыча перезапущена'
 }
 
 # ---------- 5. запуск ----------
@@ -488,11 +528,17 @@ status() {
   [[ $c == 200 ]] && ok "https://$DOMAIN открывается, сертификат выдан" || warn "сайт по HTTPS отвечает $c (сертификат ещё выдаётся? запусти: bash install.sh status)"
   c=$(code -X POST "https://$DOMAIN/rest/v1/rpc/vektor_public_config" -H "apikey: $anon" -H "Authorization: Bearer $anon" -H 'Content-Type: application/json' -d '{}')
   [[ $c == 200 ]] && ok 'база отвечает сайту (vektor_public_config)' || warn "база отвечает сайту кодом $c (если данные не копировали — это ожидаемо)"
-  c=$(code -X OPTIONS "https://$DOMAIN/functions/v1/tutor" -H "Origin: https://$DOMAIN" -H 'Access-Control-Request-Method: POST')
-  [[ $c == 200 || $c == 204 ]] && ok 'функция Бипыча отвечает' || warn "функция Бипыча отвечает кодом $c"
+  # тот же запрос, что шлёт сайт (сайт и API на одном домене — предварительного OPTIONS у браузера нет)
+  c=$(code -X POST "https://$DOMAIN/functions/v1/tutor" -H "Origin: https://$DOMAIN" -H "apikey: $anon" -H "Authorization: Bearer $anon" -H 'Content-Type: application/json' -d '{"mode":"lesson","topic":"concept","token":"x","history":[{"role":"user","content":"привет"}]}')
+  [[ $c == 401 || $c == 400 || $c == 200 ]] && ok "функция Бипыча на месте (без входа ученика отвечает $c — так и должно быть)" || warn "функция Бипыча отвечает кодом $c"
+  if grep -q '^AI_URL=' "$ROOT/functions.env" 2>/dev/null; then ok 'Бипыч работает через ИИ-шлюз Beget'
+  elif grep -q '^OPENROUTER_API_KEY=.\+' "$ROOT/functions.env" 2>/dev/null; then ok 'Бипыч настроен на OpenRouter'
+  else warn 'ключ для Бипыча не задан — подключи: bash install.sh ai'; fi
   c=$(code "https://$DOMAIN/AGENTS.md"); [[ $c == 404 ]] && ok 'служебные файлы репозитория скрыты' || warn "служебные файлы видны (код $c)"
-  c=$(code "https://openrouter.ai/api/v1/models")
-  [[ $c == 200 ]] && ok 'OpenRouter доступен с сервера' || warn "OpenRouter с сервера недоступен (код $c) — понадобится обходной воркер"
+  if ! grep -q '^AI_URL=' "$ROOT/functions.env" 2>/dev/null; then
+    c=$(code "https://openrouter.ai/api/v1/models")
+    [[ $c == 200 ]] && ok 'OpenRouter доступен с сервера' || warn "OpenRouter с сервера недоступен (код $c) — подключи ИИ-шлюз Beget: bash install.sh ai"
+  fi
   ok "память: занято $(free -m | awk '/Mem:/{print $3}') из $(free -m | awk '/Mem:/{print $2}') МБ, swap занят $(free -m | awk '/Swap:/{print $3}') МБ"
 }
 
@@ -548,7 +594,13 @@ case $CMD in
     printf '%s\n' "$2" > "$ROOT/domain"; DOMAIN=$2
     CMD=install; ask; exec > >(tee -a "$LOG") 2>&1
     base; firewall; supabase_prepare; site_prepare; up; exposure; data; backup; status; summary ;;
+  ai)   # bash install.sh ai — подключить Бипыча через ИИ-шлюз Beget
+    [[ -f $SB/.env ]] || die 'сначала установка: bash install.sh'
+    printf 'Ключ ИИ-шлюза Beget (панель → ИИ-шлюз → Создать ключ; ввод не виден): '
+    read -rs AI_KEY </dev/tty || true; echo
+    exec > >(tee -a "$LOG") 2>&1
+    ai_setup; status; summary ;;
   diag) diag ;;
   status) exec > >(tee -a "$LOG") 2>&1; status; summary ;;
-  *) die "неизвестная команда $CMD (install | reset | data | status)" ;;
+  *) die "неизвестная команда $CMD (install | ai | data | domain | reset | status | diag)" ;;
 esac
