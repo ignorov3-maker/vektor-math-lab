@@ -19,7 +19,7 @@
     login: b => ['vektor_login', { p_login: b.login, p_password: b.password, p_device: deviceId() }],
     logout: (b, t) => ['vektor_logout', { p_token: t }],
     state: (b, t) => ['vektor_state', { p_token: t }],
-    sync: (b, t) => ['vektor_sync', { p_token: t, p_state: b.state ?? null, p_events: b.events || [] }],
+    sync: (b, t) => ['vektor_sync', { p_token: t, p_state: b.state ?? null, p_events: b.events || [], ...(b.base_rev != null ? { p_base_rev: b.base_rev } : {}) }],
     test_get: (b, t) => ['vektor_test_get', { p_token: t }],
     test_answer: (b, t) => ['vektor_test_answer', { p_token: t, p_n: b.n, p_answer: b.answer, p_sec: b.sec ?? null }],
     test_finish: (b, t) => ['vektor_test_finish', { p_token: t }],
@@ -33,19 +33,26 @@
   }
   const STATUS = { bad_login: 401, no_session: 401, locked: 429, too_many: 429, layout: 400, forbidden: 403, too_large: 413 };
 
+  // Ожидание ответа не бесконечное: школьный Wi-Fi может «повиснуть», ребёнок должен увидеть «нажми ещё раз»
+  const WAIT = { login: 15000, key_login: 15000 }, WAIT_DEFAULT = 20000;
+  const slow = () => { const e = new Error('Сервер долго не отвечает. Проверь интернет и нажми ещё раз.'); e.status = 0; e.slow = true; return e; };
   async function call(r, body, token) {
     if(CFG.maintenance&&r!=='logout'){const e=new Error('Технические работы — прогресс сохраняется на этом устройстве');e.status=0;throw e;}
     if (SB) {
       const [fn, args] = RPC[r](body || {}, token);
-      const send = values => fetch(`${SB}/rest/v1/rpc/${fn}`, {
-        method: 'POST', cache: 'no-store',
-        headers: { 'Content-Type': 'application/json', apikey: CFG.supabaseKey, Authorization: 'Bearer ' + CFG.supabaseKey },
-        body: JSON.stringify(values),
-      });
+      const send = async values => {
+        const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), WAIT[r] || WAIT_DEFAULT);
+        try { return await fetch(`${SB}/rest/v1/rpc/${fn}`, {
+          method: 'POST', cache: 'no-store', signal: ctl.signal,
+          headers: { 'Content-Type': 'application/json', apikey: CFG.supabaseKey, Authorization: 'Bearer ' + CFG.supabaseKey },
+          body: JSON.stringify(values),
+        }); } catch (e) { if (e.name === 'AbortError') throw slow(); throw e; } finally { clearTimeout(t); }
+      };
       let res=await send(args);
       let j = null; try { j = await res.json(); } catch {}
-      if(!res.ok&&r==='login'&&j?.code==='PGRST202'){
-        const old={...args};delete old.p_device;res=await send(old);try{j=await res.json();}catch{j=null;}
+      // сервер ещё старый (нет нового параметра) — повторяем без него
+      if(!res.ok&&j?.code==='PGRST202'&&(r==='login'||r==='sync')){
+        const old={...args};delete old.p_device;delete old.p_base_rev;res=await send(old);try{j=await res.json();}catch{j=null;}
       }
       if (!res.ok) {
         const code = j && /no_session|forbidden/.exec(j.message || '');
@@ -97,9 +104,11 @@
     else app.innerHTML = loginHtml;
     const f = document.getElementById('login-form'), out = document.getElementById('login-msg');
     document.getElementById('show-pass').onchange = e => { f.password.type = e.target.checked ? 'text' : 'password'; };
+    // Логины всегда русскими буквами (5а-7, демо3) — латиница в логине значит другую раскладку.
+    // Пароль может быть своим, латиницей, поэтому про него подсказываем только после неудачного входа.
     const latin = /[a-z]/i;
-    const hint = () => { const bad = latin.test(f.login.value) || latin.test(f.password.value); out.className = 'feedback' + (bad ? ' bad' : ''); out.textContent = bad ? 'Смени язык клавиатуры на русский' : ''; };
-    f.login.oninput = f.password.oninput = hint;
+    const hint = () => { const bad = latin.test(f.login.value); out.className = 'feedback' + (bad ? ' bad' : ''); out.textContent = bad ? 'В логине английские буквы — смени язык клавиатуры на русский' : ''; };
+    f.login.oninput = hint; f.password.oninput = () => { if (!latin.test(f.login.value)) { out.className = 'feedback'; out.textContent = ''; } };
     f.onsubmit = async e => {
       e.preventDefault();
       if (!f.login.value.trim() || !f.password.value.trim()) { out.className = 'feedback bad'; out.textContent = 'Впиши логин и пароль с бумажки'; return; }
@@ -108,8 +117,9 @@
         const r = await call('login', { login: f.login.value, password: f.password.value });
         startSession(r);
       } catch (err) {
-        out.className = 'feedback bad'; out.textContent = err.status ? err.message : 'Нет связи с сервером. Проверь интернет и попробуй ещё раз.';
-        btn.disabled = false;
+        out.className = 'feedback bad';
+        out.textContent = err.slow ? err.message : err.status ? err.message + (err.code === 'bad_login' && /[a-z]/i.test(f.password.value) && !/[а-яё]/i.test(f.password.value) ? ' Если пароль на бумажке русскими буквами — проверь язык клавиатуры.' : '') : 'Нет связи с сервером. Проверь интернет и попробуй ещё раз.';
+        btn.disabled = false; btn.textContent = 'Войти ещё раз';
       }
     };
     f.login.focus();
@@ -130,8 +140,10 @@
   }
 
   /* ---------- Синхронизация ---------- */
+  // base — последнее подтверждённое сервером состояние этого ученика (без имени: имя сервер не хранит)
+  const noName = st => { const c = JSON.parse(JSON.stringify(st || null)); if (c && c.settings) delete c.settings.name; return c; };
   function makeSync(sess) {
-    const OUT = 'vektor-outbox:' + sess.login, DIRTY = 'vektor-dirty:' + sess.login;
+    const OUT = 'vektor-outbox:' + sess.login, DIRTY = 'vektor-dirty:' + sess.login, BASE = 'vektor-base:' + sess.login;
     let outbox = ls.get(OUT) || [], pendingState = null, timer = null, busy = false;
     const status = el => {
       const b = document.getElementById('sync-status'); if (!b) return;
@@ -142,11 +154,22 @@
     async function flush() {
       if (busy || (!pendingState && !outbox.length)) return true;
       busy = true; clearTimeout(timer);
-      const state = pendingState, events = outbox.slice(0, 200);
+      const state = pendingState, events = outbox.slice(0, 200), base = ls.get(BASE);
       try {
-        const r = await call('sync', { state: state || undefined, events }, sess.token);
+        const r = await call('sync', { state: state || undefined, events, base_rev: state && base ? base.rev : undefined }, sess.token);
         const acc = new Set(r.accepted || []);
         outbox = outbox.filter(e => !acc.has(e.id)); ls.set(OUT, outbox);
+        if (r.conflict) {
+          // за это время ученик занимался на другом устройстве: сливаем и отправляем снова
+          const M = window.VEKTOR_MERGE, mine = pendingState || state;
+          const merged = M.merge3(base ? (base.state || {}) : null, mine, r.state);
+          merged.settings = { ...(merged.settings || {}), name: sess.name };
+          ls.set(BASE, { rev: r.rev, state: noName(r.state) });
+          pendingState = merged; ls.set(KEY, merged); ls.set(DIRTY, 1);
+          if (window.VEKTOR_STATE_REPLACE) { try { window.VEKTOR_STATE_REPLACE(merged); } catch {} }
+          busy = false; status(); timer = setTimeout(flush, 300); return true;
+        }
+        if (state && r.rev != null) ls.set(BASE, { rev: r.rev, state: noName(state) });
         if (pendingState === state) { pendingState = null; ls.del(DIRTY); }
         busy = false; status('ok');
         if (pendingState || outbox.length) timer = setTimeout(flush, 300);
@@ -227,9 +250,19 @@
     if (!sess || !sess.token) { ls.del(KEY); loginScreen(); return; }
     try {
       const r = await call('state', null, sess.token);
-      // сервер — источник истины; локальную копию берём, только если она новее (не успела уйти до перезагрузки)
-      const dirty = ls.get('vektor-dirty:' + sess.login) && ls.get(KEY);
-      if (r.state && !dirty) ls.set(KEY, { ...r.state, settings: { ...(r.state.settings || {}), name: sess.name } });
+      // сервер — источник истины. Если здесь остались неотправленные занятия (вкладка была без сети),
+      // не затираем ни их, ни то, что ученик сделал на другом устройстве, — сливаем
+      const local = ls.get(KEY), dirty = ls.get('vektor-dirty:' + sess.login) && local, base = ls.get('vektor-base:' + sess.login);
+      let st = local;
+      if (dirty) st = window.VEKTOR_MERGE.merge3(base ? (base.state || {}) : null, local, r.state);
+      else if (r.state) st = r.state;
+      if (st) {
+        st = { ...st, settings: { ...(st.settings || {}), name: sess.name } };
+        // класс из ведомости школы: 6А — шестиклассник с первого входа (если сам не выбрал другой)
+        if (r.grade && !st.settings.gradeChosen && st.settings.grade !== r.grade) { st.settings.grade = r.grade; if (r.state) ls.set('vektor-dirty:' + sess.login, 1); }
+        ls.set(KEY, st);
+      } else if (r.grade) ls.set(KEY, { settings: { name: sess.name, grade: r.grade } });
+      ls.set('vektor-base:' + sess.login, { rev: r.rev, state: noName(r.state) });
     } catch (err) {
       if (err.status === 401) { ls.del(SESS); ls.del(KEY); loginScreen('Сессия закончилась, войди заново'); return; }
       // нет связи — работаем с локальной копией, отправим позже
@@ -314,22 +347,23 @@
     const answered = () => Object.values(answers).filter(v => String(v).trim()).length;
     const count = () => { const k = answered(); document.getElementById('test-count').innerHTML = `<span class="tc-word">Отвечено </span>${k} из ${t.items.length}`; };
     // отправка по одной и строго по очереди: два одновременных вызова не должны терять ответы
-    let flushing = null;
+    let flushing = null, closed = false;
     const flushQ = () => (flushing = (flushing || Promise.resolve()).then(sendQ, sendQ));
+    // true — всё отправлено; false — нет связи (ответы остались на устройстве); 'closed' — тест закрыт
     const sendQ = async () => {
       while (queue.length) {
         const q = queue[0];
-        try { const r = await call('test_answer', q, sess.token); if (r && r.error === 'closed') { queue = []; break; } }
-        catch (e) { if (e.status === 401) break; return false; }
+        try { await call('test_answer', q, sess.token); }
+        catch (e) { if (e.code === 'closed') { closed = true; return 'closed'; } if (e.status === 401) break; return false; }
         queue = queue.filter(x => x !== q); ls.set(OUTQ, queue);
       }
-      ls.set(OUTQ, queue); return true;
+      ls.set(OUTQ, queue); return closed ? 'closed' : true;
     };
     const save = (n, v, li) => {
       if ((answers[n] || '') === v) return;
       answers[n] = v; count();
       queue = queue.filter(q => q.n !== n).concat({ n, answer: v, sec: Math.round((Date.now() - started) / 1000) }); ls.set(OUTQ, queue);
-      flushQ().then(ok => { const m = li.querySelector('.test-saved'); m.textContent = ok ? (v ? 'сохранено' : '') : 'сохраним, когда будет связь'; });
+      flushQ().then(ok => { const m = li.querySelector('.test-saved'); m.textContent = ok === 'closed' ? 'тест закрыт — ответ не записан' : ok ? (v ? 'сохранено' : '') : 'сохраним, когда будет связь'; if (ok === 'closed') showClosed(); });
     };
     // клеточки → строка ответа: «36», «3/4» или «2 1/3»
     const readBox = li => { const g = k => li.querySelector(`[data-part="${k}"]`).value.replace(/\D/g, ''); const w = g('w'), n = g('n'), d = g('d');
@@ -350,14 +384,38 @@
       const li = b.closest('li'); li.querySelectorAll('[data-sign]').forEach(x => x.setAttribute('aria-pressed', x === b));
       save(+li.dataset.n, b.dataset.sign, li);
     });
-    const finish = async () => {
-      document.activeElement && document.activeElement.blur();
-      const ok = await flushQ();
-      if (!ok) { document.getElementById('test-left').textContent = 'Нет связи — ответы сохранены на этом устройстве. Подключись к интернету и нажми ещё раз.'; return; }
-      try { await call('test_finish', {}, sess.token); } catch { document.getElementById('test-left').textContent = 'Нет связи, нажми ещё раз.'; return; }
-      ls.del(OUTQ); clearInterval(tm);
-      app.innerHTML = `<section class="login sheet"><h1>Тест сдан. Спасибо!</h1><p>Можно продолжать занятия.</p><button class="btn btn-primary btn-big" onclick="location.reload()">Продолжить</button></section>`;
+    // Три честных состояния: «ждём сеть» (сдача ещё не принята), «тест закрыт» (сдачи нет), «сдан» (сервер записал)
+    let finishing = false, retry = null;
+    const btnF = () => document.getElementById('test-finish');
+    const waitNet = () => {
+      const b = btnF(); if (b) { b.disabled = false; b.textContent = 'Сдать ещё раз'; }
+      document.getElementById('test-left').textContent = 'Сдача ещё НЕ принята: нет связи. Ответы сохранены на этом устройстве — пробуем отправить сами каждые 10 секунд.';
+      clearTimeout(retry); retry = setTimeout(finish, 10000);
     };
+    function showClosed(saved) {
+      clearInterval(tm); clearTimeout(retry); ls.del(OUTQ);
+      app.innerHTML = `<section class="login sheet"><h1>Тест закрыт</h1><p><b>Сдача не записана.</b> Скажи учителю${saved != null ? ` — сохранено ответов: ${+saved} из ${t.items.length}` : ''}.</p><button class="btn btn-primary btn-big" onclick="location.reload()">Продолжить</button></section>`;
+    }
+    const finish = async () => {
+      if (finishing) return; // двойное нажатие
+      finishing = true; clearTimeout(retry);
+      const b = btnF(); if (b) { b.disabled = true; b.textContent = 'Сдаём…'; }
+      document.activeElement && document.activeElement.blur();
+      try {
+        const ok = await flushQ();
+        if (ok === 'closed') { let r = null; try { r = await call('test_finish', {}, sess.token); } catch (e) { r = null; } if (r && r.status === 'accepted') return done(r); return showClosed(); }
+        if (!ok) return waitNet();
+        let r;
+        try { r = await call('test_finish', {}, sess.token); }
+        catch (e) { if (e.code === 'closed') return showClosed(); return waitNet(); }
+        if (!r || r.status !== 'accepted') return waitNet(); // старый сервер или неясный ответ — не врём, что сдано
+        done(r);
+      } finally { finishing = false; }
+    };
+    function done(r) {
+      ls.del(OUTQ); clearInterval(tm); clearTimeout(retry);
+      app.innerHTML = `<section class="login sheet"><h1>Тест сдан. Спасибо!</h1><p>Учитель видит твою сдачу${r && r.total ? `: отвечено ${+r.answered || 0} из ${+r.total}` : ''}. Можно продолжать занятия.</p><button class="btn btn-primary btn-big" onclick="location.reload()">Продолжить</button></section>`;
+    }
     let armed = false;
     document.getElementById('test-finish').onclick = () => {
       app.querySelectorAll('.test-box').forEach(bx => { const li = bx.closest('li'), v = readBox(li); if (v !== null) save(+li.dataset.n, v, li); });
@@ -369,7 +427,7 @@
       const s = Math.max(0, Math.round((endAt - Date.now()) / 1000));
       const el = document.getElementById('test-timer'); if (!el) return;
       el.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; el.classList.toggle('low', s < 300);
-      if (s === 0) { clearInterval(tm); finish(); }
+      if (s === 0) { clearInterval(tm); finish(); } // время вышло: сервер ещё 2 минуты принимает автосдачу
     };
     const tm = setInterval(tick, 1000); tick();
     count(); flushQ();

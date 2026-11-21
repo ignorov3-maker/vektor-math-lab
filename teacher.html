@@ -7,6 +7,7 @@
 <meta name="theme-color" content="#1E7358">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231E7358'/%3E%3Cpath d='M9 23 23 9M13 9h10v10' stroke='%23fff' stroke-width='3.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
+.lab-plan tr.bad td{color:#b3261e}.lab-plan{margin-top:12px}
 :root{--paper:#FAFAF6;--sheet:#fff;--ink:#1E2B40;--muted:#5D6B80;--line:#D6DDE5;--tint:#EDF1F4;--head:#F6F8FA;
   --green:#1E7358;--green-dark:#155A44;--green-soft:#E3F1E9;--blue:#2C5C8F;--blue-soft:#DCE8F5;--red:#B3362B;--red-soft:#FBE4E1;--red-line:#F0B8B0;
   --amber-soft:#FFF2D9;--amber-ink:#7A4E0E;--online:#2E9B6F;--dash:#B9C4D1}
@@ -95,7 +96,8 @@ td.l b{font-weight:600}td.l small{color:var(--muted);margin-left:6px}
 .mcard{background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-align:left;width:100%;cursor:pointer}
 .mcard.need{border-left:5px solid var(--red)}
 .mcard .row1{display:flex;justify-content:space-between;gap:8px}
-.mstrip{display:flex;gap:3px;margin-top:8px}.mstrip .c{min-width:0;flex:1;height:20px;font-size:11px;padding:0}
+.mstrip{display:flex;flex-wrap:wrap;gap:3px;margin-top:8px}.mstrip .c{min-width:0;flex:1 0 14px;max-width:28px;height:20px;font-size:11px;padding:0}
+.mlist{grid-template-columns:minmax(0,1fr)}.mcard{min-width:0}
 .foot{color:var(--muted);font-size:13px;margin-top:10px}
 
 /* тесты */
@@ -286,7 +288,7 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
   }
   const labelsNote = () => labelsServer === false
     ? 'Сейчас подписи сохраняются только в этом браузере: на сервере ещё не включена эта функция.'
-    : 'Подписи сохраняются на сервере: вы увидите их и на телефоне, и на компьютере. Ученик видит свою подпись в профиле. Пишите только имя и первую букву фамилии.';
+    : 'Где хранятся: на сервере «Вектора», в записи ученика — вы увидите их и на телефоне, и на компьютере. Подпись видят вы, администратор школы, сам ученик и привязанные к нему родители и репетитор. Пишите только имя и первую букву фамилии.';
 
   /* ---------- вход (К-12) ---------- */
   function loginView(msg) {
@@ -556,28 +558,57 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
   }
   const confirmOpen = (c, ph, id, again) => `<div class="confirm">Открыть ${ph === 'pre' ? 'входной' : 'итоговый'} тест для ${esc(c.name)} на 40 минут?${again ? ' Он уже проводился.' : ''} Ученики сразу увидят тест. <button class="btn btn-sm btn-primary" data-test="${esc(id)}|1">Да, открыть</button><button class="btn btn-sm" data-cancel>Отмена</button></div>`;
 
+  /* ---------- массовые подписи: только по точному логину (блокер 3 плана приёмки) ---------- */
+  // «5A-7», «5а - 7», «5а-7 » → «5а-7»; латинские A/B, похожие на русские, приводим к русским
+  const normLogin = v => String(v || '').toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, '').replace(/a/g, 'а').replace(/b/g, 'в').replace(/[–—]/g, '-');
+  function planLabels(text, rows) {
+    const byLogin = new Map(rows.map(s => [s.login, s])), seen = new Map(), plan = [];
+    String(text || '').split(/\r?\n/).forEach((raw, i) => {
+      const ln = raw.trim(); if (!ln) return;
+      const m = /^([^;\t|]+?)\s*[;\t|]\s*(.*)$/.exec(ln);
+      if (!m) { plan.push({ line: i + 1, raw: ln, ok: false, why: 'нет логина: нужно «логин; подпись»' }); return; }
+      const lg = normLogin(m[1]), lab = cleanLabel(m[2]);
+      if (!byLogin.has(lg)) { plan.push({ line: i + 1, raw: ln, login: m[1].trim(), label: lab, ok: false, why: 'такого логина нет в выбранном классе' }); return; }
+      const row = { line: i + 1, raw: ln, login: lg, label: lab, ok: true, why: lab ? '' : 'подпись будет стёрта' };
+      if (seen.has(lg)) { const first = seen.get(lg); first.ok = false; first.why = 'логин повторяется'; row.ok = false; row.why = 'логин повторяется'; }
+      seen.set(lg, row); plan.push(row);
+    });
+    return plan;
+  }
+  const labPreview = plan => {
+    const good = plan.filter(x => x.ok).length;
+    return `<div class="lab-plan"><p><b>Проверьте перед сохранением:</b> будет сохранено ${good}, не будет сохранено ${plan.length - good}.</p>
+      <table class="lt"><thead><tr><th>Строка</th><th>Логин</th><th>Подпись</th><th></th></tr></thead><tbody>${plan.map(x => `<tr${x.ok ? '' : ' class="bad"'}><td>${x.line}</td><td><b>${esc(x.login || '—')}</b></td><td>${esc(x.label || '')}</td><td class="small">${x.ok ? (x.why ? esc(x.why) : '✓') : '✗ ' + esc(x.why)}</td></tr>`).join('')}</tbody></table>
+      <p><button class="btn btn-primary" id="lab-save"${good ? '' : ' disabled'}>Сохранить ${good}</button> <button class="btn" id="lab-cancel">Исправить список</button></p></div>`;
+  };
+
   /* ---------- вкладка «Логины и подписи» (К-02, К-12) ---------- */
   function paintLogins() {
     const rows = classRows().slice().sort((a, b) => num(a.login) - num(b.login));
     const html = `<div class="panel"><h2>Подписи учеников</h2>
       <p class="small muted" style="margin-top:0">Впишите имя рядом с логином — так в кабинете будет видно, кто есть кто. ${labelsNote()}</p>
       <table class="lt"><thead><tr><th>Логин</th><th>Подпись</th><th>Был(а)</th><th></th></tr></thead><tbody>${rows.map(s => `<tr><td><b>${esc(s.login)}</b></td><td class="lt-lab"><input class="lab" data-lab="${esc(s.login)}" value="${esc(label(s.login))}" placeholder="например, Маша К." maxlength="40" aria-label="Подпись для ${esc(s.login)}"></td><td class="lt-seen">${ago(s.last_seen)}</td><td class="lt-act"><button class="btn btn-sm" data-open="${esc(s.login)}">Карточка</button></td></tr>`).join('')}</tbody></table></div>
-      <div class="panel"><h2>Вставить список</h2><p class="small muted" style="margin-top:0">По строке на ученика: <code>ученик1; Маша К.</code> — или просто имена по порядку логинов класса.</p>
-      <textarea id="lab-bulk" placeholder="ученик1; Маша К.&#10;ученик2; Дима Л."></textarea><p><button class="btn" id="lab-apply">Применить</button> <span id="lab-out" class="small muted"></span></p></div>
+      <div class="panel"><h2>Вставить список</h2><p class="small muted" style="margin-top:0">По строке на ученика: <b>логин из ведомости</b>, точка с запятой, подпись — <code>${esc((rows[0] && rows[0].login) || '5а-1')}; Маша К.</code>. Порядок строк не важен: подпись привязывается только к точному логину. Строки без логина не сохраняются.</p>
+      <textarea id="lab-bulk" placeholder="${esc((rows[0] && rows[0].login) || '5а-1')}; Маша К.&#10;${esc((rows[1] && rows[1].login) || '5а-2')}; Дима Л.">${esc(ui.labText || '')}</textarea><p><button class="btn" id="lab-check">Проверить</button> <span id="lab-out" class="small muted">${esc(ui.labOut || '')}</span></p>
+      ${ui.labPlan ? labPreview(ui.labPlan) : ''}</div>
       ${ui.cls && ui.cls !== '*' ? `<div class="panel"><h2>Бумажки с паролями</h2><p class="small muted" style="margin-top:0">Пароли в базе не хранятся в открытом виде, поэтому напечатать старые нельзя. Можно выдать новый пароль одному ученику (в его карточке) или новые бумажки всему классу.</p>
       ${ui.armed === 'slips' ? `<div class="confirm">Выдать новые пароли всем ученикам ${esc(ui.cls)}? Старые бумажки перестанут работать, прогресс сохранится. <button class="btn btn-sm btn-danger armed" id="slips-go">Да, выдать новые</button><button class="btn btn-sm" data-cancel>Отмена</button></div>` : `<button class="btn btn-danger" data-arm="slips">Новые бумажки для ${esc(ui.cls)}</button>`}</div>` : ''}`;
     const host = $('logins'); if (host._h === html) return;
     if (host.contains(document.activeElement) && document.activeElement.matches('input,textarea')) return; // не мешаем печатать
     put(host, html);
     host.querySelectorAll('[data-lab]').forEach(inp => inp.onchange = () => { setLabel(inp.dataset.lab, inp.value); paint(); });
-    const ap = $('lab-apply'); if (ap) ap.onclick = () => {
-      const lines = $('lab-bulk').value.split(/\r?\n/).map(x => x.trim()).filter(Boolean), map = {};
-      lines.forEach((ln, i) => { const m = /^(ученик\s*\d+)\s*[;,\t—–-]\s*(.+)$/i.exec(ln);
-        if (m) { const lg = m[1].replace(/\s+/g, '').toLowerCase(); if (data.find(s => s.login === lg)) map[lg] = m[2]; }
-        else if (rows[i]) map[rows[i].login] = ln; });
-      const n = Object.keys(map).length; ap.disabled = true;
-      saveLabels(map).catch(() => false).then(ok => { $('lab-bulk').value = ''; host._h = null; paint();
-        const out = $('lab-out'); if (out) out.textContent = `Подписано: ${n}` + (ok ? '' : ' (только в этом браузере)'); });
+    const ck = $('lab-check'); if (ck) ck.onclick = () => { ui.labText = $('lab-bulk').value; ui.labPlan = planLabels(ui.labText, rows); ui.labOut = ''; host._h = null; paintLogins(); };
+    const lc = $('lab-cancel'); if (lc) lc.onclick = () => { ui.labPlan = null; host._h = null; paintLogins(); };
+    const ap = $('lab-save'); if (ap) ap.onclick = async () => {
+      const plan = ui.labPlan, map = Object.fromEntries(plan.filter(x => x.ok).map(x => [x.login, x.label]));
+      const skippedHere = plan.filter(x => !x.ok).length; ap.disabled = true;
+      let res = null, ok = false;
+      try { if (labelsServer !== false) { res = await rpc('vektor_teacher_labels', { p_token: sess.token, p_labels: map }); ok = true; } } catch (e) { if (e.auth) throw e; }
+      if (ok) { for (const [l, v] of Object.entries(map)) { const st = data.find(x => x.login === l); if (st) st.label = cleanLabel(v); delete labels[l]; } ls.set(LKEY(), labels); labelsServer = true; }
+      else { await saveLabels(map).catch(() => false); }
+      ui.labOut = ok ? `Сохранено на сервере: ${+res.saved || 0}. Пропущено сервером: ${+res.skipped || 0}. Не сохранено из-за ошибок в строках: ${skippedHere}.`
+        : `Сервер не принял список — подписи (${Object.keys(map).length}) пока только в этом браузере. Не сохранено из-за ошибок в строках: ${skippedHere}.`;
+      ui.labPlan = null; ui.labText = ''; host._h = null; paint();
     };
     const sg = $('slips-go'); if (sg) sg.onclick = async () => {
       sg.disabled = true;

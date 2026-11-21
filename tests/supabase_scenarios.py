@@ -82,7 +82,7 @@ async def main():
         psql("do $$ begin create role anon nologin; exception when duplicate_object then null; end $$;"
              "do $$ begin create role authenticated nologin; exception when duplicate_object then null; end $$;")
         subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase/schema.sql')], check=True, capture_output=True)
-        for f in ('test.sql', 'admin.sql', 'teacher.sql', 'pulse.sql', 'ai.sql', 'guard.sql', 'accounts.sql', 'plans.sql', 'parent.sql', 'tutor_cabinet.sql', 'audit.sql', 'pilot_report.sql', 'security_fix.sql', 'pilot_adults.sql', 'login_keys.sql', 'sandbox.sql', 'teacher_card.sql', 'teacher_labels.sql'):
+        for f in ('test.sql', 'admin.sql', 'teacher.sql', 'pulse.sql', 'ai.sql', 'guard.sql', 'accounts.sql', 'plans.sql', 'parent.sql', 'tutor_cabinet.sql', 'audit.sql', 'pilot_report.sql', 'security_fix.sql', 'pilot_adults.sql', 'login_keys.sql', 'sandbox.sql', 'teacher_card.sql', 'teacher_labels.sql', 'pilot_fixes.sql'):
             subprocess.run(['psql', f'{PG} dbname={DB}', '-v', 'ON_ERROR_STOP=1', '-q', '-f', str(ROOT / 'supabase' / f)], check=True, capture_output=True)
         rep('схема накатывается повторно', True)
         rep('vk_seed: 80 профилей с паролями', psql("select count(*) from vk_seed(80, '5А:1-28,5Б:29-56,5В:57-80') where password ~ '^[а-я]+[0-9]{4}$'") == '80')
@@ -105,6 +105,8 @@ async def main():
         # anon не читает таблицы и не вызывает служебные функции
         from pilot_scenarios import run as pilot_scenarios
         pilot_scenarios(psql, rep)
+        from pilot_fixes_scenarios import run as pilot_fixes_scenarios
+        pilot_fixes_scenarios(psql, rep, lit)
         # Взрослые пилота по логину без регистрации (pilot_adults.sql)
         pw = psql("select vk_adult('родитель1', 'parent')")
         rep('vk_adult: пароль-слово для родителя', bool(re.fullmatch(r'[а-я]+[0-9]{4}', pw)))
@@ -497,6 +499,8 @@ async def main():
             await q.goto(f"{base}/#k={ks['student']}"); await q.wait_for_timeout(2000)
             rep('QR: после нового пароля старый QR не пускает', await q.locator('#logout-btn').count() == 0 and 'не действует' in await q.inner_text('body'))
             await b2.close()
+        from pilot_fixes_scenarios import ui as pilot_fixes_ui
+        await pilot_fixes_ui(base, psql, rep, lit, login)
         srv.shutdown(); fn.terminate()
     finally:
         psql(f'drop database if exists {DB} with (force)', db='postgres')
