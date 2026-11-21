@@ -63,6 +63,7 @@ def sh(*args, timeout=10):
 
 def provider():
     env = read(f'{ROOT}/functions.env')
+    if re.search(r'^AI_VIA=ProxyAPI', env, re.M): return 'ProxyAPI'
     if re.search(r'^AI_URL=', env, re.M): return 'ИИ-шлюз Beget'
     if re.search(r'^OPENROUTER_URL=https://api\.proxyapi', env, re.M): return 'ProxyAPI'
     if re.search(r'^OPENROUTER_API_KEY=.+', env, re.M): return 'OpenRouter'

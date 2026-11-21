@@ -370,7 +370,7 @@ ai_setup() {
     *) die "шлюз не ответил как нужно (код $code)" ;;
   esac
   tmp=$(mktemp)
-  grep -vE '^(AI_URL|AI_API_KEY|AI_MODEL)=' "$ROOT/functions.env" > "$tmp" || true
+  grep -vE '^(AI_URL|AI_API_KEY|AI_MODEL|AI_VIA)=' "$ROOT/functions.env" > "$tmp" || true
   { cat "$tmp"; echo "AI_URL=$AI_GW"; echo "AI_MODEL=$AI_GW_MODEL"; printf 'AI_API_KEY=%s\n' "$AI_KEY"; } > "$ROOT/functions.env"
   rm -f "$tmp"; chmod 600 "$ROOT/functions.env"; unset AI_KEY
   ok 'ключ сохранён в /opt/vektor/functions.env (виден только root)'
@@ -383,22 +383,35 @@ ai_setup() {
 # ProxyAPI: тот же OpenRouter (та же модель и запасная), но через российский шлюз с оплатой в рублях
 PROXY_URL=https://api.proxyapi.ru/openrouter/v1/chat/completions
 proxy_setup() {
-  say 'Бипыч через ProxyAPI (OpenRouter за рубли)'
+  say 'Бипыч через ProxyAPI (рубли)'
   [[ -n ${AI_KEY:-} ]] || die 'ключ не введён'
-  local code tmp
-  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 40 -H @<(printf 'Authorization: Bearer %s\n' "$AI_KEY") -H 'Content-Type: application/json' \
-    -d '{"model":"deepseek/deepseek-v4-flash","models":["deepseek/deepseek-v4-flash","google/gemini-2.5-flash-lite"],"messages":[{"role":"user","content":"Ответь одним словом: ок"}],"max_tokens":5}' "$PROXY_URL" || true)
-  case $code in
-    200) ok 'ключ работает: ProxyAPI ответил' ;;
-    401|403) die "ProxyAPI не принял ключ (код $code) — проверь ключ" ;;
-    402) die 'на балансе ProxyAPI нет денег (код 402) — пополни баланс' ;;
-    *) die "ProxyAPI ответил кодом $code — пришли вывод Claude" ;;
-  esac
+  # OpenRouter закрыт для России с июня 2026 — пробуем прямые адреса ProxyAPI, берём первый рабочий
+  local url model code body tmp found="" report=""
+  for pair in \
+    "https://api.proxyapi.ru/deepseek/v1/chat/completions deepseek-v4-flash" \
+    "https://api.proxyapi.ru/deepseek/v1/chat/completions deepseek-chat" \
+    "https://openai.api.proxyapi.ru/v1/chat/completions deepseek/deepseek-v4-flash" \
+    "https://openai.api.proxyapi.ru/v1/chat/completions deepseek/deepseek-chat" \
+    "https://api.proxyapi.ru/openrouter/v1/chat/completions deepseek/deepseek-v4-flash"; do
+    url=${pair% *}; model=${pair#* }
+    body=$(mktemp)
+    code=$(curl -s -o "$body" -w '%{http_code}' --max-time 40 -H @<(printf 'Authorization: Bearer %s\n' "$AI_KEY") -H 'Content-Type: application/json' \
+      -d "{\"model\":\"$model\",\"messages\":[{\"role\":\"user\",\"content\":\"Ответь одним словом: ок\"}],\"max_tokens\":5}" "$url" || true)
+    report+=$'\n'"     $code  ${url#https://}  $model  $(head -c 160 "$body" | tr -d '\n' | sed -E 's/(sk|Bearer)[-_A-Za-z0-9.]{6,}/•••/g')"
+    rm -f "$body"
+    if [[ $code == 200 ]]; then found="$url $model"; break; fi
+  done
+  echo "   проверка адресов ProxyAPI:$report"
+  [[ -n $found ]] || die 'ни один адрес ProxyAPI не ответил 200 — пришли этот вывод Claude (ключ в нём не виден)'
+  url=${found% *}; model=${found#* }
+  ok "работает: ${url#https://}, модель $model"
   tmp=$(mktemp)
-  grep -vE '^(AI_URL|AI_API_KEY|AI_MODEL|OPENROUTER_URL|OPENROUTER_API_KEY)=' "$ROOT/functions.env" > "$tmp" || true
-  { cat "$tmp"; echo "OPENROUTER_URL=$PROXY_URL"; printf 'OPENROUTER_API_KEY=%s\n' "$AI_KEY"; } > "$ROOT/functions.env"
+  grep -vE '^(AI_URL|AI_API_KEY|AI_MODEL|AI_VIA|OPENROUTER_URL|OPENROUTER_API_KEY)=' "$ROOT/functions.env" > "$tmp" || true
+  { cat "$tmp"; echo "AI_URL=$url"; echo "AI_MODEL=$model"; printf 'AI_API_KEY=%s\n' "$AI_KEY"; echo "AI_VIA=ProxyAPI"; } > "$ROOT/functions.env"
   rm -f "$tmp"; chmod 600 "$ROOT/functions.env"; unset AI_KEY
   ok 'ключ сохранён в /opt/vektor/functions.env (виден только root)'
+  [[ -s $ROOT/functions-ref ]] || echo claude/beget > "$ROOT/functions-ref"
+  overlay_tutor
   (cd "$SB" && docker compose up -d --force-recreate --no-deps functions >/dev/null 2>&1) || true
   sleep 5; ok 'функция Бипыча перезапущена'
 }
@@ -620,7 +633,8 @@ status() {
   # тот же запрос, что шлёт сайт (сайт и API на одном домене — предварительного OPTIONS у браузера нет)
   c=$(code -X POST "https://$DOMAIN/functions/v1/tutor" -H "Origin: https://$DOMAIN" -H "apikey: $anon" -H "Authorization: Bearer $anon" -H 'Content-Type: application/json' -d '{"mode":"lesson","topic":"concept","token":"x","history":[{"role":"user","content":"привет"}]}')
   [[ $c == 401 || $c == 400 || $c == 200 ]] && ok "функция Бипыча на месте (без входа ученика отвечает $c — так и должно быть)" || warn "функция Бипыча отвечает кодом $c"
-  if grep -q '^AI_URL=' "$ROOT/functions.env" 2>/dev/null; then ok 'Бипыч работает через ИИ-шлюз Beget'
+  if grep -q '^AI_VIA=ProxyAPI' "$ROOT/functions.env" 2>/dev/null; then ok 'Бипыч работает через ProxyAPI'
+  elif grep -q '^AI_URL=' "$ROOT/functions.env" 2>/dev/null; then ok 'Бипыч работает через ИИ-шлюз Beget'
   elif grep -q '^OPENROUTER_URL=https://api.proxyapi' "$ROOT/functions.env" 2>/dev/null; then ok 'Бипыч работает через ProxyAPI'
   elif grep -q '^OPENROUTER_API_KEY=.\+' "$ROOT/functions.env" 2>/dev/null; then ok 'Бипыч настроен на OpenRouter'
   else warn 'ключ для Бипыча не задан — подключи: bash install.sh ai'; fi
