@@ -377,6 +377,29 @@ ai_setup() {
   sleep 5; ok 'функция Бипыча перезапущена'
 }
 
+# ProxyAPI: тот же OpenRouter (та же модель и запасная), но через российский шлюз с оплатой в рублях
+PROXY_URL=https://api.proxyapi.ru/openrouter/v1/chat/completions
+proxy_setup() {
+  say 'Бипыч через ProxyAPI (OpenRouter за рубли)'
+  [[ -n ${AI_KEY:-} ]] || die 'ключ не введён'
+  local code tmp
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 40 -H @<(printf 'Authorization: Bearer %s\n' "$AI_KEY") -H 'Content-Type: application/json' \
+    -d '{"model":"deepseek/deepseek-v4-flash","models":["deepseek/deepseek-v4-flash","google/gemini-2.5-flash-lite"],"messages":[{"role":"user","content":"Ответь одним словом: ок"}],"max_tokens":5}' "$PROXY_URL" || true)
+  case $code in
+    200) ok 'ключ работает: ProxyAPI ответил' ;;
+    401|403) die "ProxyAPI не принял ключ (код $code) — проверь ключ" ;;
+    402) die 'на балансе ProxyAPI нет денег (код 402) — пополни баланс' ;;
+    *) die "ProxyAPI ответил кодом $code — пришли вывод Claude" ;;
+  esac
+  tmp=$(mktemp)
+  grep -vE '^(AI_URL|AI_API_KEY|AI_MODEL|OPENROUTER_URL|OPENROUTER_API_KEY)=' "$ROOT/functions.env" > "$tmp" || true
+  { cat "$tmp"; echo "OPENROUTER_URL=$PROXY_URL"; printf 'OPENROUTER_API_KEY=%s\n' "$AI_KEY"; } > "$ROOT/functions.env"
+  rm -f "$tmp"; chmod 600 "$ROOT/functions.env"; unset AI_KEY
+  ok 'ключ сохранён в /opt/vektor/functions.env (виден только root)'
+  (cd "$SB" && docker compose up -d --force-recreate --no-deps functions >/dev/null 2>&1) || true
+  sleep 5; ok 'функция Бипыча перезапущена'
+}
+
 # ---------- 5. запуск ----------
 wait_db() { local i; for i in $(seq 1 60); do [[ $(state supabase-db) == 'running healthy' ]] && return 0; sleep 5; done; return 1; }
 wait_all() {
@@ -532,10 +555,11 @@ status() {
   c=$(code -X POST "https://$DOMAIN/functions/v1/tutor" -H "Origin: https://$DOMAIN" -H "apikey: $anon" -H "Authorization: Bearer $anon" -H 'Content-Type: application/json' -d '{"mode":"lesson","topic":"concept","token":"x","history":[{"role":"user","content":"привет"}]}')
   [[ $c == 401 || $c == 400 || $c == 200 ]] && ok "функция Бипыча на месте (без входа ученика отвечает $c — так и должно быть)" || warn "функция Бипыча отвечает кодом $c"
   if grep -q '^AI_URL=' "$ROOT/functions.env" 2>/dev/null; then ok 'Бипыч работает через ИИ-шлюз Beget'
+  elif grep -q '^OPENROUTER_URL=https://api.proxyapi' "$ROOT/functions.env" 2>/dev/null; then ok 'Бипыч работает через ProxyAPI'
   elif grep -q '^OPENROUTER_API_KEY=.\+' "$ROOT/functions.env" 2>/dev/null; then ok 'Бипыч настроен на OpenRouter'
   else warn 'ключ для Бипыча не задан — подключи: bash install.sh ai'; fi
   c=$(code "https://$DOMAIN/AGENTS.md"); [[ $c == 404 ]] && ok 'служебные файлы репозитория скрыты' || warn "служебные файлы видны (код $c)"
-  if ! grep -q '^AI_URL=' "$ROOT/functions.env" 2>/dev/null; then
+  if ! grep -qE '^(AI_URL=|OPENROUTER_URL=https://api.proxyapi)' "$ROOT/functions.env" 2>/dev/null; then
     c=$(code "https://openrouter.ai/api/v1/models")
     [[ $c == 200 ]] && ok 'OpenRouter доступен с сервера' || warn "OpenRouter с сервера недоступен (код $c) — подключи ИИ-шлюз Beget: bash install.sh ai"
   fi
@@ -594,12 +618,14 @@ case $CMD in
     printf '%s\n' "$2" > "$ROOT/domain"; DOMAIN=$2
     CMD=install; ask; exec > >(tee -a "$LOG") 2>&1
     base; firewall; supabase_prepare; site_prepare; up; exposure; data; backup; status; summary ;;
-  ai)   # bash install.sh ai — подключить Бипыча через ИИ-шлюз Beget
+  ai)   # bash install.sh ai proxyapi — через ProxyAPI; bash install.sh ai — через ИИ-шлюз Beget
     [[ -f $SB/.env ]] || die 'сначала установка: bash install.sh'
-    printf 'Ключ ИИ-шлюза Beget (панель → ИИ-шлюз → Создать ключ; ввод не виден): '
+    if [[ ${2:-} == proxyapi ]]; then printf 'Ключ ProxyAPI (proxyapi.ru → Ключи API; ввод не виден): '
+    else printf 'Ключ ИИ-шлюза Beget (панель → ИИ-шлюз → Создать ключ; ввод не виден): '; fi
     read -rs AI_KEY </dev/tty || true; echo
     exec > >(tee -a "$LOG") 2>&1
-    ai_setup; status; summary ;;
+    if [[ ${2:-} == proxyapi ]]; then proxy_setup; else ai_setup; fi
+    status; summary ;;
   diag) diag ;;
   status) exec > >(tee -a "$LOG") 2>&1; status; summary ;;
   *) die "неизвестная команда $CMD (install | ai | data | domain | reset | status | diag)" ;;
