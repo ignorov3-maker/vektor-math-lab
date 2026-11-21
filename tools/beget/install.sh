@@ -145,6 +145,10 @@ supabase_prepare() {
     git -C "$ROOT/supabase-src" rev-parse HEAD > "$ROOT/supabase-commit"
     ok "Supabase docker, commit $(cut -c1-10 "$ROOT/supabase-commit")"
   else ok 'Supabase уже скачан'; fi
+  # контейнеры работают не от root: стартовые SQL и конфиги должны читаться (umask 077 их закрывал);
+  # данные базы не трогаем — Postgres требует для них 0700
+  find "$SB" -path "$SB/volumes/db/data" -prune -o -exec chmod go+rX {} +
+  chmod 711 "$ROOT"
 
   if [[ ! -f $SB/.env ]]; then
     cp "$SB/.env.example" "$SB/.env"
@@ -347,7 +351,7 @@ wait_all() {
 
 auth_broken() {  # без grep -q: при pipefail ранний выход grep давал ложный ответ
   local n
-  n=$(cd "$SB" && docker compose logs --no-color --since 30m 2>&1 | grep -c 'password authentication failed' || true)
+  n=$(cd "$SB" && docker compose logs --no-color --since 45s 2>&1 | grep -c 'password authentication failed' || true)
   (( ${n:-0} > 0 ))
 }
 
