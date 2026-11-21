@@ -308,7 +308,10 @@ print('''{
 		Strict-Transport-Security "max-age=31536000"
 		-Server
 	}
-	@hidden path /.git /.git/* /.github/* /supabase/* /tools/* /tests/* /server/* /docs/* /api/* *.md /vercel.json
+	@hidden {
+		path /.git /.git/* /.github/* /supabase/* /tools/* /tests/* /server/* /docs/* /api/* *.md /vercel.json
+		not path /legal/*
+	}
 	handle @hidden {
 		respond 404
 	}
