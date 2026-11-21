@@ -327,6 +327,8 @@ print('''{
 		file_server
 	}
 }''' % (sys.argv[2], '\n'.join(lines)))
+if not sys.argv[2].endswith('sslip.io'):
+    print('www.%s {\n\tredir https://%s{uri} permanent\n}' % (sys.argv[2], sys.argv[2]))
 PY
   chmod 644 "$ROOT/Caddyfile"
   ok "HTTPS-настройки для $DOMAIN готовы (заголовки безопасности как на Vercel)"
@@ -537,6 +539,11 @@ case $CMD in
   reset)   # пустую базу пересоздать заново и продолжить установку
     ask; exec > >(tee -a "$LOG") 2>&1
     say 'Сброс пустой базы'; wipe_db; ok 'база и её тома удалены'
+    base; firewall; supabase_prepare; site_prepare; up; exposure; data; backup; status; summary ;;
+  domain)  # bash install.sh domain vektorstudy.ru — сменить домен и перевыпустить настройки
+    [[ -n ${2:-} ]] || die 'укажи домен: bash install.sh domain example.ru'
+    printf '%s\n' "$2" > "$ROOT/domain"; DOMAIN=$2
+    CMD=install; ask; exec > >(tee -a "$LOG") 2>&1
     base; firewall; supabase_prepare; site_prepare; up; exposure; data; backup; status; summary ;;
   diag) diag ;;
   status) exec > >(tee -a "$LOG") 2>&1; status; summary ;;
