@@ -67,7 +67,7 @@ const fresh = () => ({
 let state;
 try { state = Object.assign(fresh(), JSON.parse(localStorage.getItem(KEY))); } catch { state = fresh(); }
 // защита от испорченных или старых данных в браузере
-(() => {
+const normalize = () => {
   const d = fresh(), isObj = v => v && typeof v === 'object' && !Array.isArray(v);
   for (const k of ['progress', 'meta', 'diag', 'settings']) if (!isObj(state[k])) state[k] = d[k];
   for (const k of ['attempts', 'days']) if (!Array.isArray(state[k])) state[k] = [];
@@ -85,7 +85,10 @@ try { state = Object.assign(fresh(), JSON.parse(localStorage.getItem(KEY))); } c
   const DEMO_START = { concept: 25, reduce: 33, compare: 20, 'add-same': 33 };
   const idle = (id, m = state.meta[id]) => !(m && (m.tasks || m.practice || m.errorsTotal || m.mastered || m.failedChecks || m.cleanTotal)) && !state.attempts.some(a => a.topic === id);
   for (const [id, v] of Object.entries(DEMO_START)) if (state.progress[id] === v && idle(id)) state.progress[id] = 0;
-})();
+};
+normalize();
+// прогресс слили с другим устройством (account.js): подменяем состояние и перерисовываем экран
+window.VEKTOR_STATE_REPLACE = next => { state = Object.assign(fresh(), next); normalize(); try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} if (typeof render === 'function') render(); };
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} if (window.VEKTOR_SYNC) window.VEKTOR_SYNC.push(state); };
 // Ф-31: «Как тебе занятие?» — 5 смайликов, один раз за занятие, можно пропустить (только с сервером)
 const MOODS = ['😣', '🙁', '😐', '🙂', '😄'];

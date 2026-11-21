@@ -46,6 +46,9 @@ jobs:
           STRICT=1 N=600 node tests/content.test.js
           node tests/report-export.test.js
           node tests/quick.test.js
+          node tests/merge.test.js
+          node tests/answers.test.js
+          node tests/metrika.test.js
 
       - uses: oven-sh/setup-bun@v2
       - name: ИИ-режимы серверной функции
