@@ -400,6 +400,35 @@ proxy_setup() {
   sleep 5; ok 'функция Бипыча перезапущена'
 }
 
+# ---------- автообновление: сервер сам берёт исправления с GitHub ----------
+# Каждые 5 минут: если изменилась ветка со скриптом (/opt/vektor/ops-ref, по умолчанию claude/beget)
+# или main с сайтом — повторный запуск установки (он ничего не ломает и ключи не трогает).
+autoupdate() {
+  say 'Автообновление'
+  [[ -s $ROOT/ops-ref ]] || echo claude/beget > "$ROOT/ops-ref"
+  cat > "$ROOT/update.sh" <<'SH'
+#!/usr/bin/env bash
+set -uo pipefail; umask 077
+exec 9>/opt/vektor/.update.lock; flock -n 9 || exit 0
+R=https://github.com/ignorov3-maker/vektor-math-lab.git
+ref=$(cat /opt/vektor/ops-ref 2>/dev/null || echo claude/beget)
+ops=$(git ls-remote "$R" "refs/heads/$ref" | cut -c1-40); [[ -n $ops ]] || { ref=main; ops=$(git ls-remote "$R" refs/heads/main | cut -c1-40); }
+site=$(git ls-remote "$R" refs/heads/main | cut -c1-40)
+[[ -n $ops && -n $site ]] || exit 0
+now="$ops $site"; [[ "$now" == "$(cat /opt/vektor/.update-state 2>/dev/null)" ]] && exit 0
+echo "$(date -u +%FT%TZ) обновление: скрипт $ref@${ops:0:8}, сайт main@${site:0:8}"
+curl -fsSL --max-time 60 "https://raw.githubusercontent.com/ignorov3-maker/vektor-math-lab/$ops/tools/beget/install.sh" -o /opt/vektor/install.sh.new || exit 0
+bash -n /opt/vektor/install.sh.new || exit 0
+mv /opt/vektor/install.sh.new /opt/vektor/install.sh
+if bash /opt/vektor/install.sh install </dev/null >/opt/vektor/update-last.log 2>&1; then echo "$now" > /opt/vektor/.update-state; echo "$(date -u +%FT%TZ) готово"
+else echo "$(date -u +%FT%TZ) ОШИБКА — /opt/vektor/update-last.log"; fi
+SH
+  chmod 700 "$ROOT/update.sh"
+  echo "*/5 * * * * root $ROOT/update.sh >> $ROOT/update.log 2>&1" > /etc/cron.d/vektor-update
+  chmod 644 /etc/cron.d/vektor-update
+  ok "сервер раз в 5 минут проверяет GitHub (скрипт: $(cat "$ROOT/ops-ref"), сайт: main) и обновляется сам; журнал — /opt/vektor/update.log"
+}
+
 # ---------- 5. запуск ----------
 wait_db() { local i; for i in $(seq 1 60); do [[ $(state supabase-db) == 'running healthy' ]] && return 0; sleep 5; done; return 1; }
 wait_all() {
@@ -625,7 +654,8 @@ case $CMD in
     read -rs AI_KEY </dev/tty || true; echo
     exec > >(tee -a "$LOG") 2>&1
     if [[ ${2:-} == proxyapi ]]; then proxy_setup; else ai_setup; fi
-    status; summary ;;
+    autoupdate; status; summary ;;
+  autoupdate) exec > >(tee -a "$LOG") 2>&1; autoupdate ;;
   diag) diag ;;
   status) exec > >(tee -a "$LOG") 2>&1; status; summary ;;
   *) die "неизвестная команда $CMD (install | ai | data | domain | reset | status | diag)" ;;
