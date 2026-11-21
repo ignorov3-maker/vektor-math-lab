@@ -707,6 +707,9 @@ case $CMD in
     SOURCE_DB=$(head -c 4096 | tr -d '\r\n'); DOMAIN=$(cat "$ROOT/domain"); exec > >(tee -a "$LOG") 2>&1
     [[ $SOURCE_DB =~ ^postgres(ql)?:// ]] || die 'строка должна начинаться с postgresql://'
     data; unset SOURCE_DB; backup; status; summary ;;
+  rootpw-set)  # из админки: новый пароль на stdin, в журнал не попадает
+    P=$(head -c 512 | tr -d '\r\n'); [[ ${#P} -ge 12 && $P != *:* ]] || die 'пароль короче 12 символов или с двоеточием'
+    printf 'root:%s\n' "$P" | chpasswd && echo '   ✓ пароль root сменён'; unset P ;;
   backup-now) exec > >(tee -a "$LOG") 2>&1; say 'Бэкап'; "$ROOT/backup.sh" && ok 'бэкап сделан' ;;
   diag) diag ;;
   status) exec > >(tee -a "$LOG") 2>&1; status; summary ;;

@@ -19,10 +19,10 @@ SESS, FAILS, LOCK = {}, {}, threading.Lock()
 JOB = {'name': None, 'proc': None, 'started': 0, 'ended': 0, 'rc': None}
 JOBS = {  # имя → аргументы install.sh; value уходит в stdin и больше никуда
     'ai_proxyapi': ['ai-set', 'proxyapi'], 'ai_beget': ['ai-set', 'beget'],
-    'data': ['data-set'], 'update': ['install'], 'backup': ['backup-now'], 'check': ['status'],
+    'data': ['data-set'], 'update': ['install'], 'backup': ['backup-now'], 'check': ['status'], 'rootpw': ['rootpw-set'],
 }
 TITLES = {'ai_proxyapi': 'Подключение Бипыча через ProxyAPI', 'ai_beget': 'Подключение Бипыча через ИИ-шлюз Beget',
-          'data': 'Перенос данных из облака', 'update': 'Обновление сервера', 'backup': 'Бэкап', 'check': 'Проверка'}
+          'data': 'Перенос данных из облака', 'update': 'Обновление сервера', 'backup': 'Бэкап', 'check': 'Проверка', 'rootpw': 'Смена пароля root'}
 
 
 def read(p, default=''):
@@ -182,6 +182,7 @@ class H(BaseHTTPRequestHandler):
             name, value = body.get('name'), str(body.get('value') or '').strip()
             if name not in JOBS: return self.send(400, {'error': 'Неизвестное действие'})
             if name.startswith('ai_') and not re.fullmatch(r'[A-Za-z0-9._:-]{10,400}', value): return self.send(400, {'error': 'Похоже, это не ключ: вставьте ключ целиком'})
+            if name == 'rootpw' and not (12 <= len(value) <= 200 and ':' not in value and '\n' not in value): return self.send(400, {'error': 'Пароль root — не короче 12 символов, без двоеточия'})
             if name == 'data' and not re.fullmatch(r'postgres(ql)?://\S{10,1000}', value): return self.send(400, {'error': 'Строка должна начинаться с postgresql://'})
             err = start_job(name, value)
             return self.send(409, {'error': err}) if err else self.send(200, {'ok': True})
@@ -216,6 +217,9 @@ pre{background:#1d1d1f;color:#e8e8ed;border-radius:12px;padding:12px;font-size:1
  <small>Копия из облачного Supabase: Connect → Session pooler → URI, вместо [YOUR-PASSWORD] — пароль базы. Строка нигде не сохраняется.</small>
  <label>Строка подключения</label><textarea id="src" spellcheck="false" autocomplete="off"></textarea>
  <button data-job="data">Перенести данные</button><div class="msg" id="m-data"></div></section>
+<section class="card"><h2>Пароль root</h2><small>Для входа на сервер по SSH и в консоль Бегета. Старый был в переписке — смените.</small>
+ <label>Новый пароль (не короче 12 символов)</label><input id="rpw" type="password" autocomplete="new-password">
+ <button data-job="rootpw">Сменить пароль root</button><div class="msg" id="m-rootpw"></div></section>
 <section class="card"><h2>Состояние</h2><div class="grid" id="st"></div>
  <div class="row"><button class="ghost" data-job="update">Обновить сейчас</button><button class="ghost" data-job="backup">Сделать бэкап</button><button class="ghost" data-job="check">Проверить всё</button><button class="ghost" id="out">Выйти</button></div>
  <div class="msg" id="m-ops"></div></section>
@@ -246,8 +250,9 @@ async function refresh(){let s;try{s=await api('status')}catch(e){if(e.code===40
 document.querySelectorAll('[data-job]').forEach(b=>b.onclick=async()=>{const k=b.dataset.job;let name=k,value='',out='m-ops';
  if(k==='ai'){name=$('pv').value;value=$('key').value.trim();out='m-ai';if(!value)return $(out).textContent='Вставьте ключ'}
  if(k==='data'){value=$('src').value.trim();out='m-data';if(!value)return $(out).textContent='Вставьте строку подключения'}
+ if(k==='rootpw'){value=$('rpw').value;out='m-rootpw';if(value.length<12)return $(out).textContent='Не короче 12 символов'}
  if(k==='update'&&!confirm('Обновить сервер сейчас? Сайт может мигнуть на минуту.'))return;
- try{await api('job',{name,value});$('key').value='';$('src').value='';$(out).textContent='Запущено — ход виден в журнале ниже.';refresh()}catch(e){$(out).innerHTML='<span class="bad">'+esc(e.message)+'</span>'}});
+ try{await api('job',{name,value});$('key').value='';$('src').value='';$('rpw').value='';$(out).textContent='Запущено — ход виден в журнале ниже.';refresh()}catch(e){$(out).innerHTML='<span class="bad">'+esc(e.message)+'</span>'}});
 $('out').onclick=async()=>{await api('logout',{}).catch(()=>{});location.reload()};
 boot();
 </script></body></html>'''
