@@ -1415,3 +1415,17 @@ body.is-focus #app{max-width:820px;padding:10px 20px calc(28px + env(safe-area-i
 @media (max-width:760px){.lesson-practice .feedback .fb-links{padding-right:64px}}
 @media (max-width:760px){.lesson-learn .chat-lesson>.chat-form{width:100%}.lesson-learn .chat-lesson>.chat-form .composer{width:100%}}
 .lesson-title+.requires .link{font-size:inherit;font-weight:600;text-decoration-thickness:1px}
+/* выбор класса — один раз, от него зависит путь (темы 5–9 по программе) */
+.grade-pick{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:14px 0 6px}
+.grade-pick .btn{font-size:22px;font-weight:800;padding:14px 0;justify-content:center;text-align:center;min-width:0}
+/* «дыра из младшего класса» под разбором ошибки */
+.root-hole{margin:8px 0 0;padding:8px 10px;border-radius:10px;background:var(--amber-soft,#FFF4D6);font-size:14px}
+.root-hole .link{font-weight:700}
+/* клавиша ± рядом с полем ответа */
+.sign-key{min-width:44px;font-size:20px;font-weight:800}
+.choices-text{flex-wrap:wrap;gap:8px}
+.choices-text .choice{min-width:0;width:auto;padding:12px 18px;font-size:17px;flex:1 1 auto}
+/* класс ученика над путём — сменить в одно касание */
+.grade-bar{display:flex;justify-content:center;margin:4px 0 0}
+.grade-chip{border:1.5px solid var(--line,#d9dde3);background:var(--paper,#fff);color:inherit;border-radius:999px;padding:6px 14px;font-weight:800;font-size:15px;cursor:pointer}
+.grade-chip:hover{border-color:var(--green,#1E7358)}
