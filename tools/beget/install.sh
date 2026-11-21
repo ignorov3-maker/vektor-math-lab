@@ -497,6 +497,28 @@ summary() {
   echo '   Не забудь сменить пароль root командой: passwd'
 }
 
+# диагностика паролей ролей без вывода самих секретов
+diag() {
+  cd "$SB"
+  local pw r c v
+  pw=$(env_get POSTGRES_PASSWORD)
+  echo "строк POSTGRES_PASSWORD в .env: $(grep -c '^POSTGRES_PASSWORD=' .env), длина: ${#pw}"
+  echo "файлы: $(ls -1 *.yml 2>/dev/null | tr '\n' ' ')"
+  echo "db образ: $(docker inspect -f '{{.Config.Image}}' supabase-db 2>/dev/null)"
+  echo "db тома: $(docker inspect -f '{{range .Mounts}}{{.Destination}} {{end}}' supabase-db 2>/dev/null)"
+  for c in supabase-db supabase-storage supabase-auth supabase-rest realtime-dev.supabase-realtime supabase-pooler; do
+    v=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$c" 2>/dev/null || true)
+    if [[ -z $v ]]; then echo "$c: нет контейнера"; continue; fi
+    printf '%s: пароль из .env найден в окружении — %s; переменные с паролем: %s\n' "$c" \
+      "$(grep -qF -- "$pw" <<<"$v" && echo да || echo НЕТ)" \
+      "$(grep -oE '^[A-Z_]*(PASSWORD|DATABASE_URL|DB_URL|PGRST_DB_URI|DB_PASSWORD)[A-Z_]*' <<<"$v" | tr '\n' ' ')"
+  done
+  for r in supabase_admin postgres authenticator supabase_auth_admin supabase_storage_admin; do
+    if docker exec -e PGPASSWORD="$pw" supabase-db psql -h 127.0.0.1 -U "$r" -d postgres -Atc 'select 1' >/dev/null 2>&1; then echo "вход $r по паролю из .env: да"; else echo "вход $r по паролю из .env: НЕТ"; fi
+  done
+  echo "--- журнал базы:"; docker logs --tail 25 supabase-db 2>&1 | cut -c1-160
+}
+
 case $CMD in
   install)
     ask; exec > >(tee -a "$LOG") 2>&1
@@ -508,6 +530,7 @@ case $CMD in
     ask; exec > >(tee -a "$LOG") 2>&1
     say 'Сброс пустой базы'; wipe_db; ok 'база и её тома удалены'
     base; firewall; supabase_prepare; site_prepare; up; exposure; data; backup; status; summary ;;
+  diag) diag ;;
   status) exec > >(tee -a "$LOG") 2>&1; status; summary ;;
   *) die "неизвестная команда $CMD (install | reset | data | status)" ;;
 esac
