@@ -98,6 +98,7 @@ base() {
   else ok 'swap уже есть'; fi
 
   export DEBIAN_FRONTEND=noninteractive
+  echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99vektor-ipv4   # IPv6 на сервере нет
   apt-get update -qq
   apt-get install -y -qq ca-certificates curl git openssl python3 ufw cron >/dev/null
   if ! command -v docker >/dev/null; then apt-get install -y -qq docker.io >/dev/null; fi
@@ -177,9 +178,16 @@ supabase_prepare() {
   env_set_if STUDIO_DEFAULT_ORGANIZATION Vektor
   env_set_if STUDIO_DEFAULT_PROJECT vektor
 
-  local left
-  left=$(grep -E 'your-|super-secret|insecure|eyAgCiAg' "$SB/.env" | cut -d= -f1 | tr '\n' ' ' || true)
-  [[ -z $left ]] || die "в .env остались учебные значения: $left"
+  env_set_if PROXY_DOMAIN "$DOMAIN"
+  env_set_if SAML_PRIVATE_KEY ''   # SAML выключен
+
+  # прочие учебные значения в новых версиях Supabase: ключи и пароли — заменить случайными
+  local k left=""
+  for k in $(grep -vE '^\s*#' "$SB/.env" | grep -E 'your-|super-secret|insecure|eyAgCiAg' | cut -d= -f1 || true); do
+    if [[ $k =~ (KEY|SECRET|PASSWORD|TOKEN) ]]; then env_set "$k" "$(rnd 24)"; ok "заменил учебное значение $k"
+    else left+=" $k"; fi
+  done
+  [[ -z $left ]] || die "в .env остались учебные значения:$left"
 
   # все порты контейнеров — только на 127.0.0.1 (Docker обходит ufw)
   python3 - "$SB/docker-compose.yml" <<'PY'
