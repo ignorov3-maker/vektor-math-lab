@@ -567,16 +567,46 @@ exposure() {
 }
 
 # ---------- 6. данные ----------
+# Self-hosted Supabase по умолчанию раздаёт anon/authenticated права на всё новое в public,
+# поэтому после восстановления права сбрасываются к умолчаниям Postgres и
+# накатываются ровно те, что были в облаке (ACL-записи выгрузки).
+write_acl() {
+  cat > "$ROOT/acl.sh" <<'ACL'
+set -euo pipefail
+dump=$1 toc=$2
+psql "$TARGET_DB" -XAtq -v ON_ERROR_STOP=1 <<'SQL'
+do $$
+declare r record; who text := 'public, anon, authenticated, service_role';
+begin
+  for r in select c.oid::regclass::text n, c.relkind k from pg_class c join pg_namespace s on s.oid=c.relnamespace
+           where s.nspname='public' and c.relkind in ('r','v','m','S','p','f') loop
+    execute format('revoke all on %s %s from %s', case when r.k='S' then 'sequence' else 'table' end, r.n, who);
+  end loop;
+  for r in select p.oid::regprocedure::text n, p.prokind k from pg_proc p join pg_namespace s on s.oid=p.pronamespace
+           where s.nspname='public' and p.prokind in ('f','p') loop
+    execute format('revoke all on %s %s from %s', case when r.k='p' then 'procedure' else 'function' end, r.n, who);
+    execute format('grant execute on %s %s to public', case when r.k='p' then 'procedure' else 'function' end, r.n);
+  end loop;
+end $$;
+SQL
+grep -E '^[0-9]+; [0-9]+ [0-9]+ ACL public ' "$toc" > /tmp/acl.toc || true
+pg_restore --dbname="$TARGET_DB" --no-owner --exit-on-error --single-transaction -L /tmp/acl.toc "$dump"
+echo "   ✓ права доступа как в облаке ($(wc -l < /tmp/acl.toc) записей)"
+ACL
+  chmod 600 "$ROOT/acl.sh"
+}
+
 data() {
   [[ ${CHECK_ONLY:-} == 1 ]] && say 'Сверка с облачной базой' || say 'Копирование данных из облачного Supabase'
   [[ -n ${SOURCE_DB:-} || ! -f $ROOT/.data-copied ]] || { ok 'данные уже на сервере'; return 0; }
   [[ -n ${SOURCE_DB:-} ]] || { warn 'строка подключения не введена — данные не копировал (позже: bash install.sh data)'; return 0; }
   local net pw rc=0
+  write_acl
   net=$(docker inspect supabase-db -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' | awk '{print $1}')
   pw=$(env_get POSTGRES_PASSWORD)
   SOURCE_DB="$SOURCE_DB" TARGET_DB="postgresql://postgres:$pw@db:5432/postgres" CHECK_ONLY=${CHECK_ONLY:-0} \
   docker run --rm -i --network "$net" -e SOURCE_DB -e TARGET_DB -e CHECK_ONLY \
-    -v "$APP/tools/migrate:/m:ro" -v "$ROOT/dumps:/d" "$CLIENT_IMAGE" bash -s <<'SH' || rc=$?
+    -v "$APP/tools/migrate:/m:ro" -v "$ROOT/acl.sh:/acl.sh:ro" -v "$ROOT/dumps:/d" "$CLIENT_IMAGE" bash -s <<'SH' || rc=$?
 set -euo pipefail
 q() { psql "$TARGET_DB" -XAtq -v ON_ERROR_STOP=1 -c "$1"; }
 psql "$SOURCE_DB" -XAtqc 'select 1' >/dev/null || { echo '   ! не подключиться к облачной базе — проверь строку и пароль'; exit 2; }
@@ -608,6 +638,7 @@ done
 pg_restore -l "$DUMP_FILE" | grep -vE '^[0-9]+; [0-9]+ [0-9]+ (SCHEMA - (public|extensions)( |$)|EXTENSION - |COMMENT - EXTENSION |COMMENT - SCHEMA (public|extensions)( |$)|[A-Z ]+ extensions |EVENT TRIGGER |COMMENT - EVENT TRIGGER |DEFAULT ACL .* supabase_admin$)' > /tmp/toc
 echo "   объектов к восстановлению: $(grep -c '^[0-9]' /tmp/toc)"
 pg_restore --dbname="$TARGET_DB" --no-owner --exit-on-error --single-transaction -L /tmp/toc "$DUMP_FILE"
+bash /acl.sh "$DUMP_FILE" /tmp/toc
 q "notify pgrst, 'reload schema'"
 echo "   ✓ восстановлено одной транзакцией: таблиц $(q "select count(*) from pg_tables where schemaname='public'")"
 bash /m/verify.sh > /tmp/verify.log 2>&1 || { grep -v '^OK:' /tmp/verify.log | tail -25; exit 4; }
@@ -749,6 +780,18 @@ case $CMD in
     AI_KEY=$(head -c 4096 | tr -d '\r\n '); exec > >(tee -a "$LOG") 2>&1
     case ${2:-} in proxyapi) proxy_setup ;; beget) ai_setup ;; *) die 'неизвестный провайдер' ;; esac
     status; summary ;;
+  acl-fix)  # права как в облаке по последней выгрузке (без пароля облака)
+    exec > >(tee -a "$LOG") 2>&1; say 'Права доступа как в облаке'; write_acl
+    net=$(docker inspect supabase-db -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' | awk '{print $1}')
+    TARGET_DB="postgresql://postgres:$(env_get POSTGRES_PASSWORD)@db:5432/postgres" \
+    docker run --rm -i --network "$net" -e TARGET_DB -v "$ROOT/acl.sh:/acl.sh:ro" -v "$ROOT/dumps:/d" "$CLIENT_IMAGE" bash -s <<'SH' && ok 'права приведены к облачным' || die 'не удалось выставить права'
+set -euo pipefail
+f=$(ls -t /d/*.dump | head -1); [[ -n $f ]] || { echo 'нет выгрузки'; exit 1; }
+pg_restore -l "$f" > /tmp/toc
+bash /acl.sh "$f" /tmp/toc
+psql "$TARGET_DB" -XAtq -c "notify pgrst, 'reload schema'"
+SH
+    ;;
   data-check)  # из админки: только сверка сервера с облаком, ничего не меняет
     SOURCE_DB=$(head -c 4096 | tr -d '\r\n'); exec > >(tee -a "$LOG") 2>&1
     [[ $SOURCE_DB =~ ^postgres(ql)?:// ]] || die 'строка должна начинаться с postgresql://'
