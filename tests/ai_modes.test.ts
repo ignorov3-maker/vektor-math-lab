@@ -77,4 +77,15 @@ const classifyRequest=(catalog:any[],t='2/5')=>M.handle(new Request('https://edg
 const hit=await (await classifyRequest(bugs)).json();const changed=await (await classifyRequest([{id:'different-rule',title:'Другая ошибка'}])).json();
 ok(hit.bug==='add-denominators'&&changed.bug==='other'&&keys[0]!==keys[1],'кэш зависит от каталога и повторно проверяет id ошибки');
 await (await classifyRequest(bugs,' 2 / 5 ')).text();ok(keys[0]===keys[2],'пробелы в математической строке не расходуют повторный запрос');
+// Свой OpenAI-совместимый шлюз (ИИ-шлюз Beget): обычный формат, без полей OpenRouter, ключ из AI_API_KEY
+env.AI_URL='https://api-llm.beget.example/v1/chat/completions';env.AI_API_KEY='beget-test';env.AI_MODEL='deepseek-v4-flash';
+let gw:any=null,gwUrl='',gwAuth='';
+globalThis.fetch=(async(url:string,options:any)=>{
+ if(String(url).endsWith('vk_ai_take'))return Response.json({ok:true,student_id:1});
+ if(String(url).endsWith('vk_ai_spend'))return Response.json(null);
+ gwUrl=String(url);gwAuth=options.headers.Authorization;gw=JSON.parse(options.body);return new Response('data: '+JSON.stringify({choices:[{delta:{content:'Ок'}}]})+'\n\ndata: [DONE]\n\n');
+}) as any;
+await (await send([{role:'user',content:'объясни'}])).text();
+ok(gwUrl===env.AI_URL&&gwAuth==='Bearer beget-test'&&gw.model==='deepseek-v4-flash'&&!('models' in gw)&&!('provider' in gw)&&!('reasoning' in gw)&&gw.stream===true&&gw.stream_options?.include_usage===true,'ИИ-шлюз: OpenAI-формат, своя модель и ключ, без полей OpenRouter');
+delete env.AI_URL;
 console.log(fails ? `ai_modes: ${fails} FAIL` : 'ai_modes: OK'); process.exit(fails ? 1 : 0);
