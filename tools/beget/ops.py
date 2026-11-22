@@ -184,6 +184,11 @@ class H(BaseHTTPRequestHandler):
             if name not in JOBS: return self.send(400, {'error': 'Неизвестное действие'})
             if name.startswith('ai_') and not re.fullmatch(r'[A-Za-z0-9._:-]{10,400}', value): return self.send(400, {'error': 'Похоже, это не ключ: вставьте ключ целиком'})
             if name == 'rootpw' and not (12 <= len(value) <= 200 and ':' not in value and '\n' not in value): return self.send(400, {'error': 'Пароль root — не короче 12 символов, без двоеточия'})
+            if name == 'data' and not value.startswith('postgres'):
+                # вставили только пароль базы — собираем строку Session pooler облачного проекта сами
+                from urllib.parse import quote
+                if not (6 <= len(value) <= 200) or '\n' in value: return self.send(400, {'error': 'Вставьте пароль базы или строку postgresql://…'})
+                value = f"postgresql://postgres.spyyhlatppyhmnmaksin:{quote(value, safe='')}@aws-1-eu-central-1.pooler.supabase.com:5432/postgres"
             if name == 'data' and not re.fullmatch(r'postgres(ql)?://\S{10,1000}', value): return self.send(400, {'error': 'Строка должна начинаться с postgresql://'})
             err = start_job(name, value)
             return self.send(409, {'error': err}) if err else self.send(200, {'ok': True})
@@ -215,8 +220,8 @@ pre{background:#1d1d1f;color:#e8e8ed;border-radius:12px;padding:12px;font-size:1
  <label>Ключ (после сохранения нигде не показывается)</label><input id="key" type="password" autocomplete="off" spellcheck="false">
  <button data-job="ai">Сохранить и проверить</button><div class="msg" id="m-ai"></div></section>
 <section class="card"><h2>Данные учеников <span class="pill" id="data"></span></h2>
- <small>Копия из облачного Supabase: Connect → Session pooler → URI, вместо [YOUR-PASSWORD] — пароль базы. Строка нигде не сохраняется.</small>
- <label>Строка подключения</label><textarea id="src" spellcheck="false" autocomplete="off"></textarea>
+ <small>Копия из облачного Supabase. Достаточно пароля базы (Supabase → Connect → Direct → «Reset database password», если не помните). Пароль нигде не сохраняется.</small>
+ <label>Пароль базы Supabase (или целиком строка postgresql://…)</label><input id="src" type="password" spellcheck="false" autocomplete="off">
  <button data-job="data">Перенести данные</button><div class="msg" id="m-data"></div></section>
 <section class="card"><h2>Пароль root</h2><small>Для входа на сервер по SSH и в консоль Бегета. Старый был в переписке — смените.</small>
  <label>Новый пароль (не короче 12 символов)</label><input id="rpw" type="password" autocomplete="new-password">
@@ -250,7 +255,7 @@ async function refresh(){let s;try{s=await api('status')}catch(e){if(e.code===40
  document.querySelectorAll('[data-job]').forEach(b=>b.disabled=j.running);clearTimeout(timer);timer=setTimeout(refresh,j.running?2000:15000)}
 document.querySelectorAll('[data-job]').forEach(b=>b.onclick=async()=>{const k=b.dataset.job;let name=k,value='',out='m-ops';
  if(k==='ai'){name=$('pv').value;value=$('key').value.trim();out='m-ai';if(!value)return $(out).textContent='Вставьте ключ'}
- if(k==='data'){value=$('src').value.trim();out='m-data';if(!value)return $(out).textContent='Вставьте строку подключения'}
+ if(k==='data'){value=$('src').value.trim();out='m-data';if(!value)return $(out).textContent='Вставьте пароль базы'}
  if(k==='rootpw'){value=$('rpw').value;out='m-rootpw';if(value.length<12)return $(out).textContent='Не короче 12 символов'}
  if(k==='update'&&!confirm('Обновить сервер сейчас? Сайт может мигнуть на минуту.'))return;
  try{await api('job',{name,value});$('key').value='';$('src').value='';$('rpw').value='';$(out).textContent='Запущено — ход виден в журнале ниже.';refresh()}catch(e){$(out).innerHTML='<span class="bad">'+esc(e.message)+'</span>'}});
