@@ -569,6 +569,7 @@ exposure() {
 # ---------- 6. данные ----------
 data() {
   [[ ${CHECK_ONLY:-} == 1 ]] && say 'Сверка с облачной базой' || say 'Копирование данных из облачного Supabase'
+  [[ -n ${SOURCE_DB:-} || ! -f $ROOT/.data-copied ]] || { ok 'данные уже на сервере'; return 0; }
   [[ -n ${SOURCE_DB:-} ]] || { warn 'строка подключения не введена — данные не копировал (позже: bash install.sh data)'; return 0; }
   local net pw rc=0
   net=$(docker inspect supabase-db -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' | awk '{print $1}')
