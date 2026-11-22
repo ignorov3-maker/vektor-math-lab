@@ -316,6 +316,9 @@ th{font-size:14px;color:var(--ink-2);font-weight:600}
 .msg.user .msg-body{border-top-right-radius:4px;background:var(--green-soft)}
 .msg.error .msg-body{border-color:var(--warn-line);background:var(--amber-soft)}
 .msg-body .figure{margin:8px 0}
+.msg-body .pilot-table{margin:10px 0;font-size:.8em}
+.msg-body .pilot-table th,.msg-body .pilot-table td{padding:5px 4px}
+.msg-body .pilot-table td{white-space:nowrap}
 .chat-q{font-size:20px;font-weight:700}
 .typing{color:var(--ink-2)}
 .typing::after{content:'';display:inline-block;width:1.2em;text-align:left;animation:dots 1.2s steps(4) infinite;overflow:hidden;vertical-align:bottom}
@@ -1309,6 +1312,7 @@ body.is-focus #app{max-width:820px;padding:10px 20px calc(28px + env(safe-area-i
 .chat-next:active{transform:translateY(2px) scale(.99)}
 .chat-chips{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:2px}
 .chat-chips::-webkit-scrollbar{display:none}
+.chat-chips:has([data-quick^="pilot-"]){flex-wrap:wrap}
 .chip{flex:none;padding:8px 14px;border:1.5px solid var(--line);border-radius:999px;background:var(--sheet);color:var(--ink);font:inherit;font-size:14px;font-weight:600;cursor:pointer;
   opacity:0;animation:chip-in .35s ease forwards;animation-delay:calc(.9s + var(--n) * .08s);transition:transform .12s,border-color .2s,background .2s}
 .chip:hover{border-color:var(--green);background:var(--green-soft)}

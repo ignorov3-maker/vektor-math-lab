@@ -18,6 +18,7 @@ for (const t of [...ctx.window.VEKTOR_FRACTIONS.topics, ...ctx.window.VEKTOR_KIT
   const e = t.explain;
   out[t.id] = {
     title: t.title,
+    grade: t.grade || 5,
     text: [
       `Тема: «${t.title}» (раздел «${t.strand || 'Обыкновенные дроби'}», ${(t.grade || 5) < 5 ? 'повторение начальной школы' : (t.grade || 5) + ' класс'}).`,
       `Цель: ${t.goal}`,
@@ -30,7 +31,7 @@ for (const t of [...ctx.window.VEKTOR_FRACTIONS.topics, ...ctx.window.VEKTOR_KIT
   };
 }
 const file = `// Сгенерировано: node tools/tutor-method.mjs — не править руками. Источник: content/fractions.js, content/courses/*.js\n` +
-  `export const METHOD: Record<string, { title: string; text: string; mistakes: Record<string, string> }> = ${JSON.stringify(out, null, 1)};\n`;
+  `export const METHOD: Record<string, { title: string; grade: number; text: string; mistakes: Record<string, string> }> = ${JSON.stringify(out, null, 1)};\n`;
 const path = new URL('supabase/functions/tutor/method.ts', root);
 if (process.argv.includes('--check')) {
   let cur = ''; try { cur = readFileSync(path, 'utf8'); } catch {}

@@ -69,13 +69,14 @@
         return;
       }
       // повторение освоенной темы — обычная задача генератора
-      const task = o.reviewTask(it.topic);
+      const task = o.reviewTask(it.topic, it.type);
       el.innerHTML = frame(`<p class="rv-task">${task.story ? esc(task.story.replace(/<[^>]+>/g, '')) + ' ' : ''}${task.question}</p><div class="wu-ans"></div><div class="wu-fb" aria-live="polite"></div>`);
-      const p = { answer: task.answer, sign: ['<', '>', '='].includes(task.answer) ? task.answer : null };
+      const p = { answer: task.answer, sign: ['<', '>', '='].includes(task.answer) ? task.answer : null, decimal: task.decimal };
       ask(el.querySelector('.wu-ans'), p, raw => {
         const r = o.check(raw, task), ok = !!(r.ok && !r.almost);
         if (ok) right++;
-        o.onEvent && o.onEvent('warmup_review', { topic: it.topic, ok });
+        if (it.type === 'tutor') o.onTutorCheck(it.topic, ok);
+        else o.onEvent && o.onEvent('warmup_review', { topic: it.topic, ok });
         el.querySelector('.wu-fb').innerHTML = `<p class="${ok ? 'wu-ok' : 'wu-bad'}">${ok ? 'Верно!' : `Ответ: ${fr(task.answer)}.`}</p><button type="button" class="btn btn-primary" data-wu="next">Дальше</button>`;
         el.querySelector('[data-wu="next"]').onclick = () => { k++; next(); };
       });
@@ -87,7 +88,7 @@
         host.querySelectorAll('[data-v]').forEach(b => b.onclick = () => once(b.dataset.v));
         return;
       }
-      host.innerHTML = `<form class="rv-ans"><input class="xr-in" inputmode="numeric" autocomplete="off" aria-label="Ответ" placeholder="ответ">
+      host.innerHTML = `<form class="rv-ans"><input class="xr-in" inputmode="${p.decimal ? 'decimal' : 'numeric'}" autocomplete="off" aria-label="Ответ" placeholder="ответ">
         <button type="button" class="xr-key" data-k="/">/</button><button class="btn btn-primary">Ответить</button></form>`;
       const f = host.querySelector('form'), inp = f.querySelector('input');
       f.querySelector('[data-k]').onclick = () => { inp.value += '/'; inp.focus(); };

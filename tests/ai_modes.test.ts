@@ -100,4 +100,15 @@ ok(compatibleRequest?.url === env.AI_URL
 'Бегет: запрос сохраняет формат и настройки действующего ИИ-шлюза');
 ok(compatibleRequest?.body.messages[0].content.includes('Линейные уравнения'), 'Бегет: сервер загружает методичку новой темы');
 
+const lessonPrompt = (topic: string) => M.buildChat({
+  mode: 'lesson', topic, grade: 4, history: [{ role: 'user', content: 'Не понял. Объясни иначе.' }],
+})!.messages[0].content;
+for (const [topic, grade] of [['compare', 5], ['a7-proportional', 7], ['s9-geom-prob', 9]] as const) {
+  const prompt = lessonPrompt(topic);
+  ok(prompt.includes('Тема программы ' + grade + '-го класса') && !prompt.includes('Тема программы 4-го класса'),
+    'пилот: класс берётся из серверной методички ' + topic);
+  ok(prompt.includes('смени способ объяснения') && !prompt.includes('Бери их в первую очередь'),
+    'пилот: способ объяснения зависит от темы ' + topic);
+}
+
 console.log(fails ? `ai_modes: ${fails} FAIL` : 'ai_modes: OK'); process.exit(fails ? 1 : 0);

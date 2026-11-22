@@ -4,6 +4,7 @@
 
 const { check } = window.VEKTOR_CHECK;
 const V = window.VEKTOR_VISUALS, T = window.VEKTOR_TUTOR, A = window.VEKTOR_ADAPTIVE, G = window.VEKTOR_GAME;
+const TUTOR_PILOT = window.VEKTOR_TUTOR_PILOT;
 const { f, figure } = V;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
@@ -57,7 +58,7 @@ const STAGES = [['learn', 'Узнать'], ['practice', 'Потренирова�
 const KEY = 'vektor-progress-v3';
 const fresh = () => ({
   progress: Object.fromEntries(topics.map(t => [t.id, t.start])),
-  meta: {}, attempts: [], answers: 0, asked: 0, days: [], diag: { step: 0, results: [] },
+  meta: {}, tutorReview: {}, attempts: [], answers: 0, asked: 0, days: [], diag: { step: 0, results: [] },
   settings: { name: 'Ученик', style: 'steps' },
 });
 let state;
@@ -65,7 +66,7 @@ try { state = Object.assign(fresh(), JSON.parse(localStorage.getItem(KEY))); } c
 // защита от испорченных или старых данных в браузере
 (() => {
   const d = fresh(), isObj = v => v && typeof v === 'object' && !Array.isArray(v);
-  for (const k of ['progress', 'meta', 'diag', 'settings']) if (!isObj(state[k])) state[k] = d[k];
+  for (const k of ['progress', 'meta', 'diag', 'settings', 'tutorReview']) if (!isObj(state[k])) state[k] = d[k];
   for (const k of ['attempts', 'days']) if (!Array.isArray(state[k])) state[k] = [];
   for (const k of ['answers', 'asked']) if (!Number.isFinite(state[k])) state[k] = 0;
   if (typeof state.settings.name !== 'string' || !state.settings.name.trim()) state.settings.name = d.settings.name;
@@ -107,7 +108,10 @@ function ownProblem(task, topic) {
 function warmupPlan() {
   const W = window.VEKTOR_WARMUP, RV = window.VEKTOR_REVIEW; if (!W || !RV) return [];
   const done = topics.map((t, k) => k).filter(k => !topics[k].legacy && meta(k).mastered);
-  return W.plan(RV.ensure(state), today(), { reviewTopic: done.length ? done[Math.floor(Math.random() * done.length)] : null });
+  const date = today();
+  const reviews = Object.keys(TUTOR_PILOT).filter(id => state.tutorReview[id] && state.tutorReview[id] <= date)
+    .map(id => ({ type: 'tutor', topic: byId[id] }));
+  return [...W.plan(RV.ensure(state), date, { reviewTopic: done.length ? done[Math.floor(Math.random() * done.length)] : null }), ...reviews];
 }
 function warmupPage() { return '<div class="page-head"><h1>Разминка</h1></div><div id="wu"></div>'; }
 function runWarmup() {
@@ -115,7 +119,14 @@ function runWarmup() {
   const items = warmupPlan();
   if (!items.length) { location.hash = 'home'; return; }
   window.VEKTOR_WARMUP.run(el, { items, bugs: window.VEKTOR_REVIEW.ensure(state), today: today(), lv: 2,
-    reviewTask: k => newTask(topics[k], 2), check,
+    reviewTask: (k, type) => type === 'tutor' ? TUTOR_PILOT[topics[k].id].review : newTask(topics[k], 2), check,
+    onTutorCheck: (k, ok) => {
+      const id = topics[k].id;
+      if (!state.tutorReview[id]) return;
+      state.tutorReview[id] = null;
+      logEvent('tutor_check', { topic: id, phase: 'delayed', ok });
+      save();
+    },
     onEvent: (type, data) => { logEvent(type, data); save(); },
     onStars: n => { game().stars += n; save(); hud(); },
     onReview: (key, p, back) => openReview(el, key, null, null, { own: p, onClose: back }),
@@ -294,7 +305,15 @@ function quickReplies(i, kind) {
   if (kind === 'lesson') {
     if (c.done) return [['go-practice', 'Перейти к тренировке', true]];
     if (c.ask) return [];
+    if (c.pending?.pilot) return [['pilot-back', 'Назад к уроку']];
     if (c.pending) return [['hint', 'Подсказка'], ['solution', 'Покажи решение']];
+    const id = topics[i].id;
+    if (TUTOR_PILOT[id]) {
+      if (c.pilotReady && !Object.hasOwn(state.tutorReview, id)) {
+        return [['pilot-independent', 'Попробовать без подсказки', true], ['Дальше', 'Дальше'], ['pilot-explain', 'Объясни иначе']];
+      }
+      return [['Дальше', 'Дальше', true], ['pilot-hint', 'Дай подсказку'], ['pilot-explain', 'Объясни иначе'], ['pilot-step', 'Проверь мой шаг']];
+    }
     if (c.forceOffline) return [['Дальше', 'Дальше', true], ['Повтори правило', 'Повтори правило'], ['Покажи картинку', 'Картинка']];
     if (isOnline() && c.truncated) return [['Продолжи, пожалуйста', 'Продолжи', true], ['Дальше', 'Дальше']];
     return isOnline()
@@ -585,6 +604,7 @@ function bindChat(i, kind) {
     const v = b.dataset.quick;
     if (v === 'go-practice') { session = null; location.hash = `lesson/${i}/practice`; return; }
     if (v === 'hint' || v === 'solution') return lessonTaskHelp(i, v);
+    if (v.startsWith('pilot-')) return tutorPilotAction(i, v);
     tutorSay(i, kind, v);
   });
   box.querySelectorAll('[data-ask]').forEach(b => b.onclick = () => answerAsk(i, +b.dataset.ask));
@@ -648,9 +668,74 @@ function lessonTaskHelp(i, what) {
   refreshChat(i, 'lesson');
 }
 
+function tutorPilotAction(i, action) {
+  const id = topics[i].id, pilot = TUTOR_PILOT[id], c = getChat(i, 'lesson');
+  if (!pilot || c.ask || c.busy || c.done) return;
+  if (action === 'pilot-back') {
+    if (!c.pending?.pilot) return;
+    c.pending = null;
+    c.msgs.push({ role: 'assistant', stage: true, html: '<p>Можешь продолжить урок.</p>' });
+    return refreshChat(i, 'lesson');
+  }
+  if (c.pending) return;
+  if (action === 'pilot-explain') {
+    const index = c.pilotExplanation || 0;
+    const html = pilot.explanations[index];
+    if (html) c.pilotExplanation = index + 1;
+    c.msgs.push({ role: 'assistant', stage: true,
+      html: html || '<p>Мы уже смотрели эту идею двумя способами. Нажми «Весь разговор», чтобы вернуться к ним, или попробуй задачу.</p>',
+      raw: html ? T.plain(html) : null });
+  } else if (action === 'pilot-hint') {
+    c.msgs.push({ role: 'assistant', stage: true, html: '<p>' + esc(pilot.hint) + '</p>', raw: pilot.hint });
+  } else {
+    const independent = action === 'pilot-independent';
+    if (independent && (!c.pilotReady || Object.hasOwn(state.tutorReview, id))) return;
+    const task = independent ? pilot.immediate : {
+      ...pilot.step, choices: shuffleIdx(pilot.step.choices.length).map(k => pilot.step.choices[k]),
+    };
+    c.pending = { task, tries: 0, pilot: independent ? 'immediate' : 'step' };
+    c.msgs.push({ role: 'assistant', stage: true, html: '<p>' + task.question + '</p>' });
+  }
+  refreshChat(i, 'lesson');
+}
+
+function answerTutorPilot(i, input) {
+  const c = getChat(i, 'lesson'), { task, pilot } = c.pending;
+  const result = check(input, task), ok = !!(result.ok && !result.almost);
+  if (result.empty || result.unreadable) {
+    c.msgs.push({ role: 'assistant', html: '<p>Впиши одно число или выбери ответ.</p>' });
+    return refreshChat(i, 'lesson');
+  }
+  if (pilot === 'step' && !ok && c.pending.tries++ === 0) {
+    c.msgs.push({ role: 'assistant', html: '<p>' + esc(task.hint) + '</p>' });
+    return refreshChat(i, 'lesson');
+  }
+  c.pending = null;
+  c.msgs.push({ role: 'assistant', html: '<p>' + (ok ? 'Верно. ' : 'Разберём этот шаг. ') + esc(task.solution) + '</p>' });
+  if (pilot === 'step') c.pilotReady = true;
+  else {
+    c.pilotReady = false;
+    const id = topics[i].id;
+    if (!Object.hasOwn(state.tutorReview, id)) {
+      state.tutorReview[id] = addDays(today(), 1);
+      logEvent('tutor_check', { topic: id, phase: 'immediate', ok });
+      save();
+      c.msgs.push({ role: 'assistant', html: '<p>Завтра в разминке будет другая задача на эту же идею.</p>' });
+    }
+  }
+  refreshChat(i, 'lesson');
+}
+
 function tutorSay(i, kind, text) {
   const c = getChat(i, kind);
   if (c.busy) return;
+  if (kind === 'lesson' && !c.done && TUTOR_PILOT[topics[i].id]) {
+    if (c.pending?.pilot) return answerTutorPilot(i, text);
+    if (!c.pending && !c.ask) {
+      if (/^(не понял[а]?|объясни (иначе|по-другому)|дай ещ[ёе] пример)[.!?]*$/i.test(text)) return tutorPilotAction(i, 'pilot-explain');
+      if (/^дай подсказку[.!?]*$/i.test(text)) return tutorPilotAction(i, 'pilot-hint');
+    }
+  }
   c.msgs.push({ role: 'user', html: T.render(String(text).replace(/\[\[|\]\]/g, '')).html, raw: text, hidden: /^дальше$/i.test(text) });
   state.asked = (state.asked || 0) + 1; save();
   if (!c.pending && !/^(дальше|продолжи)/i.test(text)) celebrate(G.asked(game()));
@@ -927,7 +1012,7 @@ function currentSpot() {
 function bipGreeting(cur) {
   const hour = new Date().getHours(), name = esc(state.settings.name || '');
   const hi = (hour < 12 ? 'Доброе утро' : hour < 18 ? 'Привет' : 'Добрый вечер') + (name && name !== 'Ученик' ? `, ${name}` : '') + '!';
-  if (state.warmupDay !== today() && warmupPlan().length) return `${hi} Сначала проверим, не вернулись ли жучки — это две минуты.`;
+  if (state.warmupDay !== today() && warmupPlan().length) return `${hi} Начнём с короткой разминки.`;
   if (cur.kind === 'quick') { const l = Q().byId[cur.id]; return `${hi} ${l.say} Жми на кружок!`; }
   const t = topics[cur.i], ct = continueTarget(), why = ct.stage !== 'review' && nextStep().reason;
   if (why) return `${hi} ${why}`;
@@ -976,7 +1061,7 @@ function home() {
     }),
   ].join('');
   const hidden = Math.max(0, seq.length - FOG_FROM - 2);
-  return `${state.warmupDay !== today() && warmupPlan().length ? `<a class="strip strip-warmup" href="#warmup" data-warmup>${G.icon('repeat', 18)}<span><b>${window.VEKTOR_TONE.senior() ? 'Проверим разобранные ошибки' : 'Не вернулись ли жучки?'}</b> 2 минуты</span><span class="strip-go">Начать</span></a>` : ''}
+  return `${state.warmupDay !== today() && warmupPlan().length ? `<a class="strip strip-warmup" href="#warmup" data-warmup>${G.icon('repeat', 18)}<span><b>Повторим пройденное</b> 2 минуты</span><span class="strip-go">Начать</span></a>` : ''}
   ${!gradeTopics(state.settings.grade || 5).length ? `<a class="strip grade-note" href="#map"><span><b>Программа ${state.settings.grade} класса скоро появится.</b> Пока закрываем дыры из младших классов.</span></a>` : ''}
   ${askGrade() ? gradeSheet() : ''}
   ${askInterests() ? `<div class="int-sheet-wrap"><section class="int-sheet interests-ask" role="dialog" aria-modal="true" aria-labelledby="int-h"><span class="int-grip" aria-hidden="true"></span><h2 id="int-h">Ты прошёл уже ${finishedLevels()} ${finishedLevels() < 5 ? 'уровня' : 'уровней'}! Что тебе интересно?</h2><p class="muted small">Выбери до трёх — Бипыч будет придумывать задачи про это.</p>${interestPicker([])}<div class="row-actions"><button class="btn btn-primary btn-big" data-interests-save>Готово</button><button class="btn btn-ghost" data-interests-skip>Не сейчас</button></div></section></div>` : ''}
