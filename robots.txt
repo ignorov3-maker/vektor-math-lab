@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+Disallow: /parent.html
+Disallow: /teacher.html
+Disallow: /tutor.html
+Disallow: /report.html
+Disallow: /board.html
+Disallow: /print/
+Disallow: /landing/pitch.html
+Disallow: /api/
+Disallow: /supabase/
+Disallow: /server/
+Disallow: /tests/
+Disallow: /tools/
+Disallow: /docs/
+
+Sitemap: https://vektorstudy.ru/sitemap.xml

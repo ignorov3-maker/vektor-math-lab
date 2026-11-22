@@ -1,0 +1,13 @@
+{
+  "name": "Вектор — математика 5–9 класса",
+  "short_name": "Вектор",
+  "lang": "ru",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAFAF6",
+  "theme_color": "#1E7358",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
