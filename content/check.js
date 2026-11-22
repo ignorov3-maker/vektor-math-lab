@@ -10,11 +10,15 @@
     if (/^-?\d+(\.\d+)?$/.test(s)) return { kind: 'num', v: +s };
     return null;
   }
+  // вариант ответа «Острый.» = «острый»
+  const choiceNorm = x => String(x == null ? '' : x).trim().toLowerCase().replace(/ё/g, 'е').replace(/[.!]+$/, '').replace(/\s+/g, ' ');
   // → { ok, almost?, msg?, note?, mistake? }
   function check(input, task) {
     if (!String(input).trim()) return { ok: false, empty: true, msg: 'Сначала впиши ответ.' };
+    // выбор из вариантов (темы 5–9): сравниваем саму строку варианта
+    if (task.accept === 'choice') { const v = choiceNorm(input), pickd = (task.choices || []).find(c => choiceNorm(c) === v); return v === choiceNorm(task.answer) ? { ok: true } : { ok: false, mistake: task.misc && task.misc({ kind: 'choice', v: pickd != null ? pickd : String(input).trim() }) }; }
     const got = parse(input), want = parse(task.answer);
-    if (!got) return { ok: false, unreadable: true, msg: 'Не получилось прочитать ответ. Впиши числа в клеточки: сверху числитель, снизу знаменатель.' };
+    if (!got) return { ok: false, unreadable: true, msg: task.generic ? 'Не получилось прочитать ответ. Впиши одно число: например 12, −3 или 2,5.' : 'Не получилось прочитать ответ. Впиши числа в клеточки: сверху числитель, снизу знаменатель.' };
     if (want.kind === 'sign') return got.v === want.v ? { ok: true } : { ok: false, mistake: task.misc && task.misc(got) };
     if (got.kind === 'sign' || Math.abs(got.v - want.v) > 1e-9) return { ok: false, mistake: task.misc && task.misc(got) };
     const reducible = got.kind === 'frac' && gcd(got.n, got.d) > 1;
@@ -39,5 +43,5 @@
         return { ok: true };
     }
   }
-  root.VEKTOR_CHECK = { parse, check, gcd };
+  root.VEKTOR_CHECK = { parse, check, gcd, choiceNorm };
 })(typeof window !== 'undefined' ? window : globalThis);

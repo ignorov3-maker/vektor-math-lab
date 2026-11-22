@@ -13,13 +13,23 @@
   const positive=n=>Number.isFinite(n)&&n>0&&n<=1000000;
   const num=n=>Number.isFinite(n)?String(Math.round(n*1000)/1000):'?';
 
+  // Рисунки тем 5–9 подключаются из файлов курсов: VEKTOR_VISUALS.register('bars', { describe(fig), render(fig) → '<svg…>' | '' })
+  const PLUGINS = {};
+  function register(type, def) { if (PLUGINS[type] || ['bar','circle','pair','line','mixed','grid','labeled','pizza','cake','choco','pizzas','chocopair','people','icons','groups','triangle','right_triangle','circle_geo','angle','coord','graph','rect','box','angle_split','clock'].includes(type)) throw new Error('visuals: тип уже есть ' + type); PLUGINS[type] = def; }
+  // обёртка для render(): svgWrap(300, 200, 'подпись для экранного чтеца', '<line …/>')
+  const svgWrap = (vw, vh, label, inner) => `<svg viewBox="0 0 ${vw} ${vh}" width="${vw}" height="${vh}" role="img" aria-label="${esc(label)}" style="width:${vw}px;max-width:100%;height:auto"><title>${esc(label)}</title>${inner}</svg>`;
   function describe(fig) {
     if(!fig)return '';
+    if(PLUGINS[fig.type]){try{return String(PLUGINS[fig.type].describe(fig)||'');}catch(e){return '';}}
     switch(fig.type){
       case 'triangle': return `треугольник, стороны ${fig.a}, ${fig.b}, ${fig.c}`;
       case 'right_triangle': return `прямоугольный треугольник, катеты ${fig.a} и ${fig.b}, гипотенуза ${fig.c==null?'неизвестна':fig.c}`;
       case 'circle_geo': return `окружность, радиус ${fig.r}, диаметр ${num(2*fig.r)}${fig.chord===false?'':', показана хорда'}`;
       case 'angle': return `угол ${fig.degrees} градусов`;
+      case 'rect': return fig.a===fig.b?`квадрат со стороной ${fig.la??fig.a}`:`прямоугольник ${fig.la??fig.a} на ${fig.lb??fig.b}`;
+      case 'box': return `прямоугольный параллелепипед ${fig.la??fig.a} на ${fig.lb??fig.b} на ${fig.lc??fig.c}`;
+      case 'angle_split': return `${fig.total===180?'развёрнутый':'прямой'} угол разделён лучом, одна часть ${fig.a} градусов, другая неизвестна`;
+      case 'clock': return `часы показывают ${fig.h}:00`;
       case 'coord': return 'координатная плоскость: '+(fig.points||[]).map((p,i)=>`${p.label||String.fromCharCode(65+i)}(${p.x}; ${p.y})`).join(', ');
       case 'graph': return `график функции y = ${fig.kind==='quadratic'?`${fig.a}x² + ${fig.b}x + ${fig.c}`:`${fig.a}x + ${fig.b}`}`;
       case 'bar': return `полоска из ${fig.parts} частей, закрашено ${fig.shaded}`;
@@ -71,8 +81,31 @@
       else{if(!['linear','quadratic'].includes(fig.kind)||![fig.a,fig.b,...(fig.kind==='quadratic'?[fig.c]:[])].every(n=>Number.isFinite(n)&&Math.abs(n)<=1000))return '';
         if(fig.kind==='quadratic'&&fig.a===0)return '';const pts=[];for(let k=0;k<=200;k++){const x=-5+k/20,y=fig.kind==='quadratic'?fig.a*x*x+fig.b*x+fig.c:fig.a*x+fig.b;pts.push(`${x},${-y}`);}
         body+=`<svg x="30" y="30" width="240" height="240" viewBox="-5 -5 10 10" overflow="hidden"><polyline points="${pts.join(' ')}" fill="none" stroke="var(--green,currentColor)" stroke-width="2.5" vector-effect="non-scaling-stroke"/></svg>`;}
+    }else if(fig.type==='rect'){
+      // прямоугольник; при небольших сторонах — на клетках, чтобы площадь можно было посчитать глазами
+      const a=fig.a,b=fig.b;if(!positive(a)||!positive(b)||a>1000||b>1000)return '';
+      const k=Math.min(180/a,180/b),w=a*k,h=b*k,x0=150-w/2,y0=40+(180-h)/2,grid=fig.grid!==false&&a<=12&&b<=12&&Number.isInteger(a)&&Number.isInteger(b);
+      if(grid){let g='';for(let i=1;i<a;i++)g+=line(x0+i*k,y0,x0+i*k,y0+h);for(let j=1;j<b;j++)g+=line(x0,y0+j*k,x0+w,y0+j*k);body+=`<g opacity=".25" stroke-width="1">${g}</g>`;}
+      body+=`<rect x="${x0}" y="${y0}" width="${w}" height="${h}" stroke-width="2.5"/>`+text(150,y0+h+20,String(fig.la??a))+`<text x="${x0-8}" y="${y0+h/2+4}" text-anchor="end" fill="currentColor" stroke="none" font-size="13">${esc(String(fig.lb??b))}</text>`;
+    }else if(fig.type==='box'){
+      const a=fig.a,b=fig.b,c=fig.c;if(![a,b,c].every(positive)||Math.max(a,b,c)>1000)return '';
+      const k=Math.min(170/(a+b*0.5),170/(c+b*0.5)),W=a*k,H=c*k,dx=b*k*0.5,dy=-b*k*0.5,x0=150-(W+dx)/2,y0=150+(H+(-dy))/2-H;
+      const P=(x,y)=>`${x},${y}`,f=[[x0,y0],[x0+W,y0],[x0+W,y0+H],[x0,y0+H]];
+      body+=`<polygon points="${f.map(p=>P(...p)).join(' ')}"/><polygon points="${P(x0,y0)} ${P(x0+dx,y0+dy)} ${P(x0+W+dx,y0+dy)} ${P(x0+W,y0)}"/><polygon points="${P(x0+W,y0)} ${P(x0+W+dx,y0+dy)} ${P(x0+W+dx,y0+H+dy)} ${P(x0+W,y0+H)}"/>`;
+      body+=`<g stroke-dasharray="4 4" opacity=".45">${line(x0,y0+H,x0+dx,y0+H+dy)+line(x0+dx,y0+H+dy,x0+W+dx,y0+H+dy)+line(x0+dx,y0+dy,x0+dx,y0+H+dy)}</g>`;
+      body+=text(x0+W/2,y0+H+20,String(fig.la??a))+text(x0+W+dx/2+14,y0+H+dy/2+12,String(fig.lb??b))+`<text x="${x0-8}" y="${y0+H/2+4}" text-anchor="end" fill="currentColor" stroke="none" font-size="13">${esc(String(fig.lc??c))}</text>`;
+    }else if(fig.type==='angle_split'){
+      const T=fig.total,a=fig.a;if(![90,180].includes(T)||!positive(a)||a>=T)return '';const R=Math.PI/180,cx=150,cy=T===180?190:230,L=120;
+      const ray=d=>line(cx,cy,cx+L*Math.cos(d*R),cy-L*Math.sin(d*R)),arc=(d1,d2,r)=>`<path d="M${cx+r*Math.cos(d1*R)} ${cy-r*Math.sin(d1*R)}A${r} ${r} 0 0 0 ${cx+r*Math.cos(d2*R)} ${cy-r*Math.sin(d2*R)}"/>`;
+      body=ray(0)+ray(T)+`<g stroke="var(--green,currentColor)">${ray(a)}</g>`+arc(0,a,34)+arc(a,T,48)+text(cx+62*Math.cos(a/2*R),cy-62*Math.sin(a/2*R)+4,a+'°')+text(cx+78*Math.cos((a+T)/2*R),cy-78*Math.sin((a+T)/2*R)+4,'?');
+      if(T===90)body+=`<path d="M${cx+14} ${cy}v-14h-14" opacity=".5"/>`;
+      body+='<circle cx="150" cy="'+cy+'" r="3" fill="currentColor"/>';
+    }else if(fig.type==='clock'){
+      const h=fig.h;if(!Number.isInteger(h)||h<1||h>12)return '';const R=Math.PI/180;let t='';
+      for(let i=1;i<=12;i++){const d=90-i*30;t+=line(150+100*Math.cos(d*R),150-100*Math.sin(d*R),150+88*Math.cos(d*R),150-88*Math.sin(d*R))+text(150+74*Math.cos(d*R),150-74*Math.sin(d*R)+5,String(i));}
+      const hd=90-h*30;body='<circle cx="150" cy="150" r="110"/>'+t+`<g stroke-width="4" stroke-linecap="round">${line(150,150,150+55*Math.cos(hd*R),150-55*Math.sin(hd*R))}</g><g stroke-width="2.5" stroke-linecap="round">${line(150,150,150,62)}</g><circle cx="150" cy="150" r="4" fill="currentColor"/>`;
     }else return '';
-    const label=esc(describe(fig));return `<div class="figure"><svg viewBox="0 0 300 300" width="300" height="300" role="img" aria-label="${label}" style="width:300px;max-width:100%;height:auto"><title>${label}</title><g fill="none" stroke="currentColor" stroke-width="2">${body}</g></svg></div>`;
+    const label=esc(describe(fig)),vh=fig.type==='rect'?250:300;return `<div class="figure"><svg viewBox="0 0 300 ${vh}" width="300" height="${vh}" role="img" aria-label="${label}" style="width:300px;max-width:100%;height:auto"><title>${label}</title><g fill="none" stroke="currentColor" stroke-width="2">${body}</g></svg></div>`;
   }
 
   function barSvg(parts, shaded, { split = null, crossed = 0, y = 0, h = 44, label = null, width = W } = {}) {
@@ -218,7 +251,8 @@
   // Рисунок по описанию { type, ... } → HTML
   function figure(fig) {
     if (!fig) return '';
-    if(['triangle','right_triangle','circle_geo','angle','coord','graph'].includes(fig.type))return geometry(fig);
+    if (PLUGINS[fig.type]) { let svg = ''; try { svg = PLUGINS[fig.type].render(fig) || ''; } catch (e) { svg = ''; } return svg ? `<div class="figure">${svg}</div>` : ''; }
+    if(['triangle','right_triangle','circle_geo','angle','coord','graph','rect','box','angle_split','clock'].includes(fig.type))return geometry(fig);
     if (SCENES.includes(fig.type)) return scene(fig);
     // значки интереса ребёнка (мячи, ракеты…): total штук, первые mark выделены. Значок — готовая картинка из VEKTOR_ART
     if (fig.type === 'icons') return `<div class="figure icons" role="img" aria-label="${fig.total} штук, выделено ${fig.mark}">${Array.from({ length: fig.total }, (_, k) => `<span class="ic${k < fig.mark ? ' on' : ''}">${fig.icon}</span>`).join('')}</div>`;
@@ -347,5 +381,5 @@
     });
   }
 
-  window.VEKTOR_VISUALS = { f, figure, figureFromTag, describe, labHtml, labBind, labeled };
+  window.VEKTOR_VISUALS = { f, figure, figureFromTag, describe, labHtml, labBind, labeled, register, svgWrap, esc };
 })();

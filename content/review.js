@@ -37,10 +37,18 @@
       el.querySelectorAll('[data-v]').forEach(b => b.onclick = () => onAnswer(b.dataset.v));
       return;
     }
-    el.innerHTML = `<form class="rv-ans"><input class="xr-in" inputmode="numeric" autocomplete="off" aria-label="Ответ" placeholder="ответ">
-      <button type="button" class="xr-key" data-k="/">/</button><button class="btn btn-primary">Проверить</button></form>`;
+    // темы 5–9: выбор из вариантов
+    if (p.accept === 'choice' && Array.isArray(p.choices)) {
+      el.innerHTML = `<div class="rv-choices">${p.choices.map((c, k) => `<button type="button" class="btn btn-ghost rv-choice" data-k="${k}">${esc(c)}</button>`).join('')}</div>`;
+      el.querySelectorAll('[data-k]').forEach(b => b.onclick = () => onAnswer(p.choices[+b.dataset.k]));
+      return;
+    }
+    // клавиши, которых нет на цифровой клавиатуре телефона: дробь, минус, запятая
+    const keys = [(!p.generic || String(p.answer).includes('/')) && '/', p.signed && '−', p.decimal && ','].filter(Boolean);
+    el.innerHTML = `<form class="rv-ans"><input class="xr-in" inputmode="${p.decimal ? 'decimal' : 'numeric'}" autocomplete="off" aria-label="Ответ" placeholder="ответ">
+      ${keys.map(k => `<button type="button" class="xr-key" data-k="${k}" aria-label="${{ '/': 'дробь', '−': 'минус', ',': 'запятая' }[k]}">${k}</button>`).join('')}<button class="btn btn-primary">Проверить</button></form>`;
     const f = el.querySelector('form'), inp = f.querySelector('input');
-    f.querySelector('[data-k]').onclick = () => { inp.value += '/'; inp.focus(); };
+    f.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { const k = b.dataset.k; inp.value = k === '−' ? (/^[-−]/.test(inp.value) ? inp.value.slice(1) : '−' + inp.value) : inp.value + k; inp.focus(); });
     f.onsubmit = e => { e.preventDefault(); if (inp.value.trim()) onAnswer(inp.value.trim()); };
     setTimeout(() => inp.focus(), 0);
   }
@@ -57,7 +65,9 @@
     const bug = K.byKey[o.bugKey]; if (!bug) return null;
     const rec = caught(o.bugs, o.bugKey, o.today);
     const T = root.VEKTOR_TONE, V = root.VEKTOR_VISUALS;
-    const fig = tag => { const m = String(tag || '').match(/^\[\[(.+)\]\]$/); const g = m && V && V.figureFromTag(m[1]); return g ? `<div class="rv-fig">${V.figure(g)}</div>` : ''; };
+    // рисунок контрпримера: тег [[…]] (дроби) или готовый SVG (темы 5–9)
+    const fig = tag => { if (/^\s*</.test(String(tag || ''))) return `<div class="rv-fig">${tag}</div>`; const m = String(tag || '').match(/^\[\[(.+)\]\]$/); const g = m && V && V.figureFromTag(m[1]); return g ? `<div class="rv-fig">${V.figure(g)}</div>` : ''; };
+    const taskFig = p => (p && p.generic && p.figure && V ? `<div class="rv-fig">${V.figure(p.figure)}</div>` : '');
     const ev = (type, data) => o.onEvent && o.onEvent(type, Object.assign({ bug: bug.key }, data));
     let step = 0, conflictIdx = rec.conflict || 0;
     el.innerHTML = `<div class="review card" data-bug="${bug.key}">
@@ -116,7 +126,7 @@
     function fix() {
       step = 2; dots();
       const p = o.own;
-      body.innerHTML = `<p class="rv-h">${esc(bug.fixIdea)}</p>${p ? `<p>Теперь реши свою задачу заново:</p><p class="rv-task">${fr(p.text)}</p><div class="rv-ans-host"></div><p class="rv-note" aria-live="polite"></p>` : next()}`;
+      body.innerHTML = `<p class="rv-h">${esc(bug.fixIdea)}</p>${p ? `<p>Теперь реши свою задачу заново:</p><p class="rv-task">${fr(p.text)}</p>${taskFig(p)}<div class="rv-ans-host"></div><p class="rv-note" aria-live="polite"></p>` : next()}`;
       more();
       if (!p) return bindNext(twin);
       answerer(body.querySelector('.rv-ans-host'), p, (raw, a) => {
@@ -131,7 +141,7 @@
     function twin() {
       step = 3; dots();
       const p = bug.trap(o.lv || 2) || o.own;
-      body.innerHTML = `<p>Проверим: задача-двойник.</p><p class="rv-task" data-expr="${esc(p.expr || '')}">${fr(p.text)}</p><div class="rv-ans-host"></div><p class="rv-note" aria-live="polite"></p>`;
+      body.innerHTML = `<p>Проверим: задача-двойник.</p><p class="rv-task" data-expr="${esc(p.expr || '')}">${fr(p.text)}</p>${taskFig(p)}<div class="rv-ans-host"></div><p class="rv-note" aria-live="polite"></p>`;
       answerer(body.querySelector('.rv-ans-host'), p, (raw, a) => {
         const ok = isRight(p, raw) && (!a || a.stepsOk);
         ev('bug_step', { step: 'twin', ok });
@@ -162,13 +172,16 @@
     if (!bug || !p || document.getElementById('push-card')) return false;
     const c = bug.conflicts[(pl.conflict || 0) % bug.conflicts.length];
     const V = root.VEKTOR_VISUALS, m = String(c.figure || '').match(/^\[\[(.+)\]\]$/), g = m && V && V.figureFromTag(m[1]);
+    const cfig = g ? `<div class="rv-fig">${V.figure(g)}</div>` : /^\s*</.test(String(c.figure || '')) ? `<div class="rv-fig">${c.figure}</div>` : '';
+    const pfig = p.generic && p.figure && V ? `<div class="rv-fig">${V.figure(p.figure)}</div>` : '';
+    const shown = x => (p.generic && p.accept !== 'choice' ? String(x).replace('.', ',').replace(/^-/, '−') : x);
     // Окно поверх экрана с затемнением; «Позже» сворачивает его в плашку, задача не теряется
     const el = document.createElement('div'); el.id = 'push-card'; el.className = 'push-wrap';
     el.innerHTML = `<div class="push-back" data-pc="later"></div>
       <section class="push-card" role="dialog" aria-modal="true" aria-labelledby="pc-title">
         <div class="pc-head"><h2 id="pc-title">Задача от учителя</h2><button type="button" class="pc-later" data-pc="later">Позже</button></div>
-        <p>${fr(c.text.replace(/\[\[[^\]]*\]\]/g, ''))}</p>${g ? `<div class="rv-fig">${V.figure(g)}</div>` : ''}
-        <p class="rv-task pc-lead" data-expr="${esc(p.expr || '')}">${p.expr ? 'Теперь реши сам:' : fr(p.text)}</p>
+        <p>${fr(c.text.replace(/\[\[[^\]]*\]\]/g, ''))}</p>${cfig}
+        <p class="rv-task pc-lead" data-expr="${esc(p.expr || '')}">${p.expr ? 'Теперь реши сам:' : fr(p.text)}</p>${pfig}
         <div class="rv-ans-host"></div><div class="pc-result" aria-live="polite"></div>
       </section>
       <button type="button" class="push-pill" data-pc="open" hidden>Задача от учителя</button>`;
@@ -183,7 +196,7 @@
       const ok = isRight(p, raw) && (!a || a.stepsOk);
       if (!sent) { sent = true; onDone && onDone(ok); }
       el.querySelector('.rv-ans-host').querySelectorAll('button, input').forEach(x => (x.disabled = true));
-      el.querySelector('.pc-result').innerHTML = `<p class="${ok ? 'pc-ok' : 'pc-bad'}">${ok ? 'Верно! Учитель увидит твою галочку.' : `Пока не так. Правильный ответ: ${fr(p.answer)}.`}</p>
+      el.querySelector('.pc-result').innerHTML = `<p class="${ok ? 'pc-ok' : 'pc-bad'}">${ok ? 'Верно! Учитель увидит твою галочку.' : `Пока не так. Правильный ответ: ${fr(esc(shown(p.answer)))}.`}</p>
         <button type="button" class="btn btn-primary" data-pc="close">Готово</button>`;
       el.querySelector('[data-pc="close"]').onclick = () => { document.body.classList.remove('push-open'); el.remove(); };
       el.querySelector('[data-pc="later"].pc-later').hidden = true;

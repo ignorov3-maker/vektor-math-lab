@@ -215,16 +215,23 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
 <script src="content/metrika.js"></script>
 <script src="content/check.js"></script>
 <script src="content/visuals.js"></script>
-<script src="content/fractions.js"></script>
+<script src="content/fractions.js"></script><script src="content/kit.js"></script><script src="content/courses/m5n.js"></script><script src="content/courses/m5d.js"></script><script src="content/courses/g56.js"></script><script src="content/courses/m6a.js"></script><script src="content/courses/m6b.js"></script><script src="content/courses/a7.js"></script><script src="content/courses/g7.js"></script><script src="content/courses/a8.js"></script><script src="content/courses/g89.js"></script><script src="content/courses/a9.js"></script><script src="content/courses/s79.js"></script>
 <script src="content/rational.js"></script>
 <script src="content/tone.js"></script>
 <script src="content/bugs.js"></script>
 <script>
 (() => {
   const CFG = window.VEKTOR_CONFIG || {}, SB = (CFG.supabaseUrl || '').replace(/\/+$/, '');
-  const SHORT = { concept: 'Доли', reduce: 'Сокращ.', compare: 'Сравн.', 'add-same': '± один.', 'add-diff': '± разн.', mixed: 'Смешан.', mult: 'Умнож.', div: 'Деление', 'part-of': 'Часть' };
-  const TOPICS = window.VEKTOR_FRACTIONS.topics.filter(t => !t.legacy).map((t, i) => ({ id: t.id, n: i + 1, title: t.title, short: SHORT[t.id] || t.title.split(' ')[0], mistakes: t.mistakes || [] }));
-  const TI = Object.fromEntries(TOPICS.map(t => [t.id, t]));
+  const SHORT = { concept: 'Доли', reduce: 'Сокращ.', compare: 'Сравн.', 'add-same': '± один.', 'add-diff': '± разн.', mixed: 'Смешан.', mult: 'Умнож.', div: 'Деление', 'part-of': 'Часть', 'g-angles': 'Углы', 'g-perimeter': 'Периметр', 'g-area': 'Площадь', 'g-volume': 'Объём', 'g-circle': 'Окружн.' };
+  // Темы: дроби + все курсы 5–9 (content/courses через kit). В таблице класса — темы его класса (по названию «5А» → 5).
+  const KITT = window.VEKTOR_KIT ? window.VEKTOR_KIT.topics.filter(t => t.course) : [];
+  const ALL = [...window.VEKTOR_FRACTIONS.topics.map(t => ({ ...t, grade: 5 })), ...KITT].filter(t => !t.legacy);
+  const gradeOf = name => { const m = /^\s*(\d+)/.exec(String(name || '')); const g = m ? +m[1] : 5; return g >= 5 && g <= 9 ? g : 5; };
+  const mk = list => list.map((t, i) => ({ id: t.id, n: i + 1, title: t.title, short: SHORT[t.id] || t.short || t.title.split(' ')[0], mistakes: t.mistakes || [], grade: t.grade || 5 }));
+  const TOPIC_BY_GRADE = {}; for (let g = 5; g <= 9; g++) TOPIC_BY_GRADE[g] = mk(ALL.filter(t => (t.grade || 5) === g));
+  let TOPICS = TOPIC_BY_GRADE[5];
+  // справочник по id — по всем классам (номер темы — внутри её класса)
+  const TI = Object.fromEntries([...Object.values(TOPIC_BY_GRADE).flat(), ...mk(ALL.filter(t => (t.grade || 5) < 5))].map(t => [t.id, t]));
   const KEY = 'vektor-teacher', root = document.getElementById('root'), $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const ls = { get: k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
@@ -460,6 +467,8 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
   function paint() {
     now = Date.now() / 1000 + skew;
     pickClass();
+    // столбцы тем — программа класса: 5А → темы 5 класса, 7Б → алгебра, геометрия и статистика 7 класса
+    { const g = ui.cls && ui.cls !== '*' ? gradeOf(ui.cls) : gradeOf((classes()[0] || {}).name); if (TOPICS !== TOPIC_BY_GRADE[g]) { TOPICS = TOPIC_BY_GRADE[g]; ['thead', 'tbody'].forEach(id => { if ($(id)) $(id)._h = null; }); } }
     const C = curClass(), control = ui.cls !== '*' && C.group === 'control';
     const all = classRows();
     const inPulse = new Set(control || !pulse ? [] : (pulse.bugs || []).flatMap(x => x.logins));

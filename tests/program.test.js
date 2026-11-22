@@ -1,7 +1,8 @@
 // Запуск: node tests/program.test.js — структура программы 5–9
 globalThis.window = globalThis;
-['check', 'visuals', 'fractions', 'program'].forEach(f => require(`../content/${f}.js`));
-const P = window.VEKTOR_PROGRAM, ids = new Set(window.VEKTOR_FRACTIONS.topics.map(t => t.id));
+['check', 'rational', 'tone', 'visuals', 'bugs', 'fractions', 'kit', 'program'].forEach(f => require(`../content/${f}.js`));
+const fs = require('fs'); for (const f of fs.readdirSync(__dirname + '/../content/courses').filter(f => f.endsWith('.js'))) require(`../content/courses/${f}`);
+const P = window.VEKTOR_PROGRAM, ids = new Set([...window.VEKTOR_FRACTIONS.topics, ...window.VEKTOR_KIT.topics].map(t => t.id));
 let fails = 0; const ok = (c, m) => { if (!c) { fails++; console.log('FAIL', m); } };
 ok(P.GRADES.map(g => g.n).join() === '5,6,7,8,9', 'классы 5–9');
 for (const g of P.GRADES) for (const s of g.strands) for (const t of s.topics) {
