@@ -245,6 +245,8 @@ write_override() {
     echo '    env_file:'
     echo "      - $ROOT/functions.env"
   } > "$SB/docker-compose.override.yml"
+  # в .env Supabase задан COMPOSE_FILE — без этого override (ключи Бипыча, ALLOWED_ORIGINS) молча игнорируется
+  env_set COMPOSE_FILE docker-compose.yml:docker-compose.override.yml
 }
 
 # ---------- 4. сайт и функция ----------
@@ -566,17 +568,33 @@ exposure() {
 
 # ---------- 6. данные ----------
 data() {
-  say 'Копирование данных из облачного Supabase'
+  [[ ${CHECK_ONLY:-} == 1 ]] && say 'Сверка с облачной базой' || say 'Копирование данных из облачного Supabase'
   [[ -n ${SOURCE_DB:-} ]] || { warn 'строка подключения не введена — данные не копировал (позже: bash install.sh data)'; return 0; }
   local net pw rc=0
   net=$(docker inspect supabase-db -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' | awk '{print $1}')
   pw=$(env_get POSTGRES_PASSWORD)
-  SOURCE_DB="$SOURCE_DB" TARGET_DB="postgresql://postgres:$pw@db:5432/postgres" \
-  docker run --rm -i --network "$net" -e SOURCE_DB -e TARGET_DB \
+  SOURCE_DB="$SOURCE_DB" TARGET_DB="postgresql://postgres:$pw@db:5432/postgres" CHECK_ONLY=${CHECK_ONLY:-0} \
+  docker run --rm -i --network "$net" -e SOURCE_DB -e TARGET_DB -e CHECK_ONLY \
     -v "$APP/tools/migrate:/m:ro" -v "$ROOT/dumps:/d" "$CLIENT_IMAGE" bash -s <<'SH' || rc=$?
 set -euo pipefail
 q() { psql "$TARGET_DB" -XAtq -v ON_ERROR_STOP=1 -c "$1"; }
 psql "$SOURCE_DB" -XAtqc 'select 1' >/dev/null || { echo '   ! не подключиться к облачной базе — проверь строку и пароль'; exit 2; }
+if [[ ${CHECK_ONLY:-} == 1 ]]; then  # сверка без изменений; выводит только различия (< облако, > сервер)
+  bad=0
+  for sql in \
+    "select quote_ident(tablename) from pg_tables where schemaname='public' order by 1" \
+    "select sequencename,last_value from pg_sequences where schemaname='public' order by 1" \
+    "select c.relname,c.relrowsecurity,has_table_privilege('anon',c.oid,'select'),has_table_privilege('anon',c.oid,'insert') from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' order by 1" \
+    "select p.oid::regprocedure::text,has_function_privilege('anon',p.oid,'execute'),has_function_privilege('authenticated',p.oid,'execute'),p.prosecdef,p.proconfig::text from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' order by 1"; do
+    d=$(diff <(psql "$SOURCE_DB" -XAtc "$sql") <(psql "$TARGET_DB" -XAtc "$sql") | grep '^[<>]' | head -20 || true)
+    [[ -z $d ]] || { bad=1; echo "   ${sql:7:40}…"; printf '     %s\n' "$d"; }
+  done
+  for t in $(psql "$SOURCE_DB" -XAtc "select quote_ident(tablename) from pg_tables where schemaname='public' order by 1"); do
+    a=$(psql "$SOURCE_DB" -XAtc "select count(*) from public.$t"); b=$(psql "$TARGET_DB" -XAtc "select count(*) from public.$t" 2>/dev/null || echo нет)
+    [[ $a == "$b" ]] || { bad=1; echo "   строк в $t: облако $a, сервер $b"; }
+  done
+  exit $bad
+fi
 [[ $(q "select count(*) from pg_tables where schemaname='public' and tablename like 'vk_%'") == 0 ]] || { echo '   ! на новом сервере уже есть данные Вектора — повторное копирование делаем при переключении'; exit 3; }
 export DUMP_FILE=/d/vektor-$(date -u +%Y%m%dT%H%M%SZ).dump
 bash /m/dump.sh >/dev/null
@@ -591,9 +609,10 @@ echo "   объектов к восстановлению: $(grep -c '^[0-9]' /t
 pg_restore --dbname="$TARGET_DB" --no-owner --exit-on-error --single-transaction -L /tmp/toc "$DUMP_FILE"
 q "notify pgrst, 'reload schema'"
 echo "   ✓ восстановлено одной транзакцией: таблиц $(q "select count(*) from pg_tables where schemaname='public'")"
-bash /m/verify.sh > /tmp/verify.log 2>&1 || { tail -3 /tmp/verify.log; exit 4; }
+bash /m/verify.sh > /tmp/verify.log 2>&1 || { grep -v '^OK:' /tmp/verify.log | tail -25; exit 4; }
 echo "   ✓ сверка: $(grep -c '^OK:' /tmp/verify.log) таблиц совпали строка в строку, права браузера одинаковые"
 SH
+  [[ ${CHECK_ONLY:-} == 1 ]] && return $rc
   case $rc in
     0) touch "$ROOT/.data-copied"; ok 'данные скопированы и сверены' ;;
     3) ok 'данные уже были скопированы раньше' ;;
@@ -729,6 +748,11 @@ case $CMD in
     AI_KEY=$(head -c 4096 | tr -d '\r\n '); exec > >(tee -a "$LOG") 2>&1
     case ${2:-} in proxyapi) proxy_setup ;; beget) ai_setup ;; *) die 'неизвестный провайдер' ;; esac
     status; summary ;;
+  data-check)  # из админки: только сверка сервера с облаком, ничего не меняет
+    SOURCE_DB=$(head -c 4096 | tr -d '\r\n'); exec > >(tee -a "$LOG") 2>&1
+    [[ $SOURCE_DB =~ ^postgres(ql)?:// ]] || die 'строка должна начинаться с postgresql://'
+    rc=0; CHECK_ONLY=1 data || rc=$?; unset SOURCE_DB
+    (( rc == 0 )) && ok 'сервер и облако совпадают' || warn 'есть расхождения — пришли вывод Claude' ;;
   data-set)
     SOURCE_DB=$(head -c 4096 | tr -d '\r\n'); DOMAIN=$(cat "$ROOT/domain"); exec > >(tee -a "$LOG") 2>&1
     [[ $SOURCE_DB =~ ^postgres(ql)?:// ]] || die 'строка должна начинаться с postgresql://'

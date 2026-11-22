@@ -19,6 +19,7 @@ for query in \
   "select sequencename,last_value from pg_sequences where schemaname='public' order by sequencename" \
   "select c.relname,c.relrowsecurity,has_table_privilege('anon',c.oid,'select'),has_table_privilege('anon',c.oid,'insert') from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' order by c.relname" \
   "select p.oid::regprocedure::text,has_function_privilege('anon',p.oid,'execute'),has_function_privilege('authenticated',p.oid,'execute'),p.prosecdef,p.proconfig::text from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' order by 1"; do
-  [[ "$(db_query "$SOURCE_DB" -c "$query")" == "$(db_query "$TARGET_DB" -c "$query")" ]] || { echo 'FAIL: sequences or security settings differ' >&2; exit 1; }
+  src=$(db_query "$SOURCE_DB" -c "$query"); tgt=$(db_query "$TARGET_DB" -c "$query")
+  [[ "$src" == "$tgt" ]] || { echo 'FAIL: sequences or security settings differ (< облако, > сервер):' >&2; diff <(printf '%s\n' "$src") <(printf '%s\n' "$tgt") | grep '^[<>]' | head -20 >&2; exit 1; }
 done
 echo 'VERIFY OK'
