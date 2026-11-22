@@ -153,15 +153,21 @@ async def main():
         await pg.wait_for_timeout(300)
         rep('мастерская: 10 побеждённых жучков → «Золотой сачок»', await pg.evaluate("state.workshop.owned.includes('net-gold')"))
 
-        # программа 5–9: вся структура видна, наполнены дроби
+        # Доступные темы и ещё не наполненные разделы программы 5–9
         await pg.evaluate("() => { state.settings.grade = 8; save(); }")
         await pg.goto(B+'#map'); await pg.reload(); await pg.wait_for_timeout(300)
         rep('«Все темы»: открывается класс ученика (8)', await pg.locator('[data-map-grade="8"][aria-selected="true"]').count() == 1 and 'Квадратные уравнения' in await pg.inner_text('#app'))
         rep('«Все темы»: у разделов 7–9 пример неверного правила', await pg.locator('.bug-sample').count() >= 2)
+        rep('«Все темы»: доступные упражнения раньше планов',
+            'Вероятность и статистика' in await pg.locator('.strand h2').first.inner_text()
+            and await pg.locator('.strand').first.locator('.topic-row').count() > 0)
         await pg.click('[data-map-grade="5"]'); await pg.wait_for_timeout(200)
         rep('«Все темы»: в 5 классе работают 9 тем дробей', await pg.locator('.topic [data-lesson]').count() >= 9)
         await pg.goto(B+'#home'); await pg.wait_for_timeout(200)
-        rep('главная 8 класса: объяснение про фундамент', 'Программа 8 класса' in await pg.inner_text('.grade-note'))
+        rep('главная 8 класса: доступный маршрут по вероятности и статистике',
+            '8 класс' in await pg.inner_text('.grade-chip')
+            and await pg.evaluate("ROUTE.length > 0 && ROUTE.every(i => topics[i].grade === 8 && topics[i].strand === 'Вероятность и статистика')")
+            and await pg.locator('.grade-note').count() == 0)
         await pg.evaluate("() => { state.settings.grade = 5; save(); }")
         rep('нет ошибок JavaScript', not errs, '; '.join(errs)[:200])
         await b.close()

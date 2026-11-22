@@ -54,9 +54,9 @@
     var program = root.VEKTOR_PROGRAM;
     if (!host || !program) return;
     var copy = {
-      0: 'Дроби 5–6 класса и проверка механизма в школьном пилоте.',
-      1: 'Карта навыков, контент-фабрика, 5–6 класс целиком и входная диагностика.',
-      2: 'Алгебра 7–8 и вычислительная геометрия с живым чертежом.',
+      0: 'Математика 5–6, алгебра и геометрия 7, вероятность и статистика 7–9 классов.',
+      1: 'Карта навыков и входная диагностика.',
+      2: 'Алгебра и геометрия 8 класса.',
       3: '9 класс, причины потери баллов на ОГЭ и фото решения.'
     };
     var row = node('ol', 'wave-plan');
@@ -72,9 +72,8 @@
   function summary(host) {
     var program = root.VEKTOR_PROGRAM;
     if (!host || !program) return;
-    var ids = new Set();
-    program.GRADES.forEach(function (grade) { grade.strands.forEach(function (s) { s.topics.forEach(function (t) { if (ready(t)) t.ready.forEach(function (id) { ids.add(id); }); }); }); });
-    host.textContent = 'Классы: ' + program.GRADES.map(function (g) { return g.n; }).join(' · ') + '. Сейчас — ' + ids.size + ' тем дробей; остальные разделы по плану.';
+    host.textContent = 'Классы: ' + program.GRADES.map(function (g) { return g.n; }).join(' · ') +
+      '. Доступных тем: ' + program.readyCount() + '.';
   }
   root.VEKTOR_PUBLIC_PROGRAM = Object.freeze({ render: renderProgram, renderWaves: renderWaves, summary: summary });
 }(window));

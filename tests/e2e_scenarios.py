@@ -118,11 +118,17 @@ async def main():
         rep('Д-01: повторение неосвоенной темы закрыто', await pg.evaluate("session ? session.mode : 'none'")!='review' and await pg.evaluate("pct(5)")<100)
         # Ф-10: заглушки других разделов скрыты
         await pg.goto(B+'#map'); await pg.wait_for_timeout(150)
-        rep('Ф-10: на карте только 9 тем дробей', await pg.evaluate("topics.length")==9 and 'Проценты' not in await pg.inner_text('#app'))
+        # шаг «Проверь себя» открывается на каждой теме 5–9 (был белый экран: у новых тем не было check)
+        bad=[]
+        for i in await pg.evaluate("topics.map((t,i)=>t.course?i:-1).filter(i=>i>=0)"):
+            await pg.goto(B+f'#lesson/{i}/check'); await pg.wait_for_timeout(60)
+            if await pg.locator('#answer-form').count()!=1: bad.append(i)
+        rep('«Проверь себя» открывается на всех темах 5–9', not bad, str(bad[:5]))
+        rep('Ф-10: темы — дроби и курсы 5–9 по программе, заглушек нет', await pg.evaluate("topics.length===9+VEKTOR_KIT.topics.filter(t=>t.course).length && topics.filter(t=>t.legacy).length===0"))
         # 9. Краткие темы (без методички) — только в демо-режиме ?demo=all
         D=B+'?demo=all'
-        await pg.goto(D+'#lesson/9'); await pg.wait_for_timeout(150); await answer(pg,'3'); rep('краткая тема решается', 'Верно' in await pg.inner_text('#feedback'))
-        await pg.goto(D+'#lesson/9/check'); rep('краткая тема не ломается на /check', await pg.locator('#answer-form').count()==1)
+        await pg.goto(D+'#lesson/'+str(await pg.evaluate("9+VEKTOR_KIT.topics.filter(t=>t.course).length"))); await pg.wait_for_timeout(150); await answer(pg,'3'); rep('краткая тема решается', 'Верно' in await pg.inner_text('#feedback'))
+        await pg.goto(D+'#lesson/'+str(await pg.evaluate("9+VEKTOR_KIT.topics.filter(t=>t.course).length"))+'/check'); rep('краткая тема не ломается на /check', await pg.locator('#answer-form').count()==1)
         # 10. Материалы → конспект открывает урок, а не тренировку
         await pg.goto(B+'#library'); await pg.click('.topic-row[data-lesson="2"]'); await pg.wait_for_timeout(200); await pg.goto(B+'#lesson/2/learn'); await pg.wait_for_timeout(200); await pg.click('.lb-tabs [data-learn-tab="notes"]'); await pg.wait_for_timeout(200)
         rep('конспект открывается из урока кнопкой в верхней строке', await pg.locator('.method').count()==1, await pg.evaluate("location.hash"))
@@ -168,10 +174,11 @@ async def main():
         await pg.goto(B); await pg.evaluate("localStorage.removeItem('vektor-progress-v3')"); await pg.reload(); await pg.wait_for_timeout(300)
         rep('карта новичка: лёгкий старт, дальше облака', await pg.locator('#path .node-quick.is-current').count()==1 and await pg.locator('#path .is-fog').count()==2 and await pg.locator('#path .fog-bank').count()==1)
         await pg.evaluate("() => { state.quick = Object.fromEntries(VEKTOR_QUICK.LEVELS.map(l => [l.id, {done:true, at:today(), best:5}])); state.settings.interests = []; save(); render(); }"); await pg.wait_for_timeout(200)
-        rep('после старта текущий уровень — первая тема дробей', await pg.locator('#path .is-current [data-lesson="0"]').count()==1)
+        r0 = await pg.evaluate("ROUTE[0]"); rep('после старта текущий уровень — первая тема программы класса', await pg.locator(f'#path .is-current [data-lesson="{r0}"]').count()==1)
         await pg.click('#path .is-current [data-continue]', force=True); await pg.wait_for_timeout(200)
-        rep('«Продолжить» ведёт в урок первой темы', (await pg.evaluate("location.hash")).startswith('#lesson/0/learn'))
+        rep('«Продолжить» ведёт в урок первой темы', (await pg.evaluate("location.hash")).startswith(f'#lesson/{r0}/learn'))
         rep('шаги урока — полоска из трёх частей вверху', await pg.locator('.lesson-bar .stepper .step').count()==3 and await pg.locator('.do-now').count()==0)
+        await pg.goto(B+'#lesson/0/learn'); await pg.wait_for_timeout(200)  # ввод дробью проверяем на первой теме дробей
         await pg.click('.stepper [data-stage=practice]'); await pg.wait_for_timeout(150)
         await pg.fill('#ans-num','3'); await pg.press('#ans-num','/'); await pg.keyboard.type('5')
         rep('«/» переносит курсор в знаменатель', await pg.input_value('#ans-den')=='5')
