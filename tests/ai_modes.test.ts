@@ -77,4 +77,27 @@ const classifyRequest=(catalog:any[],t='2/5')=>M.handle(new Request('https://edg
 const hit=await (await classifyRequest(bugs)).json();const changed=await (await classifyRequest([{id:'different-rule',title:'Другая ошибка'}])).json();
 ok(hit.bug==='add-denominators'&&changed.bug==='other'&&keys[0]!==keys[1],'кэш зависит от каталога и повторно проверяет id ошибки');
 await (await classifyRequest(bugs,' 2 / 5 ')).text();ok(keys[0]===keys[2],'пробелы в математической строке не расходуют повторный запрос');
+
+Object.assign(env, {
+  AI_URL: 'https://ai.example/v1/chat/completions',
+  AI_API_KEY: 'compat-test',
+  AI_MODEL: 'compatible-model',
+  OPENROUTER_WORKER_URL: 'https://worker.example',
+});
+let compatibleRequest: { url: string; headers: Headers; body: Record<string, any> } | undefined;
+globalThis.fetch = (async (url: string, options: RequestInit) => {
+  if (url.endsWith('vk_ai_take')) return Response.json({ ok: true, student_id: 1 });
+  if (url.endsWith('vk_ai_spend')) return Response.json(null);
+  compatibleRequest = { url, headers: new Headers(options.headers), body: JSON.parse(String(options.body)) };
+  return new Response('data: {"choices":[{"delta":{"content":"Разберём уравнение."}}]}\n\ndata: [DONE]\n\n');
+}) as any;
+const compatible = await send([{ role: 'user', content: 'Как решить 2x + 5 = 11?' }], { topic: 'a7-linear-eq' });
+ok(compatible.status === 200 && (await compatible.text()).includes('Разберём уравнение'), 'Бегет: наставник отвечает по теме алгебры 7 класса');
+ok(compatibleRequest?.url === env.AI_URL
+  && compatibleRequest.headers.get('Authorization') === 'Bearer ' + env.AI_API_KEY
+  && compatibleRequest.body.model === env.AI_MODEL
+  && !('models' in compatibleRequest.body) && !('provider' in compatibleRequest.body),
+'Бегет: запрос сохраняет формат и настройки действующего ИИ-шлюза');
+ok(compatibleRequest?.body.messages[0].content.includes('Линейные уравнения'), 'Бегет: сервер загружает методичку новой темы');
+
 console.log(fails ? `ai_modes: ${fails} FAIL` : 'ai_modes: OK'); process.exit(fails ? 1 : 0);

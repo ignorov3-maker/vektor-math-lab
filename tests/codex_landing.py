@@ -75,8 +75,12 @@ async def main():
             VEKTOR_PUBLIC_PROGRAM.render(document.querySelector('#program-view'));
             return ok;
         }"""))
-        check("future grades do not imply ready lessons", await page.evaluate("""() =>
-            [...document.querySelectorAll('[data-grade-panel="7"] .readiness,[data-grade-panel="8"] .readiness,[data-grade-panel="9"] .readiness')].every(e=>e.dataset.ready==='false')"""))
+        check("7th grade is available and grades 8–9 show both ready and planned subjects", await page.evaluate("""() => {
+            const ready = n => [...document.querySelectorAll('[data-grade-panel="'+n+'"] .readiness')]
+                .map(status => status.dataset.ready);
+            return ready(7).length > 0 && ready(7).every(status => status === 'true')
+                && [8, 9].every(n => ready(n).includes('true') && ready(n).includes('false'));
+        }"""))
         check("four roadmap waves use shared schedule labels", await page.evaluate("""() => {
             const waves=[...document.querySelectorAll('#roadmap [data-wave-plan] .wave-item')];
             return waves.length===4 && waves.every((e,i)=>e.dataset.wavePlan===String(i)
