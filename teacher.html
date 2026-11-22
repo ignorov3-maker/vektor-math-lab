@@ -215,15 +215,15 @@ textarea{font:inherit;width:100%;min-height:110px;padding:8px 10px;border:1px so
 <script src="content/metrika.js"></script>
 <script src="content/check.js"></script>
 <script src="content/visuals.js"></script>
-<script src="content/fractions.js"></script>
+<script src="content/fractions.js"></script><script src="content/geometry.js"></script>
 <script src="content/rational.js"></script>
 <script src="content/tone.js"></script>
 <script src="content/bugs.js"></script>
 <script>
 (() => {
   const CFG = window.VEKTOR_CONFIG || {}, SB = (CFG.supabaseUrl || '').replace(/\/+$/, '');
-  const SHORT = { concept: 'Доли', reduce: 'Сокращ.', compare: 'Сравн.', 'add-same': '± один.', 'add-diff': '± разн.', mixed: 'Смешан.', mult: 'Умнож.', div: 'Деление', 'part-of': 'Часть' };
-  const TOPICS = window.VEKTOR_FRACTIONS.topics.filter(t => !t.legacy).map((t, i) => ({ id: t.id, n: i + 1, title: t.title, short: SHORT[t.id] || t.title.split(' ')[0], mistakes: t.mistakes || [] }));
+  const SHORT = { concept: 'Доли', reduce: 'Сокращ.', compare: 'Сравн.', 'add-same': '± один.', 'add-diff': '± разн.', mixed: 'Смешан.', mult: 'Умнож.', div: 'Деление', 'part-of': 'Часть', 'g-angles': 'Углы', 'g-perimeter': 'Периметр', 'g-area': 'Площадь', 'g-volume': 'Объём', 'g-circle': 'Окружн.' };
+  const TOPICS = [...window.VEKTOR_FRACTIONS.topics, ...((window.VEKTOR_GEOMETRY || {}).topics || [])].filter(t => !t.legacy).map((t, i) => ({ id: t.id, n: i + 1, title: t.title, short: SHORT[t.id] || t.title.split(' ')[0], mistakes: t.mistakes || [] }));
   const TI = Object.fromEntries(TOPICS.map(t => [t.id, t]));
   const KEY = 'vektor-teacher', root = document.getElementById('root'), $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
