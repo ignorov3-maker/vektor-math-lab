@@ -346,10 +346,14 @@ PY
   ok "HTTPS-настройки для $DOMAIN готовы (заголовки безопасности как на Vercel)"
 }
 
-# Бипыч из другой ветки репозитория (пока поддержка ИИ-шлюза не в main): /opt/vektor/functions-ref
+# При необходимости источник функции Бипыча задаётся файлом /opt/vektor/functions-ref.
 overlay_tutor() {
   [[ -s $ROOT/functions-ref ]] || return 0
-  local ref f tmp; ref=$(cat "$ROOT/functions-ref"); tmp=$(mktemp -d)
+  local ref f tmp
+  ref=$(cat "$ROOT/functions-ref")
+  # Раньше шлюз был только в claude/beget. Теперь main содержит и шлюз, и актуальные уроки.
+  if [[ $ref == claude/beget ]]; then ref=main; fi
+  tmp=$(mktemp -d)
   for f in index.ts method.ts; do
     curl -fsSL --max-time 30 "https://raw.githubusercontent.com/ignorov3-maker/vektor-math-lab/$ref/supabase/functions/tutor/$f" -o "$tmp/$f" || { warn "функция Бипыча из ветки $ref не скачалась — оставляю версию из main"; rm -rf "$tmp"; return 0; }
   done
@@ -377,7 +381,7 @@ ai_setup() {
   { cat "$tmp"; echo "AI_URL=$AI_GW"; echo "AI_MODEL=$AI_GW_MODEL"; printf 'AI_API_KEY=%s\n' "$AI_KEY"; } > "$ROOT/functions.env"
   rm -f "$tmp"; chmod 600 "$ROOT/functions.env"; unset AI_KEY
   ok 'ключ сохранён в /opt/vektor/functions.env (виден только root)'
-  [[ -s $ROOT/functions-ref ]] || echo claude/beget > "$ROOT/functions-ref"
+  [[ -s $ROOT/functions-ref ]] || echo main > "$ROOT/functions-ref"
   overlay_tutor
   (cd "$SB" && docker compose up -d --force-recreate --no-deps functions >/dev/null 2>&1) || true
   sleep 5; ok 'функция Бипыча перезапущена'
@@ -413,7 +417,7 @@ proxy_setup() {
   { cat "$tmp"; echo "AI_URL=$url"; echo "AI_MODEL=$model"; printf 'AI_API_KEY=%s\n' "$AI_KEY"; echo "AI_VIA=ProxyAPI"; } > "$ROOT/functions.env"
   rm -f "$tmp"; chmod 600 "$ROOT/functions.env"; unset AI_KEY
   ok 'ключ сохранён в /opt/vektor/functions.env (виден только root)'
-  [[ -s $ROOT/functions-ref ]] || echo claude/beget > "$ROOT/functions-ref"
+  [[ -s $ROOT/functions-ref ]] || echo main > "$ROOT/functions-ref"
   overlay_tutor
   (cd "$SB" && docker compose up -d --force-recreate --no-deps functions >/dev/null 2>&1) || true
   sleep 5; ok 'функция Бипыча перезапущена'
