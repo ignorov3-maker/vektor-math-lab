@@ -66,13 +66,14 @@ ask() {
   printf '%s\n' "$DOMAIN" > "$ROOT/domain"
 
   OR_KEY=""
-  if [[ $CMD == install ]] && ! grep -qE '^(OPENROUTER_API_KEY|AI_URL)=.+' "$ROOT/functions.env" 2>/dev/null; then
+  if [[ $CMD == install && -t 0 ]] && ! grep -qE '^(OPENROUTER_API_KEY|AI_URL)=.+' "$ROOT/functions.env" 2>/dev/null; then
     printf 'Ключ OpenRouter для Бипыча (ввод не виден; Enter — пропустить): '
     read -rs OR_KEY </dev/tty || true; echo
   fi
 
   SOURCE_DB=""
-  if [[ $CMD == data ]] || [[ ! -f $ROOT/.data-copied ]]; then
+  # автообновление и админка запускают без терминала — тогда не спрашиваем
+  if [[ $CMD == data ]] || [[ -t 0 && ! -f $ROOT/.data-copied ]]; then
     printf 'Строка подключения к облачной базе Supabase\n(Connect → Session pooler → URI с паролем; ввод не виден; Enter — пропустить): '
     read -rs SOURCE_DB </dev/tty || true; echo
     if [[ -n $SOURCE_DB ]]; then
