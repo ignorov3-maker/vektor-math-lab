@@ -584,7 +584,9 @@ echo "   ✓ выгрузка из облака: $(du -h "$DUMP_FILE" | cut -f1)
 for e in $(pg_restore -l "$DUMP_FILE" | sed -nE 's/^[0-9]+; [0-9]+ [0-9]+ EXTENSION - ([^ ]+).*/\1/p'); do
   q "create extension if not exists \"$e\" with schema extensions"
 done
-pg_restore -l "$DUMP_FILE" | grep -vE '^[0-9]+; [0-9]+ [0-9]+ (SCHEMA - (public|extensions)( |$)|EXTENSION - |COMMENT - EXTENSION |COMMENT - SCHEMA (public|extensions)( |$))' > /tmp/toc
+# служебные объекты Supabase (функции/триггеры в extensions, event trigger, default acl от supabase_admin) на сервере уже есть
+pg_restore -l "$DUMP_FILE" | grep -vE '^[0-9]+; [0-9]+ [0-9]+ (SCHEMA - (public|extensions)( |$)|EXTENSION - |COMMENT - EXTENSION |COMMENT - SCHEMA (public|extensions)( |$)|[A-Z ]+ extensions |EVENT TRIGGER |COMMENT - EVENT TRIGGER |DEFAULT ACL .* supabase_admin$)' > /tmp/toc
+echo "   объектов к восстановлению: $(grep -c '^[0-9]' /tmp/toc)"
 pg_restore --dbname="$TARGET_DB" --no-owner --exit-on-error --single-transaction -L /tmp/toc "$DUMP_FILE"
 q "notify pgrst, 'reload schema'"
 echo "   ✓ восстановлено одной транзакцией: таблиц $(q "select count(*) from pg_tables where schemaname='public'")"
