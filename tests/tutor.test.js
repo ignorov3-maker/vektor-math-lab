@@ -2,6 +2,7 @@
 globalThis.window = globalThis;
 globalThis.localStorage = { _s: {}, getItem(k) { return this._s[k] ?? null; }, setItem(k, v) { this._s[k] = String(v); } };
 require('../content/check.js'); require('../content/visuals.js'); require('../content/fractions.js'); require('../content/adaptive.js'); require('../content/tutor.js');
+require('../content/tutor-visuals.js'); require('../content/tutor-constructor.js'); require('../content/tutor-visual-art.js');
 const T = window.VEKTOR_TUTOR, V = window.VEKTOR_VISUALS, A = window.VEKTOR_ADAPTIVE;
 let fails = 0; const ok = (c, msg) => { if (!c) { fails++; console.log('FAIL', msg); } };
 
@@ -94,5 +95,52 @@ const sseBody = parts => parts.map(p => 'data: ' + JSON.stringify(p) + '\n\n').j
   await T.stream({ mode: 'vektor' }, [{ role: 'system', content: 'СЕКРЕТНЫЙ ПРОМПТ' }], () => {}, { maxTokens: 999, payload: pl });
   ok(sent && !('model' in sent) && !('max_tokens' in sent) && !('messages' in sent) && !('reasoning' in sent) && !JSON.stringify(sent).includes('СЕКРЕТНЫЙ ПРОМПТ'), 'сервер: в запросе нет модели, лимита токенов и промпта');
   ok(sent.topic === topic.id && sent.mode === 'task' && sent.history.length === 1 && sent.history[0].role === 'user' && sent.task.answer === task.answer, 'сервер: тема, задача и только реплики ученика/Бипыча');
+  const catalog = window.VEKTOR_TUTOR_VISUALS.entries, artwork = new Set(), gradientIds = new Set();
+  for (const entry of catalog) {
+    const drawing = T.render(entry.tag, { topic: entry.topics[0] }).html.match(/<svg [^>]*>.*?<\/svg>/s);
+    ok(drawing && !/NaN|Infinity|undefined/.test(drawing[0]), 'SVG для тега ' + entry.id);
+    ok(T.render(entry.tag, { topic: 'unrelated-topic' }).html === '', 'тег другой темы: ' + entry.id);
+    if (drawing) {
+      const ids = [...drawing[0].matchAll(/<linearGradient id="([^"]+)"/g)].map(match => match[1]);
+      for (const id of ids) {
+        ok(!gradientIds.has(id), 'у градиента уникальный идентификатор ' + id);
+        gradientIds.add(id);
+      }
+      for (const ref of drawing[0].matchAll(/url\(#([^)]+)\)/g)) ok(ids.includes(ref[1]), 'градиент входит в SVG ' + entry.id);
+      artwork.add(drawing[0].replace(/<defs>.*?<\/defs>|<title>.*?<\/title>|<text[^>]*>.*?<\/text>| (?:aria-label|stroke|fill)="[^"]*"/gs, ''));
+    }
+  }
+  ok(new Set(catalog.map(entry => entry.tag)).size === catalog.length, 'теги схем уникальны');
+  ok(artwork.size >= 100, 'не менее 100 разных композиций SVG, кроме цвета и подписи: ' + artwork.size);
+  ok(T.render('[[схема unknown-reference]]').html === '', 'неизвестный тег не отрисовывается');
+  const constructor = window.VEKTOR_TUTOR_CONSTRUCTOR;
+  for (const type of constructor.types) {
+    const spec = constructor.compile(type.id+' '+type.example);
+    const html = spec.tag && T.render(spec.tag).html;
+    ok(spec.parts?.length === 1 && html.includes('<svg') && !/NaN|Infinity|undefined/.test(html), 'конструктор рисует ' + type.id);
+  }
+  const composite = constructor.compile('доли : "Две ленты" 3/8 5/8 | график 2:0 q:1:0:-2 h:4 @3:6:P | предметы яблоки 9/24');
+  const assembled = T.render('Две ленты.\\n' + composite.tag).html;
+  ok(composite.parts?.length === 3 && (assembled.match(/<svg /g)||[]).length === 1 &&
+    assembled.includes('Две ленты') && assembled.includes('clipPath') && assembled.includes('9 из 24'),
+    'цветной рисунок собирается из трёх частей в одном теге');
+  const far = T.render('[[конструктор график 7:12 @24:180]]').html;
+  ok(!far, 'не рисует точку за пределами допустимых значений');
+  ok(T.render('[[конструктор график 7:12 @14:100]]').html.includes('100'), 'оси подстраиваются под точки и функции');
+  ok(T.render('[[конструктор столбцы "А:0" "Б:0"]]').html.includes('<svg'), 'диаграмма с нулевыми данными');
+  for (const spec of ['доли 10/2','прямая 0 2 3','предметы яблоки 1/0','таблица "А;Б" "1"',
+    'угол 180','машины попутно -1 80 20','машины туда 50 70 120','угол 60 | доли 1/2 | круги 5 2 | сетка 5x6 3x3','сетка 5x4 6x2','график h:0','отрезок 0 5 -1 2',
+    'доли : "<img src=x>" 1/3','ветви "А;Б "В;Г"']){
+    ok(!!constructor.compile(spec).error && T.render('[[конструктор '+spec+']]').html === '', 'отказ на некорректных данных ' + spec);
+  }
+  ok(!T.render('[[конструктор '+ 'я'.repeat(350) +']]').html.includes('<svg'),'длинный тег не рисуется');
+  for (const direction of ['навстречу','попутно','вразъезд']) {
+    const driving = T.render('[[конструктор машины '+direction+' 47 83 126]]').html;
+    ok(driving.includes('47 км/ч') && driving.includes('83 км/ч') && driving.includes('126 км'),
+      'сцена движения рисует нестандартные скорости и расстояние '+direction);
+  }
+  ok(T.render('[[конструктор машины вразъезд 50 70 0]]').html.includes('Одна точка старта'),
+    'сцена движения допускает старт из одной точки');
+
   console.log(fails ? `ошибок: ${fails}` : 'tutor tests: ok'); process.exit(fails ? 1 : 0);
 })();

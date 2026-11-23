@@ -1,4 +1,5 @@
 import asyncio, json
+from datetime import datetime, timedelta
 from playwright.async_api import async_playwright
 # Сценарии ученика и учителя в настоящем браузере. OpenRouter подменён — ключ не нужен.
 # Запуск: pip install playwright && playwright install chromium && python tests/e2e_scenarios.py
@@ -222,6 +223,58 @@ async def main():
         rep('цель дня на главной', '1/5' in (await pg.inner_text('.goal-ring')).replace('\n',''))
         await pg.goto(B+'#settings'); await pg.select_option('#set-goal','3'); await pg.dispatch_event('#settings-form','change'); await pg.wait_for_timeout(100)
         rep('цель дня меняется в настройках', await pg.evaluate("game().goal")==3)
+        # Поддержка в уроке, новая задача без подсказки и повторение на следующий день
+        pilot = await b.new_page(viewport={'width': 390, 'height': 844}, reduced_motion='reduce')
+        pilot.on('pageerror', lambda e: errs.append(str(e)))
+        await pilot.goto(B)
+        await pilot.evaluate("window.pilotEvents = []; window.VEKTOR_METRIKA = { goal: (type, data) => pilotEvents.push([type, data]) }")
+        expected = [('compare', 'одинаковыми долями', 'Выбрать больший знаменатель', 'Сравнить размер одной доли', '>'),
+                    ('a7-proportional', 'насосо-часа', 'Проверить, что 250 ₽ больше 150 ₽', 'Сравнить 250 ₽ с 2 · 150 ₽', '320'),
+                    ('s9-geom-prob', 'одномерный', '2 : 4', '4 : 16', '0,09')]
+        for topic, second, wrong, right, independent in expected:
+            index = await pilot.evaluate('id => byId[id]', topic)
+            await pilot.goto(B + f'#lesson/{index}/learn')
+            await pilot.get_by_role('button', name='Дай подсказку', exact=True).click()
+            await pilot.get_by_role('button', name='Объясни иначе', exact=True).click()
+            before = pilot.locator('.chat-lesson .msg.is-last')
+            first_text = await before.inner_text()
+            first_figure = await before.locator('.figure svg').count()
+            await pilot.get_by_role('button', name='Объясни иначе', exact=True).click()
+            after = pilot.locator('.chat-lesson .msg.is-last')
+            second_text = await after.inner_text()
+            rep('пилот: другой способ объяснения ' + topic, first_figure > 0 and first_text != second_text and second in second_text and not await overflow(pilot))
+            await pilot.get_by_role('button', name='Проверь мой шаг', exact=True).click()
+            await pilot.locator('.chat-answer').get_by_role('button', name=wrong, exact=True).click()
+            rep('пилот: адресная подсказка после ошибки ' + topic,
+                await pilot.evaluate('(id) => document.querySelector(".chat-lesson .msg.is-last").innerText.includes(VEKTOR_TUTOR_PILOT[id].step.hint)', topic))
+            await pilot.locator('.chat-answer').get_by_role('button', name=right, exact=True).click()
+            await pilot.get_by_role('button', name='Попробовать без подсказки', exact=True).click()
+            rep('пилот: самостоятельная задача без подсказки ' + topic,
+                not await pilot.get_by_role('button', name='Дай подсказку', exact=True).count())
+            if independent == '>':
+                await pilot.locator('.chat-answer').get_by_role('button', name='больше', exact=True).click()
+            else:
+                await pilot.get_by_role('textbox', name='Твой ответ — число').fill(independent)
+                await pilot.locator('.chat-answer').get_by_role('button', name='Проверить').click()
+            rep('пилот: записан первый результат и назначена разминка ' + topic, await pilot.evaluate(
+                '([id, correct]) => state.tutorReview[id] === addDays(today(), 1) && pilotEvents.some(([type, d]) => type === "tutor_check" && d.topic === id && d.phase === "immediate" && d.ok === correct)',
+                [topic, independent != '320']))
+        rep('пилот: задания появляются только со следующего дня', not await pilot.evaluate('warmupPlan().some(item => item.type === "tutor")'))
+        await pilot.clock.set_fixed_time(datetime.now() + timedelta(days=1))
+        await pilot.reload()
+        await pilot.evaluate("window.pilotEvents = []; window.VEKTOR_METRIKA = { goal: (type, data) => pilotEvents.push([type, data]) }")
+        await pilot.goto(B + '#home')
+        await pilot.locator('[data-warmup]').click()
+        await pilot.locator('.wu-ans [data-v="<"]').click()
+        await pilot.locator('[data-wu=next]').click()
+        for value in ('200', '0,16'):
+            await pilot.get_by_role('textbox', name='Ответ', exact=True).fill(value)
+            await pilot.get_by_role('button', name='Ответить', exact=True).click()
+            await pilot.locator('[data-wu=next]').click()
+        rep('пилот: результаты отложенной проверки', '3 из 3' in await pilot.locator('#wu').inner_text()
+            and await pilot.evaluate('Object.values(state.tutorReview).length === 3 && Object.values(state.tutorReview).every(value => value === null)')
+            and await pilot.evaluate('pilotEvents.filter(([type, d]) => type === "tutor_check" && d.phase === "delayed" && d.ok).length === 3'))
+        await pilot.close()
         rep('нет ошибок JavaScript', not errs, '; '.join(errs[:3]))
         await b.close()
     ok=sum(1 for r in R if r[1]); print('\nИТОГО:', ok, 'из', len(R)); sys.exit(0 if ok==len(R) else 1)

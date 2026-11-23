@@ -303,7 +303,14 @@
   const FR = '(\\d{1,2})\\s*\\/\\s*(\\d{1,2})';
   const ok = (n, d, maxD = 24) => d >= 1 && d <= maxD && n >= 0 && n <= d * 4;
   function figureFromTag(tag) {
+    const recipe=tag.trim().match(/^конструктор\s+(.+)$/i);
+    if (recipe) {
+      const built=window.VEKTOR_TUTOR_CONSTRUCTOR?.compile(recipe[1]);
+      return built?.parts ? { type: 'tutor-construction', parts: built.parts } : null;
+    }
     let t = tag.trim().toLowerCase().replace(/ё/g, 'е');
+    const schema = t.match(/^схема\s+([a-z0-9-]{1,32})$/);
+    if (schema) return window.VEKTOR_TUTOR_VISUALS?.get(schema[1]) ? { type: 'tutor-diagram', id: schema[1] } : null;
     // синонимы, которые модель иногда пишет вместо названий из списка
     t = t.replace(/^(дробь|доля|полоса)\s/, 'полоска ').replace(/^(пирог)\s/, 'торт ').replace(/^(отрезок|луч|числовая прямая)\s/, 'прямая ').replace(/^(сравни|сравнение)\s/, 'сравнить ');
     let m;
