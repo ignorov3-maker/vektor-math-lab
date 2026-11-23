@@ -40,8 +40,11 @@
     const a = Math.atan2(yy-y,xx-x);
     return S(x,y,xx,yy,color,2) + S(xx,yy,xx-8*Math.cos(a-.55),yy-8*Math.sin(a-.55),color) + S(xx,yy,xx-8*Math.cos(a+.55),yy-8*Math.sin(a+.55),color);
   };
-  const card = (x,y,w,h,title,value,color=0) => R(x,y,w,h,paper,line,12) + T(x+w/2,y+19,title,{size:12,fill:muted}) +
-    T(x+w/2,y+h-15,value,{size:18,fill:accents[color%3],weight:750});
+  const card = (x,y,w,h,title,value,color=0) => {
+    const fit = (size,text) => Math.min(size,(w-12)/Math.max(1,String(text).length*.62));
+    return R(x,y,w,h,paper,line,12)+T(x+w/2,y+19,title,{size:fit(12,title),fill:muted})+
+      T(x+w/2,y+h-15,value,{size:fit(18,value),fill:accents[color%3],weight:750});
+  };
 
   const D = (d,fill,stroke='none',width=1.5) =>
     `<path d="${d}" fill="${fill}" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round"/>`;
@@ -105,16 +108,17 @@
       const skin=materials[name];
       const defs='<defs>'+gradient(active,skin.slice(0,3))+gradient(quiet,neutral.slice(0,3))+'</defs>';
       const sprites=seq(n).map(i => {
-        const x=180+(i%cols-(cols-1)/2)*gap, y=106+(Math.floor(i/cols)-(rows-1)/2)*48;
+        const dense=rows>2, scale=dense?.67:1;
+        const x=180+(i%cols-(cols-1)/2)*gap, y=106+(Math.floor(i/cols)-(rows-1)/2)*(dense?29:48);
         const onNow=i<on, number=name==='die' ? (i===0?6:i) : i;
-        return G(x,y,icons[name](paint(onNow?active:quiet), onNow?skin[3]:neutral[3], number, onNow))+
-          (onNow?R(x-6,y+22,12,3,skin[2],'none',1.5):'');
+        return G(x,y,icons[name](paint(onNow?active:quiet), onNow?skin[3]:neutral[3], number, onNow),scale)+
+          (onNow?R(x-6,y+22*scale,12,3,skin[2],'none',1.5):'');
       }).join('');
       return defs+sprites+footer(a,b);
     },
     bars(rows) {
       return rows.map(([on,n,name,value,first=on],j) => {
-        const y = rows.length===1 ? 110 : 84+j*49, d=246/n;
+        const y = rows.length===1 ? 110 : rows.length===2 ? 84+j*49 : 75+j*44, d=246/n;
         const edges = [...new Set([first,on])].filter(k => k>0 && k<n)
           .map(k => S(35+k*d-1.5,y-2,35+k*d-1.5,y+24,ink,1)).join('');
         return edges + T(35,y-9,name,{size:12,fill:muted,anchor:'start'}) + T(326,y-9,value,{size:13,fill:green,anchor:'end'}) +
@@ -294,6 +298,55 @@
       }
       return s+points.map(([x,y,name],i)=>C(X(x),Y(y),4,colors[i%3],accents[i%3])+label(X(x)+12,Y(y)-6,name,accents[i%3])).join('');
     },
+    'function-plot'([specs,points], id, scope) {
+      const xExtent = Math.max(4,...points.map(([x])=>Math.abs(x)));
+      const roundRange = n => {
+        const unit=10**Math.floor(Math.log10(n));
+        return ([1,2,5,10].find(step=>step*unit>=n))*unit;
+      };
+      const xmax=roundRange(xExtent), plotWidth=266, plotHeight=93, left=47, top=64;
+      const tick = n=>String(rnd(n)).replace('-', '−').replace('.',',');
+      const functions = specs.map(({kind,values:[a,b=0,c=0],printed:[as,bs='0',cs='0']}) => {
+        const write = raw => raw.replace('-','−');
+        const multiply = (value,raw,variable) => value===1?variable:value===-1?'−'+variable:
+          (raw.includes('/')?'('+write(raw)+')':write(raw))+variable;
+        const absolute = raw => raw.replace(/^-/,'');
+        const add = (value,raw,symbol='') => value===0?'':(value<0?' − ':' + ')+
+          (symbol ? multiply(Math.abs(value),absolute(raw),symbol) : absolute(raw));
+        if (kind==='h') return { evaluate:x=>a/x, label:'y = '+(as.includes('/')?'('+write(as)+')':write(as))+'/x', split:true };
+        if (kind==='q') return { evaluate:x=>a*x*x+b*x+c, vertex:-b/(2*a), label:'y = '+multiply(a,as,'x²')+add(b,bs,'x')+add(c,cs) };
+        return { evaluate:x=>a*x+b, label:'y = '+(a===0?write(bs):multiply(a,as,'x')+add(b,bs)) };
+      });
+      const heights = functions.flatMap(f => (f.split?[-1,1]:[-xmax,0,xmax,f.vertex].filter(x=>Math.abs(x)<=xmax)).map(f.evaluate));
+      const ymax = roundRange(Math.max(3,...heights.map(Math.abs),...points.map(([,y])=>Math.abs(y))));
+      const X=x=>left+plotWidth*(x+xmax)/(2*xmax), Y=y=>top+plotHeight*(ymax-y)/(2*ymax);
+      const clip=scope+'-plot';
+      const grid=seq(9).map(i=>{
+        const x=-xmax+i*xmax/4, y=-ymax+i*ymax/4;
+        return S(X(x),Y(-ymax),X(x),Y(ymax),line,1)+S(X(-xmax),Y(y),X(xmax),Y(y),line,1);
+      }).join('');
+      const axes=arrow(left,Y(0),left+plotWidth+11,Y(0),ink)+arrow(X(0),top+plotHeight,X(0),top-7,ink)+
+        label(left+plotWidth+20,Y(0)+4,'x',muted)+label(X(0)+12,top-7,'y',muted)+
+        label(left,Y(0)+16,tick(-xmax),muted)+label(left+plotWidth-5,Y(0)+16,tick(xmax),muted)+
+        T(X(0)-7,top+4,tick(ymax),{size:10,anchor:'end',fill:muted})+
+        T(X(0)-7,top+plotHeight+3,tick(-ymax),{size:10,anchor:'end',fill:muted});
+      const paths=functions.map((func,i)=>{
+        const intervals=func.split?[[-xmax,-xmax/160],[xmax/160,xmax]]:[[-xmax,xmax]];
+        const parts=intervals.map(([lo,hi])=>{
+          const points=seq(81).map(k=>lo+(hi-lo)*k/80).map(x=>rnd(X(x))+' '+rnd(Y(func.evaluate(x))));
+          return 'M'+points.join('L');
+        }).join('');
+        return D(parts,'none',accents[i],2.15);
+      }).join('');
+      const markers=points.map(([x,y,name])=>{
+        const labelX=X(x)+(x>0?-7:7), labelY=Y(y)+(y>ymax*.6?13:-7);
+        return C(X(x),Y(y),4,gold,ink)+T(labelX,labelY,name,{size:10,anchor:x>0?'end':'start'});
+      }).join('');
+      const legends=functions.map((func,i)=>S(46,169+i*12,57,169+i*12,accents[i],2)+
+        T(64,172+i*12,func.label,{anchor:'start',size:11,fill:accents[i]})).join('');
+      return `<defs><clipPath id="${clip}">${R(left,top,plotWidth,plotHeight,'#fff','none',0)}</clipPath></defs>`+
+        grid+axes+`<g clip-path="url(#${clip})">${paths}</g>`+markers+legends;
+    },
     circle([r,d]) {
       return C(159,115,53,paper,green)+S(106,115,212,115,purple,2)+S(159,115,188,71,green,3)+C(159,115,3,ink)+label(253,83,r)+label(257,121,d,purple);
     },
@@ -338,7 +391,7 @@
         label(ox+scale+15,oy+13,b+'°')+label(vx,vy-9,c+'°',purple)+label(180,186,note,muted);
     },
     columns([labels,counts,mean]) {
-      const max=Math.max(...counts,mean||0), x0=50,y=157, dx=264/counts.length, k=77/max;
+      const max=Math.max(1,...counts,mean||0), x0=50,y=157, dx=264/counts.length, k=77/max;
       return S(39,y,322,y,muted,1) + counts.map((n,i)=>{
         const x=x0+i*dx;
         return R(x,y-n*k,dx-20,n*k,colors[i%3],accents[i%3],5)+label(x+(dx-20)/2,y-n*k-7,n,accents[i%3])+label(x+(dx-20)/2,177,labels[i],muted);
@@ -367,16 +420,27 @@
         T(227,104,'R = '+a,{anchor:'start',fill:'#234f81'})+T(227,129,'r = '+b,{anchor:'start',fill:'#9b3c22'});
     },
   };
-  function render(item) {
-    const [tint,pigment,accent]=headerColors[item.grade-5];
-    const size=item.title.length>35?13:15, scope='bip-visual-'+(++nextDrawing);
-    return V.svgWrap(W,H,item.title + '. ' + item.note,
-      R(1,1,W-2,H-2,paper,line,20)+R(16,15,W-32,29,tint,'none',10)+
+  function panel(item, palette) {
+    const [tint,pigment,accent]=headerColors[palette];
+    const size=item.title.length>24?13:15, scope='bip-visual-'+(++nextDrawing);
+    return R(1,1,W-2,H-2,paper,line,20)+R(16,15,W-32,29,tint,'none',10)+
       T(29,34,item.title,{size,anchor:'start',weight:750,fill:pigment})+
-      C(328,29.5,4.5,accent)+draw[item.kind](item.data,item.id,scope));
+      C(328,29.5,4.5,accent)+draw[item.kind](item.data,item.id,scope);
   }
   V.register('tutor-diagram', {
     describe: ({id}) => L.get(id)?.note || '',
-    render: ({id}) => { const item=L.get(id); return item ? render(item) : ''; },
+    render: ({id}) => {
+      const item=L.get(id);
+      return item ? V.svgWrap(W,H,item.title+'. '+item.note,panel(item,item.grade-5)) : '';
+    },
+  });
+  const describeParts = ({parts}) => parts.map(p=>p.title+'. '+p.note).join(' ');
+  V.register('tutor-construction', {
+    describe: describeParts,
+    render: fig => {
+      const gap=8, height=fig.parts.length*(H+gap)-gap;
+      const pieces=fig.parts.map((part,i)=>G(0,i*(H+gap),panel(part,[1,2,0][i]))).join('');
+      return V.svgWrap(W,height,describeParts(fig),pieces);
+    },
   });
 })(window);

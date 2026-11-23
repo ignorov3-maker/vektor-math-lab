@@ -8,7 +8,7 @@ const ctx = { window: {}, console };
 vm.createContext(ctx);
 const courseDir = new URL('content/courses/', root);
 const courses = existsSync(courseDir) ? readdirSync(courseDir).filter(f => f.endsWith('.js')).sort().map(f => 'content/courses/' + f) : [];
-for (const f of ['content/check.js', 'content/rational.js', 'content/tone.js', 'content/visuals.js', 'content/bugs.js', 'content/fractions.js', 'content/kit.js', 'content/tutor-visuals.js', ...courses]) vm.runInContext(readFileSync(new URL(f, root), 'utf8'), ctx, { filename: f });
+for (const f of ['content/check.js', 'content/rational.js', 'content/tone.js', 'content/visuals.js', 'content/bugs.js', 'content/fractions.js', 'content/kit.js', 'content/tutor-visuals.js', 'content/tutor-constructor.js', ...courses]) vm.runInContext(readFileSync(new URL(f, root), 'utf8'), ctx, { filename: f });
 const plain = html => String(html || '')
   .replace(/<span class="frac"><span>([^<]*)<\/span><span>([^<]*)<\/span><\/span>/g, '$1/$2')
   .replace(/<\/?[a-z][^>]*>/gi, '').replace(/&nbsp;/g, ' ')
@@ -37,6 +37,7 @@ for (const diagram of ctx.window.VEKTOR_TUTOR_VISUALS.entries) {
   }
 }
 const file = `// Сгенерировано: node tools/tutor-method.mjs — не править руками. Источник: учебные темы и content/tutor-visuals.js\n` +
+  `export const VISUAL_CONSTRUCTOR_GUIDE = ${JSON.stringify(ctx.window.VEKTOR_TUTOR_CONSTRUCTOR.guide)};\n` +
   `export const METHOD: Record<string, { title: string; grade: number; visuals: string[]; text: string; mistakes: Record<string, string> }> = ${JSON.stringify(out, null, 1)};\n`;
 const path = new URL('supabase/functions/tutor/method.ts', root);
 if (process.argv.includes('--check')) {

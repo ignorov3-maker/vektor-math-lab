@@ -9,7 +9,7 @@
 // Безопасность запроса: браузер присылает только токен, режим, id темы, короткие данные задачи
 // и реплики разговора (ребёнок/Бипыч). Системный промпт, методичку, модель и лимит токенов
 // сервер берёт у себя — подменить их из браузера нельзя; лишние поля запроса игнорируются.
-import { METHOD } from './method.ts';
+import { METHOD, VISUAL_CONSTRUCTOR_GUIDE } from './method.ts';
 
 const MODEL = 'deepseek/deepseek-v4-flash';
 const MAX_CHARS = 24000;
@@ -143,7 +143,7 @@ export function buildChat(body: any): { messages: Msg[]; mode: 'lesson' | 'task'
     '\nИспользуй не больше одного готового тега и только для указанного примера с теми же числами. ' +
     'Выведи тег на отдельной строке и объясни, что на рисунке сравниваешь. Не выдумывай новые коды. ' +
     'В тренировке не показывай готовую схему, если в ней дан ответ на текущую задачу.' : '';
-  const messages: Msg[] = [{ role: 'system', content: `${COMMON}\n- Тема программы ${m.grade}-го класса. ${gradeGuidance}\n- ${PACE_SAY[pace]} ${STYLE_SAY[style]}\n\nМетодичка темы:\n${m.text}${diagrams}\n\n${mode === 'lesson' ? LESSON_SAY : TASK_SAY}` }];
+  const messages: Msg[] = [{ role: 'system', content: `${COMMON}\n- Тема программы ${m.grade}-го класса. ${gradeGuidance}\n- ${PACE_SAY[pace]} ${STYLE_SAY[style]}\n\nМетодичка темы:\n${m.text}${diagrams}\n\n${VISUAL_CONSTRUCTOR_GUIDE}\n\n${mode === 'lesson' ? LESSON_SAY : TASK_SAY}` }];
   if (mode === 'task') {
     const t = body?.task && typeof body.task === 'object' ? body.task : null;
     if (!t) return null;

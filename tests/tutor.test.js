@@ -2,7 +2,7 @@
 globalThis.window = globalThis;
 globalThis.localStorage = { _s: {}, getItem(k) { return this._s[k] ?? null; }, setItem(k, v) { this._s[k] = String(v); } };
 require('../content/check.js'); require('../content/visuals.js'); require('../content/fractions.js'); require('../content/adaptive.js'); require('../content/tutor.js');
-require('../content/tutor-visuals.js'); require('../content/tutor-visual-art.js');
+require('../content/tutor-visuals.js'); require('../content/tutor-constructor.js'); require('../content/tutor-visual-art.js');
 const T = window.VEKTOR_TUTOR, V = window.VEKTOR_VISUALS, A = window.VEKTOR_ADAPTIVE;
 let fails = 0; const ok = (c, msg) => { if (!c) { fails++; console.log('FAIL', msg); } };
 
@@ -113,5 +113,27 @@ const sseBody = parts => parts.map(p => 'data: ' + JSON.stringify(p) + '\n\n').j
   ok(new Set(catalog.map(entry => entry.tag)).size === catalog.length, 'теги схем уникальны');
   ok(artwork.size >= 100, 'не менее 100 разных композиций SVG, кроме цвета и подписи: ' + artwork.size);
   ok(T.render('[[схема unknown-reference]]').html === '', 'неизвестный тег не отрисовывается');
+  const constructor = window.VEKTOR_TUTOR_CONSTRUCTOR;
+  for (const type of constructor.types) {
+    const spec = constructor.compile(type.id+' '+type.example);
+    const html = spec.tag && T.render(spec.tag).html;
+    ok(spec.parts?.length === 1 && html.includes('<svg') && !/NaN|Infinity|undefined/.test(html), 'конструктор рисует ' + type.id);
+  }
+  const composite = constructor.compile('доли : "Две ленты" 3/8 5/8 | график 2:0 q:1:0:-2 h:4 @3:6:P | предметы яблоки 9/24');
+  const assembled = T.render('Две ленты.\\n' + composite.tag).html;
+  ok(composite.parts?.length === 3 && (assembled.match(/<svg /g)||[]).length === 1 &&
+    assembled.includes('Две ленты') && assembled.includes('clipPath') && assembled.includes('9 из 24'),
+    'цветной рисунок собирается из трёх частей в одном теге');
+  const far = T.render('[[конструктор график 7:12 @24:180]]').html;
+  ok(!far, 'не рисует точку за пределами допустимых значений');
+  ok(T.render('[[конструктор график 7:12 @14:100]]').html.includes('100'), 'оси подстраиваются под точки и функции');
+  ok(T.render('[[конструктор столбцы "А:0" "Б:0"]]').html.includes('<svg'), 'диаграмма с нулевыми данными');
+  for (const spec of ['доли 10/2','прямая 0 2 3','предметы яблоки 1/0','таблица "А;Б" "1"',
+    'угол 180','угол 60 | доли 1/2 | круги 5 2 | сетка 5x6 3x3','сетка 5x4 6x2','график h:0','отрезок 0 5 -1 2',
+    'доли : "<img src=x>" 1/3','ветви "А;Б "В;Г"']){
+    ok(!!constructor.compile(spec).error && T.render('[[конструктор '+spec+']]').html === '', 'отказ на некорректных данных ' + spec);
+  }
+  ok(!T.render('[[конструктор '+ 'я'.repeat(350) +']]').html.includes('<svg'),'длинный тег не рисуется');
+
   console.log(fails ? `ошибок: ${fails}` : 'tutor tests: ok'); process.exit(fails ? 1 : 0);
 })();

@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="gallery.css">
   <script src="../../content/visuals.js" defer></script>
   <script src="../../content/tutor-visuals.js" defer></script>
+  <script src="../../content/tutor-constructor.js" defer></script>
   <script src="../../content/tutor-visual-art.js" defer></script>
   <script src="gallery.js" defer></script>
 </head>
@@ -20,9 +21,34 @@
       <div>
         <h1 id="title">Математика<br>на рисунках</h1>
         <p>Наглядные примеры Бипыча для 5–9 классов. Найди схему, скопируй её тег или скачай SVG.</p>
-        <a class="browse" href="#catalog">Открыть каталог <span aria-hidden="true">↓</span></a>
+        <div class="intro-actions">
+          <a class="browse" href="#constructor">Собрать рисунок <span aria-hidden="true">↓</span></a>
+          <a href="#catalog">Открыть каталог</a>
+        </div>
       </div>
       <div class="hero-art" aria-hidden="true"></div>
+    </section>
+    <section id="constructor" aria-labelledby="constructor-title">
+      <h2 id="constructor-title">Конструктор рисунков</h2>
+      <p class="builder-lead">Измени числа в примере или собери до трёх частей. Один тег описывает весь рисунок.</p>
+      <div class="builder">
+        <div class="builder-edit">
+          <div id="builder-parts"></div>
+          <div class="builder-edit-actions">
+            <button type="button" id="builder-add">Добавить часть</button>
+            <a class="mobile-result" href="#builder-result">Посмотреть рисунок ↓</a>
+          </div>
+          <p id="builder-error" role="status" hidden></p>
+        </div>
+        <div class="builder-result" id="builder-result">
+          <div id="builder-drawing" class="builder-drawing"></div>
+          <code id="builder-tag" tabindex="0" aria-label="Тег собранного рисунка"></code>
+          <div class="builder-actions">
+            <button type="button" id="builder-copy">Скопировать тег</button>
+            <button type="button" id="builder-export">Скачать SVG</button>
+          </div>
+        </div>
+      </div>
     </section>
     <section id="catalog" aria-labelledby="catalog-title">
       <div class="catalog-heading">
@@ -41,7 +67,7 @@
       <ol>
         <li>Выбери схему под вопрос. Для сравнения дробей подойдёт числовая прямая, для геометрической вероятности — выделенная часть площади.</li>
         <li>Бипыч ставит один тег на отдельной строке, например <code>[[схема third-vs-sixth]]</code>. Код и числа в готовой схеме фиксированы.</li>
-        <li>В пояснении назови, на что смотреть. Если исходные числа другие, используй параметрический тег вроде <code>[[прямая 2/5]]</code> или <code>[[график linear 2 1]]</code>.</li>
+        <li>В пояснении назови, на что смотреть. Если исходные числа другие, собери рисунок в конструкторе или используй параметрический тег <code>[[прямая 2/5]]</code>.</li>
       </ol>
     </section>
   </main>
