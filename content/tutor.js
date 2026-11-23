@@ -261,7 +261,7 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
     return out;
   }
   // → { html, done } ; done = наставник поставил [[готово]]
-  function render(text, { streaming = false } = {}) {
+  function render(text, { streaming = false, topic = null } = {}) {
     let t = String(text)
       .replace(/\\d?frac\{([^}]*)\}\{([^}]*)\}/g, '$1/$2').replace(/\\cdot/g, '·').replace(/\\times/g, '×')
       .replace(/\$\$?/g, '').replace(/\\[()[\]]/g, '');
@@ -276,6 +276,7 @@ ${tries}${mistake ? ` Похоже на типичную ошибку: ${mistake
       if (m) {
         if (/^\s*готово\s*$/i.test(m[1])) { done = true; continue; }
         const fig = figs < 1 && figureFromTag(m[1]);
+        if (fig?.type === 'tutor-diagram' && topic && !window.VEKTOR_TUTOR_VISUALS.get(fig.id).topics.includes(topic)) continue;
         let fixed = fig && reconcile(fig, said);
         // в тексте две вещи («вторую пиццу разрезали на 8»), а тег один — рисуем обе рядом, чтобы картинка не спорила с текстом
         if (fixed && ['pizza', 'cake', 'choco'].includes(fixed.type) && !fixed.eaten && /втор|две |два |обе |оба /i.test(t)) {

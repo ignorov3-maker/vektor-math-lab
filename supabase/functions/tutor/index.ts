@@ -139,7 +139,11 @@ export function buildChat(body: any): { messages: Msg[]; mode: 'lesson' | 'task'
     : m.grade === 7
       ? 'Связывай числовой пример со знаком или формулой. Назови, что обозначают буквы.'
       : 'Используй знакомые слова и небольшие числа. Незнакомый математический термин поясни при первом употреблении.';
-  const messages: Msg[] = [{ role: 'system', content: `${COMMON}\n- Тема программы ${m.grade}-го класса. ${gradeGuidance}\n- ${PACE_SAY[pace]} ${STYLE_SAY[style]}\n\nМетодичка темы:\n${m.text}\n\n${mode === 'lesson' ? LESSON_SAY : TASK_SAY}` }];
+  const diagrams = m.visuals.length ? '\n\nГотовые схемы темы:\n' + m.visuals.join('\n') +
+    '\nИспользуй не больше одного готового тега и только для указанного примера с теми же числами. ' +
+    'Выведи тег на отдельной строке и объясни, что на рисунке сравниваешь. Не выдумывай новые коды. ' +
+    'В тренировке не показывай готовую схему, если в ней дан ответ на текущую задачу.' : '';
+  const messages: Msg[] = [{ role: 'system', content: `${COMMON}\n- Тема программы ${m.grade}-го класса. ${gradeGuidance}\n- ${PACE_SAY[pace]} ${STYLE_SAY[style]}\n\nМетодичка темы:\n${m.text}${diagrams}\n\n${mode === 'lesson' ? LESSON_SAY : TASK_SAY}` }];
   if (mode === 'task') {
     const t = body?.task && typeof body.task === 'object' ? body.task : null;
     if (!t) return null;

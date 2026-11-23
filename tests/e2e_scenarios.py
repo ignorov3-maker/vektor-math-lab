@@ -238,7 +238,7 @@ async def main():
             await pilot.get_by_role('button', name='Объясни иначе', exact=True).click()
             before = pilot.locator('.chat-lesson .msg.is-last')
             first_text = await before.inner_text()
-            first_figure = await before.locator('.figure svg, .pilot-table').count()
+            first_figure = await before.locator('.figure svg').count()
             await pilot.get_by_role('button', name='Объясни иначе', exact=True).click()
             after = pilot.locator('.chat-lesson .msg.is-last')
             second_text = await after.inner_text()

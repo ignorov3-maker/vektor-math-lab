@@ -782,13 +782,13 @@ async function aiReply(i, kind, hiddenUser) {
     attempts: kind === 'task' ? (session?.tries || []) : [], mistake: kind === 'task' ? session?.lastMistake : null,
     pace: pace(), style: state.settings.style, history }) : null;
   const call = () => T.stream(ai, [{ role: 'system', content: sys }, ...history], txt => {
-    msg.html = T.render(txt, { streaming: true }).html || '<p class="typing">…</p>'; updateLastMsg(i, kind, msg);
+    msg.html = T.render(txt, { streaming: true, topic: t.id }).html || '<p class="typing">…</p>'; updateLastMsg(i, kind, msg);
   }, { maxTokens: kind === 'lesson' ? 700 : 550, payload, onFinish: r => { c.truncated = r === 'length'; } });
   try {
     let text;
     try { text = await call(); }
     catch (e) { if (!/Нет связи|не отвечает/.test(e.message || '')) throw e; await new Promise(r => setTimeout(r, 1500)); text = await call(); } // один повтор при сбое сети
-    const r = T.render(text);
+    const r = T.render(text, { topic: t.id });
     msg.raw = text; msg.html = r.html || '<p>Картинка не получилась. Нажми «Не понял» — объясню словами.</p>';
     if (r.done && kind === 'lesson') c.done = true;
     if (kind === 'task' && session?.mode === 'practice') session.askedAi = true;

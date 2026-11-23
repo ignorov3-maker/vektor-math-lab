@@ -316,9 +316,6 @@ th{font-size:14px;color:var(--ink-2);font-weight:600}
 .msg.user .msg-body{border-top-right-radius:4px;background:var(--green-soft)}
 .msg.error .msg-body{border-color:var(--warn-line);background:var(--amber-soft)}
 .msg-body .figure{margin:8px 0}
-.msg-body .pilot-table{margin:10px 0;font-size:.8em}
-.msg-body .pilot-table th,.msg-body .pilot-table td{padding:5px 4px}
-.msg-body .pilot-table td{white-space:nowrap}
 .chat-q{font-size:20px;font-weight:700}
 .typing{color:var(--ink-2)}
 .typing::after{content:'';display:inline-block;width:1.2em;text-align:left;animation:dots 1.2s steps(4) infinite;overflow:hidden;vertical-align:bottom}

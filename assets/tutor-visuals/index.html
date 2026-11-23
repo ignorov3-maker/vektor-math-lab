@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Наглядные схемы Бипыча · Вектор</title>
+  <link rel="stylesheet" href="gallery.css">
+  <script src="../../content/visuals.js" defer></script>
+  <script src="../../content/tutor-visuals.js" defer></script>
+  <script src="../../content/tutor-visual-art.js" defer></script>
+  <script src="gallery.js" defer></script>
+</head>
+<body>
+  <header class="top">
+    <a class="wordmark" href="../../index.html"><span aria-hidden="true">↗</span> Вектор</a>
+    <a href="#instructions">Как использовать теги</a>
+  </header>
+  <main>
+    <section class="intro" aria-labelledby="title">
+      <div>
+        <h1 id="title">Математика<br>на рисунках</h1>
+        <p>Наглядные примеры Бипыча для 5–9 классов. Найди схему, скопируй её тег или скачай SVG.</p>
+        <a class="browse" href="#catalog">Открыть каталог <span aria-hidden="true">↓</span></a>
+      </div>
+      <div class="hero-art" aria-hidden="true"></div>
+    </section>
+    <section id="catalog" aria-labelledby="catalog-title">
+      <div class="catalog-heading">
+        <h2 id="catalog-title">Каталог схем</h2>
+        <output id="count" aria-live="polite"></output>
+      </div>
+      <div class="filters">
+        <div id="grades" role="group" aria-label="Класс"></div>
+        <label class="search"><span>Поиск по темам</span><input type="search" id="search" placeholder="Например, дроби или график"></label>
+      </div>
+      <div id="cards"></div>
+      <noscript>Включи JavaScript, чтобы открыть SVG-схемы.</noscript>
+    </section>
+    <section id="instructions" class="instructions" aria-labelledby="how-title">
+      <h2 id="how-title">Как использовать теги</h2>
+      <ol>
+        <li>Выбери схему под вопрос. Для сравнения дробей подойдёт числовая прямая, для геометрической вероятности — выделенная часть площади.</li>
+        <li>Бипыч ставит один тег на отдельной строке, например <code>[[схема third-vs-sixth]]</code>. Код и числа в готовой схеме фиксированы.</li>
+        <li>В пояснении назови, на что смотреть. Если исходные числа другие, используй параметрический тег вроде <code>[[прямая 2/5]]</code> или <code>[[график linear 2 1]]</code>.</li>
+      </ol>
+    </section>
+  </main>
+  <footer>Вектор · Библиотека Бипыча</footer>
+</body>
+</html>

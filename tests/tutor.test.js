@@ -2,6 +2,7 @@
 globalThis.window = globalThis;
 globalThis.localStorage = { _s: {}, getItem(k) { return this._s[k] ?? null; }, setItem(k, v) { this._s[k] = String(v); } };
 require('../content/check.js'); require('../content/visuals.js'); require('../content/fractions.js'); require('../content/adaptive.js'); require('../content/tutor.js');
+require('../content/tutor-visuals.js'); require('../content/tutor-visual-art.js');
 const T = window.VEKTOR_TUTOR, V = window.VEKTOR_VISUALS, A = window.VEKTOR_ADAPTIVE;
 let fails = 0; const ok = (c, msg) => { if (!c) { fails++; console.log('FAIL', msg); } };
 
@@ -94,5 +95,15 @@ const sseBody = parts => parts.map(p => 'data: ' + JSON.stringify(p) + '\n\n').j
   await T.stream({ mode: 'vektor' }, [{ role: 'system', content: 'СЕКРЕТНЫЙ ПРОМПТ' }], () => {}, { maxTokens: 999, payload: pl });
   ok(sent && !('model' in sent) && !('max_tokens' in sent) && !('messages' in sent) && !('reasoning' in sent) && !JSON.stringify(sent).includes('СЕКРЕТНЫЙ ПРОМПТ'), 'сервер: в запросе нет модели, лимита токенов и промпта');
   ok(sent.topic === topic.id && sent.mode === 'task' && sent.history.length === 1 && sent.history[0].role === 'user' && sent.task.answer === task.answer, 'сервер: тема, задача и только реплики ученика/Бипыча');
+  const catalog = window.VEKTOR_TUTOR_VISUALS.entries, artwork = new Set();
+  for (const entry of catalog) {
+    const drawing = T.render(entry.tag, { topic: entry.topics[0] }).html.match(/<svg [^>]*>.*?<\/svg>/s);
+    ok(drawing && !/NaN|Infinity|undefined/.test(drawing[0]), 'SVG для тега ' + entry.id);
+    ok(T.render(entry.tag, { topic: 'unrelated-topic' }).html === '', 'тег другой темы: ' + entry.id);
+    if (drawing) artwork.add(drawing[0].replace(/<title>.*?<\/title>|<text[^>]*>.*?<\/text>| (?:aria-label|stroke|fill)="[^"]*"/gs, ''));
+  }
+  ok(new Set(catalog.map(entry => entry.tag)).size === catalog.length, 'теги схем уникальны');
+  ok(artwork.size >= 100, 'не менее 100 разных композиций SVG, кроме цвета и подписи: ' + artwork.size);
+  ok(T.render('[[схема unknown-reference]]').html === '', 'неизвестный тег не отрисовывается');
   console.log(fails ? `ошибок: ${fails}` : 'tutor tests: ok'); process.exit(fails ? 1 : 0);
 })();

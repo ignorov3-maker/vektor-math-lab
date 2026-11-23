@@ -109,6 +109,9 @@ for (const [topic, grade] of [['compare', 5], ['a7-proportional', 7], ['s9-geom-
     'пилот: класс берётся из серверной методички ' + topic);
   ok(prompt.includes('смени способ объяснения') && !prompt.includes('Бери их в первую очередь'),
     'пилот: способ объяснения зависит от темы ' + topic);
+  const tags = { compare: 'third-vs-sixth', 'a7-proportional': 'bike-two-rates', 's9-geom-prob': 'square-target' };
+  ok(prompt.includes('[[схема ' + tags[topic] + ']]') && prompt.includes('с теми же числами'),
+    'готовые рисунки выбираются сервером по теме');
 }
 
 console.log(fails ? `ai_modes: ${fails} FAIL` : 'ai_modes: OK'); process.exit(fails ? 1 : 0);
