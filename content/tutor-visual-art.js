@@ -208,6 +208,25 @@
         G(68,117,car('#36cdb8','#126f6a'))+G(292,117,car('#ff8d56','#933624',true))+
         label(69,156,a)+label(292,156,b,orange)+label(180,184,title,muted);
     },
+    cars([direction,first,second,distance,movingFirst,movingSecond,sameStart]) {
+      const firstRight=direction!=='вразъезд', secondRight=direction!=='навстречу';
+      const road = R(27,78,306,84,'#596879','#3a4e65',12)+
+        S(39,120,322,120,'#fff3c1',1.8,'9 7');
+      const vehicle = (x,y,right,moving,speed,color,edge,labelX=x) => {
+        const sign=right?1:-1, a=x+sign*35, b=x+sign*55;
+        const mark=moving?arrow(a,y-3,b,y-3,'#fff5c1'):'';
+        return G(x,y,car(color,edge,!right))+mark+label(labelX,68,speed+' км/ч',edge);
+      };
+      const xA=sameStart?180:88, xB=sameStart?180:272;
+      const a=vehicle(xA,102,firstRight,movingFirst,first,'#36cdb8','#096258',sameStart?105:xA);
+      const b=vehicle(xB,143,secondRight,movingSecond,second,'#ff8d56','#933624',sameStart?255:xB);
+      if (sameStart) {
+        return road+S(180,81,180,159,'#fff',1,'3 5')+a+b+label(180,187,'Одна точка старта · 0 км',muted);
+      }
+      const measure=S(xA,172,xB,172,muted,1.2)+C(xA,172,2.5,ink)+C(xB,172,2.5,ink)+
+        label(180,192,'Расстояние в начале · '+distance+' км',muted);
+      return road+a+b+measure;
+    },
     battery([on,n], id, scope) {
       const x=77, y=90, grad=scope+'-charge';
       return '<defs>'+gradient(grad,['#efffb8','#98eb68','#43bc6a'],true)+'</defs>'+

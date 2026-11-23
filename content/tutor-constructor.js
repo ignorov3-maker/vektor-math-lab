@@ -188,6 +188,19 @@
       },
     },
     {
+      id:'машины', name:'Движение машин', example:'навстречу 60 80 210',
+      hint:'Направление (навстречу, попутно, вразъезд), скорость первой и второй машины в км/ч и расстояние между ними в начале в км.',
+      compile(args) {
+        count(args,4);
+        const [direction,first,second,distance]=args;
+        const routes={навстречу:'движутся навстречу',попутно:'движутся в одну сторону',вразъезд:'движутся в разные стороны друг от друга'};
+        if (!Object.hasOwn(routes,direction)) fail('Выбери направление: навстречу, попутно или вразъезд.');
+        const speedA=number(first,0,400), speedB=number(second,0,400), gap=number(distance,0,10000);
+        return item('cars',[direction,first,second,distance,speedA>0,speedB>0,gap===0],
+          'Схема движения: машины '+routes[direction]+'. Скорость первой '+first+' км/ч, второй '+second+' км/ч. Расстояние в начале '+distance+' км.');
+      },
+    },
+    {
       id:'цепочка', name:'Цепочка шагов', example:'"Цена;100 ₽" "Рост на 10%;110 ₽" "Скидка 10%;99 ₽"',
       hint:'Два или три шага в кавычках. Название и значение через точку с запятой.',
       compile(args) {

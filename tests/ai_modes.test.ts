@@ -110,7 +110,7 @@ for (const [topic, grade] of [['compare', 5], ['a7-proportional', 7], ['s9-geom-
   ok(prompt.includes('смени способ объяснения') && !prompt.includes('Бери их в первую очередь'),
     'пилот: способ объяснения зависит от темы ' + topic);
   const tags = { compare: 'third-vs-sixth', 'a7-proportional': 'bike-two-rates', 's9-geom-prob': 'square-target' };
-  ok(prompt.includes('[[конструктор') && prompt.includes('ветви') && prompt.includes('до трёх'), 'сервер передаёт инструкцию по сборке схем');
+  ok(prompt.includes('[[конструктор') && prompt.includes('ветви') && prompt.includes('машины навстречу 60 80 210') && prompt.includes('до трёх'), 'сервер передаёт инструкцию по сборке схем');
   ok(prompt.includes('[[схема ' + tags[topic] + ']]') && prompt.includes('с теми же числами'),
     'готовые рисунки выбираются сервером по теме');
 }
