@@ -11,7 +11,7 @@
   };
   const svg = id => figure({ type: 'tutor-diagram', id });
   const art = document.querySelector('.hero-art');
-  for (const id of ['apple-quarter','origin-vs-fee','fraction-of-fraction','circle-target']) {
+  for (const id of ['apple-quarter','origin-vs-fee','opposite-motion','circle-target']) {
     const host = make('div');
     host.innerHTML = svg(id);
     art.append(host.firstElementChild.firstElementChild);
@@ -32,6 +32,7 @@
     }
     const sections = [...groups].map(([name, items]) => {
       const section = make('section');
+      section.dataset.grade = items[0].grade;
       const grid = make('div', '', 'cards');
       grid.append(...items.map(card));
       section.append(make('h3', items[0].grade + ' класс · ' + name, 'group-heading'), grid);

@@ -95,12 +95,20 @@ const sseBody = parts => parts.map(p => 'data: ' + JSON.stringify(p) + '\n\n').j
   await T.stream({ mode: 'vektor' }, [{ role: 'system', content: 'СЕКРЕТНЫЙ ПРОМПТ' }], () => {}, { maxTokens: 999, payload: pl });
   ok(sent && !('model' in sent) && !('max_tokens' in sent) && !('messages' in sent) && !('reasoning' in sent) && !JSON.stringify(sent).includes('СЕКРЕТНЫЙ ПРОМПТ'), 'сервер: в запросе нет модели, лимита токенов и промпта');
   ok(sent.topic === topic.id && sent.mode === 'task' && sent.history.length === 1 && sent.history[0].role === 'user' && sent.task.answer === task.answer, 'сервер: тема, задача и только реплики ученика/Бипыча');
-  const catalog = window.VEKTOR_TUTOR_VISUALS.entries, artwork = new Set();
+  const catalog = window.VEKTOR_TUTOR_VISUALS.entries, artwork = new Set(), gradientIds = new Set();
   for (const entry of catalog) {
     const drawing = T.render(entry.tag, { topic: entry.topics[0] }).html.match(/<svg [^>]*>.*?<\/svg>/s);
     ok(drawing && !/NaN|Infinity|undefined/.test(drawing[0]), 'SVG для тега ' + entry.id);
     ok(T.render(entry.tag, { topic: 'unrelated-topic' }).html === '', 'тег другой темы: ' + entry.id);
-    if (drawing) artwork.add(drawing[0].replace(/<title>.*?<\/title>|<text[^>]*>.*?<\/text>| (?:aria-label|stroke|fill)="[^"]*"/gs, ''));
+    if (drawing) {
+      const ids = [...drawing[0].matchAll(/<linearGradient id="([^"]+)"/g)].map(match => match[1]);
+      for (const id of ids) {
+        ok(!gradientIds.has(id), 'у градиента уникальный идентификатор ' + id);
+        gradientIds.add(id);
+      }
+      for (const ref of drawing[0].matchAll(/url\(#([^)]+)\)/g)) ok(ids.includes(ref[1]), 'градиент входит в SVG ' + entry.id);
+      artwork.add(drawing[0].replace(/<defs>.*?<\/defs>|<title>.*?<\/title>|<text[^>]*>.*?<\/text>| (?:aria-label|stroke|fill)="[^"]*"/gs, ''));
+    }
   }
   ok(new Set(catalog.map(entry => entry.tag)).size === catalog.length, 'теги схем уникальны');
   ok(artwork.size >= 100, 'не менее 100 разных композиций SVG, кроме цвета и подписи: ' + artwork.size);

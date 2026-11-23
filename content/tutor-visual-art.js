@@ -3,8 +3,24 @@
 (function (root) {
   'use strict';
   const V = root.VEKTOR_VISUALS, L = root.VEKTOR_TUTOR_VISUALS;
-  const ink = '#243b39', muted = '#516764', line = '#c6d7d3', paper = '#fffdf7';
-  const green = '#116858', mint = '#ade2cf', purple = '#65519b', lilac = '#e1d8f4', orange = '#99521c', gold = '#ffd497';
+  const ink = '#1c2d42', muted = '#46586c', line = '#c1ccd6', paper = '#fffefa';
+  const green = '#06675b', mint = '#5ce0c3', purple = '#5636a1', lilac = '#bea9ff', orange = '#8a410c', gold = '#ffc46b';
+  const headerColors = [
+    ['#ffedd5','#9c3b20','#ff7653'], ['#dff7ee','#096250','#26c6a3'],
+    ['#eae6ff','#4b2e9b','#9b79ff'], ['#fff0c5','#764609','#efae2d'],
+    ['#dcedff','#124e91','#559cf8'],
+  ];
+  const materials = {
+    apple: ['#ffb370','#ef523f','#b32837','#772532'],
+    ticket: ['#d8e5ff','#859cf0','#657bd9','#344696'],
+    fish: ['#ffe88c','#ffac4f','#f26a50','#9c3a2f'],
+    bead: ['#ffe3ff','#cf7cec','#a958c6','#6e3682'],
+    box: ['#fff0c4','#ebba77','#c8814c','#77492b'],
+    drop: ['#dbf9ff','#73dafa','#298dc5','#215d91'],
+    die: ['#fff1e2','#ff8469','#de4540','#8b2d30'],
+  };
+  const neutral = ['#fbfdff','#e2eaf1','#b3c3ce','#61748b'];
+  let nextDrawing = 0;
   const colors = [mint, lilac, gold], accents = [green, purple, orange];
   const W = 360, H = 210, tau = Math.PI * 2;
   const rnd = n => Math.round(n * 100) / 100;
@@ -27,19 +43,53 @@
   const card = (x,y,w,h,title,value,color=0) => R(x,y,w,h,paper,line,12) + T(x+w/2,y+19,title,{size:12,fill:muted}) +
     T(x+w/2,y+h-15,value,{size:18,fill:accents[color%3],weight:750});
 
+  const D = (d,fill,stroke='none',width=1.5) =>
+    `<path d="${d}" fill="${fill}" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  const E = (x,y,rx,ry,fill='#fff',opacity=.6) =>
+    `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="${fill}" opacity="${opacity}"/>`;
+  const HIGHLIGHT = '#fff6e9';
+
   const icons = {
-    apple: (fill, c) => '<path d="M0 -8C-12 -16-19 -4-16 7C-14 19-6 24 0 18C8 24 15 14 17 6C19 -4 10 -15 0 -8Z" fill="'+fill+'" stroke="'+c+'" stroke-width="2"/><path d="M0 -8Q-2 -17 2 -20M1 -11Q5 -24 14 -19Q13 -12 1 -11" fill="'+c+'" stroke="'+c+'" stroke-width="2"/>',
-    ticket: (fill,c) => '<path d="M-18 -10H18V-4Q9 0 18 4V10H-18V4Q-9 0-18 -4Z" fill="'+fill+'" stroke="'+c+'" stroke-width="2"/><path d="M-6 -8V8M0 -3H9M0 2H7" fill="none" stroke="'+c+'" stroke-width="1.5" stroke-dasharray="2 2"/>',
-    fish: (fill,c) => '<path d="M10 1Q-4 -15-18 0Q-6 13 10 1L19 -7L19 9Z" fill="'+fill+'" stroke="'+c+'" stroke-width="2"/><circle cx="-10" cy="-1" r="1.6" fill="'+c+'"/>',
-    bead: (fill,c) => C(0,0,12,fill,c)+C(0,0,3,paper,c)+S(-6,-5,-2,-8,paper,2),
-    box: (fill,c) => P([[-13,-7],[0,-14],[13,-7],[13,7],[0,14],[-13,7]],fill,c,1.5)+S(-13,-7,0,0,c,1)+S(13,-7,0,0,c,1)+S(0,0,0,14,c,1),
-    drop: (fill,c) => '<path d="M0 -15C-6 -6-12 1-12 7A12 12 0 0 0 12 7C12 1 6-6 0-15Z" fill="'+fill+'" stroke="'+c+'" stroke-width="2"/><path d="M-6 7Q-5 12-1 13" fill="none" stroke="'+c+'" stroke-width="1.4"/>',
-    die: (fill,c,n) => {
+    apple: (fill,c,n,on) =>
+      E(0,20,15,2,'#77514a',.24)+
+      D('M0 -9C-11 -17-20 -7-17 6C-14 20-6 24 0 17C8 24 15 14 17 5C20 -6 10 -16 0 -9Z',fill,c,1.6)+
+      D('M-14 6C-12 15-5 19 0 15C6 19 11 13 14 7','none',c,.8)+
+      E(-10,-3,2.8,5.8)+E(-7,-8,1.7,1.1)+
+      D('M0 -9Q-2 -14 2 -21','none',on?'#693e28':c,2)+
+      D('M1 -12C3 -19 8 -22 16 -20C13 -13 9 -10 1 -12Z',on?'#51bd79':'#a7bac0',on?'#227052':c,1)+
+      S(3,-13,12,-18,on?'#247253':c,.7),
+    ticket: (fill,c) =>
+      D('M-18 -11H18V-5Q9 0 18 5V11H-18V5Q-9 0-18 -5Z',fill,c,1.6)+
+      R(-13,-8,25,16,'none','#f2f6ff',2)+S(-6,-8,-6,8,c,1,'2 2')+
+      S(2,-3,10,-3,c,1)+S(2,0,10,0,c,1)+S(2,3,7,3,c,1),
+    fish: (fill,c,n,on) =>
+      D('M9 1Q-4 -17-19 0Q-8 14 9 1L20 -9L18 1L20 10Z',fill,c,1.6)+
+      D('M-8 -7Q-2 -18 4 -7M-8 8Q-2 15 4 7',on?'#ffd06b':'#cfdae3',c,1.1)+
+      D('M-14 1Q-2 6 8 1M-8 -3Q-4 0-8 3M-3 -3Q1 0-3 3','none',c,.9)+C(-12,-1,1.7,c)+E(-10,-5,3,1),
+    bead: (fill,c) => E(1,13,10,2,'#594080',.35)+C(0,0,12,fill,c)+C(0,0,3,'#fff9f0',c)+E(-5,-5,2.8,2.2)+C(-4,-4,1,'#fff'),
+    box: (fill,c) => P([[-13,-7],[0,-14],[13,-7],[13,7],[0,14],[-13,7]],fill,c,1.35)+
+      P([[0,0],[13,-7],[13,7],[0,14]],'#99472429','none')+
+      S(-13,-7,0,0,c,1)+S(13,-7,0,0,c,1)+S(0,0,0,14,c,1)+S(-6,-10,7,-3,'#fff0bf',1.7),
+    drop: (fill,c) => D('M0 -16C-6 -7-12 1-12 7A12 12 0 0 0 12 7C12 1 6-7 0-16Z',fill,c,1.5)+
+      D('M-8 4Q-9 10-3 13','none','#f0fcff',1.55)+E(-4,-2,1.5,2),
+    die: (fill,c,n,on) => {
       const dots = [[-6,-6],[6,6],[6,-6],[-6,6],[-6,0],[6,0]];
       const positions = [[],[[0,0]],dots.slice(0,2),[...dots.slice(0,2),[0,0]],dots.slice(0,4),[...dots.slice(0,4),[0,0]],dots][n];
-      return R(-13,-13,26,26,fill,c,6) + positions.map(([x,y]) => C(x,y,2,c)).join('');
+      return R(-12,-10,26,26,on?'#983a43':'#92a8ba',c,6)+R(-13,-13,26,26,fill,c,6)+
+        S(-8,-10,6,-10,HIGHLIGHT,1.4)+positions.map(([x,y])=>C(x,y,1.9,c)).join('');
     },
   };
+  const gradient = (id, colors, vertical=false) =>
+    `<linearGradient id="${id}" x1="0%" y1="0%" x2="${vertical?'0%':'100%'}" y2="100%">${colors.map((c,i)=>
+      `<stop offset="${i*50}%" stop-color="${c}"/>`).join('')}</linearGradient>`;
+  const paint = id => 'url(#'+id+')';
+  function car(color, edge, reverse=false) {
+    const wheels = [-17,18].map(x=>C(x,9,5.6,'#213247')+C(x,9,2.3,'#b4c5d3')).join('');
+    const body = D('M-27 1Q-27 -4-21 -6L-10 -7L-2 -17H12L24 -6Q29 -4 30 1V8H-27Z',color,edge)+
+      D('M-6 -8L0 -15H7V-8ZM10 -15L17 -9L10 -8Z','#d2f3ff','#316882',.9)+
+      S(-20,-3,22,-3,'#fff5d7',1)+R(25,1,3,3,'#fff5ad','none',1)+wheels;
+    return `<g transform="scale(${reverse?-1:1} 1)">${body}</g>`;
+  }
 
   const cells = (cols,rows,x,y,d,fillFor) => seq(rows).map(j => seq(cols).map(i =>
     R(x+i*d,y+j*d,d-2,d-2,fillFor(i,j),line,Math.min(3,d/4))).join('')).join('');
@@ -49,10 +99,18 @@
     return b ? Number(a)/Number(b) : Number(a);
   };
   const draw = {
-    tokens([name,n,on,a,b]) {
-      const cols = Math.min(6,n), rows = Math.ceil(n/cols), gap = Math.min(50,280/cols);
-      return seq(n).map(i => G(180+(i%cols-(cols-1)/2)*gap, 109+(Math.floor(i/cols)-(rows-1)/2)*46,
-        icons[name](i<on ? mint : '#e7edeb', i<on ? green : muted, name==='die' ? (i===0?6:i) : i))).join('') + footer(a,b);
+    tokens([name,n,on,a,b], id, scope) {
+      const cols=Math.min(6,n), rows=Math.ceil(n/cols), gap=Math.min(50,280/cols);
+      const active=scope+'-active', quiet=scope+'-quiet';
+      const skin=materials[name];
+      const defs='<defs>'+gradient(active,skin.slice(0,3))+gradient(quiet,neutral.slice(0,3))+'</defs>';
+      const sprites=seq(n).map(i => {
+        const x=180+(i%cols-(cols-1)/2)*gap, y=106+(Math.floor(i/cols)-(rows-1)/2)*48;
+        const onNow=i<on, number=name==='die' ? (i===0?6:i) : i;
+        return G(x,y,icons[name](paint(onNow?active:quiet), onNow?skin[3]:neutral[3], number, onNow))+
+          (onNow?R(x-6,y+22,12,3,skin[2],'none',1.5):'');
+      }).join('');
+      return defs+sprites+footer(a,b);
     },
     bars(rows) {
       return rows.map(([on,n,name,value,first=on],j) => {
@@ -140,22 +198,30 @@
       }).join('');
     },
     motion([a,b,title]) {
-      return R(34,101,292,31,'#dce4e1',line,10) + S(44,117,315,117,paper,2,'11 8') +
-        arrow(65,89,143,89,green)+arrow(295,89,217,89,purple) +
-        G(66,114,icons.box(mint,green),1.1)+G(294,114,icons.box(lilac,purple),1.1) +
-        label(81,156,a)+label(280,156,b,purple)+label(180,184,title,muted);
+      return R(28,98,304,39,'#596879','#3a4e65',10)+S(42,118,318,118,'#fff3c1',2,'12 10')+
+        S(42,103,318,103,'#e8f0ef',1)+S(42,132,318,132,'#e8f0ef',1)+
+        arrow(65,76,143,76,green)+arrow(295,76,217,76,orange)+
+        G(68,117,car('#36cdb8','#126f6a'))+G(292,117,car('#ff8d56','#933624',true))+
+        label(69,156,a)+label(292,156,b,orange)+label(180,184,title,muted);
     },
-    battery([on,n]) {
-      const w=46, x=77, y=90;
-      return R(x,y,199,57,paper,green,12)+R(x+199,y+17,11,23,green,'none',4) +
-        seq(n).map(i=>R(x+8+w*i,y+8,w-5,41,i<on?mint:'#e7eeec',i<on?green:line,5)).join('')+
-        footer('Заполнено '+on+' из '+n,on+'/'+n);
+    battery([on,n], id, scope) {
+      const x=77, y=90, grad=scope+'-charge';
+      return '<defs>'+gradient(grad,['#efffb8','#98eb68','#43bc6a'],true)+'</defs>'+
+        R(x-3,y+4,208,57,'#d8e3ed','none',13)+R(x,y,199,57,'#f6fcff','#293f58',12)+
+        R(x+199,y+17,11,23,'#405877','none',4)+seq(n).map(i=>{
+          const left=x+8+46*i, active=i<on;
+          return R(left,y+8,41,41,active?paint(grad):'#e5eef3',active?'#26714a':'#9eb2c2',5)+
+            (active?S(left+7,y+14,left+34,y+14,'#f7ffd5',2):'');
+        }).join('')+footer('Заполнено '+on+' из '+n,on+'/'+n);
     },
-    tank([n,on,a,b]) {
-      const x=129, y=62, w=102, h=111;
-      return R(x,y,w,h,paper,line,12) + R(x+5,y+5+(n-on)*(h-10)/n,w-10,on*(h-10)/n,mint,'none',7) +
-        seq(n+1).map(i=>S(x+w-22,y+5+i*(h-10)/n,x+w-6,y+5+i*(h-10)/n,muted,1)).join('') +
-        label(255,78,b,muted)+label(180,128,a);
+    tank([n,on,a,b], id, scope) {
+      const x=124, y=60, w=105, h=113, level=y+5+(n-on)*(h-10)/n, water=scope+'-water';
+      return '<defs>'+gradient(water,['#a0e5ff','#61cdf3','#349cdd'],true)+'</defs>'+
+        D('M224 84Q267 76 264 114Q263 139 228 143M226 93Q256 88 254 113Q254 130 227 132','none','#7dacbd',2.1)+
+        R(x,y,w,h,'#edfaff','#6e9fb7',12)+R(x+5,level,w-10,on*(h-10)/n,paint(water),'none',7)+
+        S(x+9,level+1,x+w-10,level+1,'#e3fbff',1.9)+S(x+13,y+15,x+13,y+h-15,'#fff',2.6)+
+        seq(n+1).map(i=>S(x+w-22,y+5+i*(h-10)/n,x+w-6,y+5+i*(h-10)/n,'#215a78',1)).join('')+
+        label(252,70,b,muted)+label(177,128,a,'#083d58');
     },
     branches([parents,children],id) {
       const m=parents.length, n=children.length, gap=Math.min(27,122/(m*n-1)), start=115-(m*n-1)*gap/2;
@@ -296,16 +362,18 @@
         label((X(c)+X(d))/2,88,value);
     },
     target([a,b]) {
-      return C(146,115,57,paper,green)+C(146,115,57*b/a,mint,green)+S(146,115,203,115,green,2)+S(146,115,146,115-57*b/a,purple,2)+
-        C(146,115,3,ink)+T(227,104,'R = '+a,{anchor:'start',fill:green})+T(227,129,'r = '+b,{anchor:'start',fill:purple});
+      return C(146,115,57,'#eaf4ff','#4077b2')+C(146,115,57*b/a,'#ffad76','#a74425')+
+        S(146,115,203,115,'#326297',2)+S(146,115,146,115-57*b/a,'#963f20',2)+C(146,115,3,ink)+
+        T(227,104,'R = '+a,{anchor:'start',fill:'#234f81'})+T(227,129,'r = '+b,{anchor:'start',fill:'#9b3c22'});
     },
   };
   function render(item) {
-    const palette = (item.grade - 5)%3, color=accents[palette];
-    const size=item.title.length>35?13:15;
+    const [tint,pigment,accent]=headerColors[item.grade-5];
+    const size=item.title.length>35?13:15, scope='bip-visual-'+(++nextDrawing);
     return V.svgWrap(W,H,item.title + '. ' + item.note,
-      R(1,1,W-2,H-2,paper,line,20)+R(16,15,W-32,29,colors[palette],'none',10)+
-      T(29,34,item.title,{size,anchor:'start',weight:750,fill:color})+draw[item.kind](item.data,item.id));
+      R(1,1,W-2,H-2,paper,line,20)+R(16,15,W-32,29,tint,'none',10)+
+      T(29,34,item.title,{size,anchor:'start',weight:750,fill:pigment})+
+      C(328,29.5,4.5,accent)+draw[item.kind](item.data,item.id,scope));
   }
   V.register('tutor-diagram', {
     describe: ({id}) => L.get(id)?.note || '',
